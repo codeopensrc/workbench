@@ -1,0 +1,12 @@
+# All Environments
+envs/*/
+
+# Except template_env
+!envs/template_env/
+
+# Dont include template .terraform directory
+envs/template_env/*/.terraform
+
+personal.md
+
+scripts/ignore/*

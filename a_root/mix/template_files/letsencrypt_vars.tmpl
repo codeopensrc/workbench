@@ -1,0 +1,20 @@
+#!/bin/bash
+
+DOMAIN=${fqdn}
+WEBROOT=/var/www/html
+CHEF_REPO=${chef_repo}
+DRY_RUN=${dry_run}
+
+RENEW=(sudo certbot certonly --webroot --expand --non-interactive --agree-tos --email ${email} -w $WEBROOT -d $DOMAIN)
+
+%{ for APP in app_definitions }
+CREATE_SUBDOMAIN=${APP["create_subdomain"]};
+if [ "$CREATE_SUBDOMAIN" = "true" ]; then
+    RENEW+=(-d ${APP["service_name"]}.${fqdn})
+    RENEW+=(-d ${APP["service_name"]}.dev.${fqdn})
+fi
+%{ endfor }
+
+if [ "$DRY_RUN" = "true" ]; then
+    RENEW+=(--dry-run)
+fi

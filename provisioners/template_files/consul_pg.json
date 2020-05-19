@@ -1,0 +1,15 @@
+{
+  "service": {
+    "name": "pg",
+    "tags": ["pg"],
+    "address": "",
+    "port": 5432,
+    "enableTagOverride": false,
+    "checks": [
+      {
+        "script": "echo '\\q' | psql postgresql://pgcheck:${read_only_pw}@pg.${datacenter}.${fqdn}/postgres",
+        "interval": "30s"
+      }
+    ]
+  }
+}

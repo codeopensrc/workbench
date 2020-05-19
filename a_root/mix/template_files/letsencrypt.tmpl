@@ -1,0 +1,68 @@
+#!/bin/bash
+
+source /root/code/scripts/letsencrypt_vars.sh
+
+sudo apt-get update
+sudo apt-get install software-properties-common -y
+sudo add-apt-repository ppa:certbot/certbot -y
+sudo apt-get update
+sudo apt-get install certbot -y
+
+WEBROOT=/var/www/html
+CHEF_DATA_BAG_DIR=/root/repos/$CHEF_REPO/data_bags
+LETSENCRYPT_DIR=/etc/letsencrypt/live/$DOMAIN
+
+
+if [[ ! -d $LETSENCRYPT_DIR ]] || [[ $RUN_FROM_CRON ]]; then
+
+    docker run --name nginx \
+        -v $WEBROOT:/usr/share/nginx/html:ro \
+        -p 7080:80 \
+        --rm \
+        -d nginx
+
+    "${RENEW[@]}"
+
+    docker stop nginx
+fi
+
+
+
+KEY=$(<$LETSENCRYPT_DIR/privkey.pem)
+FULLCHAIN=$(<$LETSENCRYPT_DIR/fullchain.pem)
+CHAIN=$(<$LETSENCRYPT_DIR/chain.pem)
+
+ESCAPED_KEY=${KEY//$'\n'/'\\n'}
+ESCAPED_CHAIN=${CHAIN//$'\n'/'\\n'}
+ESCAPED_FULLCHAIN=${FULLCHAIN//$'\n'/'\\n'}
+
+cat << HEREDOC >$CHEF_DATA_BAG_DIR/privkey.json
+{
+        "id": "privkey",
+        "privkey": "$ESCAPED_KEY"
+}
+HEREDOC
+
+cat << HEREDOC >$CHEF_DATA_BAG_DIR/fullchain.json
+{
+        "id": "fullchain",
+        "fullchain": "$ESCAPED_FULLCHAIN"
+}
+HEREDOC
+
+cat << HEREDOC >$CHEF_DATA_BAG_DIR/chain.json
+{
+        "id": "chain",
+        "chain": "$ESCAPED_CHAIN"
+}
+HEREDOC
+
+cd ~/repos/$CHEF_REPO
+
+/usr/local/bin/consul kv put ssl/privkey "$KEY"
+/usr/local/bin/consul kv put ssl/fullchain "$FULLCHAIN"
+/usr/local/bin/consul kv put ssl/chain "$CHAIN"
+
+knife data bag from file secrets data_bags/privkey.json
+knife data bag from file secrets data_bags/fullchain.json
+knife data bag from file secrets data_bags/chain.json

@@ -1,0 +1,11 @@
+Host bitbucket.org
+Identityfile ~/.ssh/deploy.key
+IdentitiesOnly yes
+
+Host gitlab.msapps.tk
+Identityfile ~/.ssh/deploy.key
+IdentitiesOnly yes
+
+Host gitlab.${fqdn}
+Identityfile ~/.ssh/deploy.key
+IdentitiesOnly yes
