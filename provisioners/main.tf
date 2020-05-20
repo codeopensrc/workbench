@@ -53,7 +53,7 @@ variable "join_machine_id" { default = "" }
 
 variable "consul_version" { default = "" }
 variable "docker_compose_version" { default = "" }
-variable "docker_engine_version" { default = "" }
+variable "docker_engine_install_url" { default = "" }
 # TODO: Implement base docker engine url with or without docker_engine_version built in
 # variable "docker_engine_install_url" { default = "https://docs.DOMAIN/download/docker-" }
 
@@ -84,11 +84,34 @@ resource "null_resource" "docker_init" {
             echo ${var.db_hostname_ready}
 
             docker-machine create --driver generic --generic-ip-address=${element(var.public_ips, count.index)} \
-            --generic-ssh-key ~/.ssh/id_rsa --engine-install-url "https://releases.rancher.com/install-docker/${var.docker_engine_version}.sh" \
+            --generic-ssh-key ~/.ssh/id_rsa --engine-install-url "${var.docker_engine_install_url}" \
             ${element(var.names, count.index)}
 
             docker-machine provision ${element(var.names, count.index)}
         EOF
+    }
+}
+
+resource "null_resource" "temp_whitelist" {
+    count = var.servers
+    depends_on = [null_resource.docker_init]
+
+    provisioner "remote-exec" {
+        inline = [ "mkdir -p /root/code/access" ]
+    }
+
+    provisioner "file" {
+        content = fileexists("${path.module}/template_files/ignore/ips.json") ? file("${path.module}/template_files/ignore/ips.json") : ""
+        destination = "/root/code/access/ips.json"
+    }
+    provisioner "file" {
+        content = fileexists("${path.module}/template_files/ignore/sshkeys.json") ? file("${path.module}/template_files/ignore/sshkeys.json") : ""
+        destination = "/root/code/access/sshkeys.json"
+    }
+
+    connection {
+        host = element(var.public_ips, count.index)
+        type = "ssh"
     }
 }
 

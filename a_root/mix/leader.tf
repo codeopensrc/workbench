@@ -16,7 +16,7 @@ module "leader_provisioners" {
     chef_local_dir  = var.chef_local_dir
     chef_client_ver = var.chef_client_ver
     docker_compose_version = var.docker_compose_version
-    docker_engine_version  = var.docker_engine_version
+    docker_engine_install_url  = var.docker_engine_install_url
     consul_version         = var.consul_version
 
     join_machine_id = var.join_machine_id

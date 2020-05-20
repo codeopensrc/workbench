@@ -35,9 +35,7 @@ variable "num_gitlab_runners" { default = 0 }
 variable "gitlab_version" { default = "12.8.1-ce.0" }
 
 variable "docker_compose_version" { default = "1.19.0" }
-variable "docker_engine_version" { default = "18.09.7" }    # 16.04
-# variable "docker_engine_version" { default = "5:18.09.4~3-0~ubuntu-xenial" }    # 16.04
-# variable "docker_engine_version" { default = "5:18.09.4~3-0~ubuntu-bionic" }      # 18.04
+variable "docker_engine_install_url" { default = "https://get.docker.com" }
 
 variable "consul_version" { default = "1.0.6" }
 

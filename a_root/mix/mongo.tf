@@ -15,7 +15,7 @@ module "mongo_provisioners" {
     chef_local_dir  = var.chef_local_dir
     chef_client_ver = var.chef_client_ver
 
-    docker_engine_version = var.docker_engine_version
+    docker_engine_install_url = var.docker_engine_install_url
     consul_version        = var.consul_version
 
     consul_lan_leader_ip = (length(var.admin_public_ips) > 0

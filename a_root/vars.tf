@@ -95,7 +95,7 @@ variable "pg_md5_password" { default = "" }
 variable "pg_read_only_pw" { default = "" }
 
 variable "docker_compose_version" {}
-variable "docker_engine_version" {}
+variable "docker_engine_install_url" {}
 variable "consul_version" {}
 variable "gitlab_version" {}
 

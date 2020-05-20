@@ -108,7 +108,7 @@ module "root" {
     misc_repos      = var.misc_repos
 
     docker_compose_version = var.docker_compose_version
-    docker_engine_version  = var.docker_engine_version
+    docker_engine_install_url  = var.docker_engine_install_url
     consul_version         = var.consul_version
     gitlab_version         = var.gitlab_version
 

@@ -17,7 +17,7 @@ module "admin_provisioners" {
     chef_client_ver = var.chef_client_ver
 
     docker_compose_version = var.docker_compose_version
-    docker_engine_version  = var.docker_engine_version
+    docker_engine_install_url  = var.docker_engine_install_url
     consul_version         = var.consul_version
 
     # TODO: This might cause a problem when launching the 2nd admin server when swapping
