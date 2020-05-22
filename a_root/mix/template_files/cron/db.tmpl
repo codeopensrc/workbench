@@ -1,0 +1,34 @@
+# Name: Backup Mongo DB
+SHELL="/bin/bash"
+HOME="/root"
+${mongo_db != "" ? "" : "#"}0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupMongo.sh -b ${aws_bucket_name} -r ${aws_bucket_region} -d ${mongo_db} >> /dev/null 2>>$HOME/code/logs/errors.log
+
+# Name: Remove Mongo Backups
+SHELL="/bin/bash"
+HOME="/root"
+${mongo_db != "" ? "" : "#"}0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d ${mongo_db} >> /dev/null 2>>$HOME/code/logs/errors.log
+
+# Name: Backup PG DB
+SHELL="/bin/bash"
+HOME="/root"
+${pg_db != "" ? "" : "#"}0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupPG.sh -b ${aws_bucket_name} -r ${aws_bucket_region} -d ${pg_db} ->> /dev/null 2>>$HOME/code/logs/errors.log
+
+# Name: Remove PG Backups
+SHELL="/bin/bash"
+HOME="/root"
+${pg_db != "" ? "" : "#"}0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d ${pg_db} >> /dev/null 2>>$HOME/code/logs/errors.log
+
+# Name: Run PSQL function
+SHELL="/bin/bash"
+HOME="/root"
+${pg_db != "" ? "" : "#"}0 3 * * 5 bash $HOME/code/scripts/db/runPgFunction.sh -d ${pg_db} -f "${pg_fn}" >> /dev/null 2>>$HOME/code/logs/errors.log
+
+# Name: Backup Redis DB
+SHELL="/bin/bash"
+HOME="/root"
+${redis_db != "" ? "" : "#"}0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupRedis.sh -b ${aws_bucket_name} -r ${aws_bucket_region} -d ${redis_db} >> /dev/null 2>>$HOME/code/logs/errors.log
+
+# Name: Remove Redis Backups
+SHELL="/bin/bash"
+HOME="/root"
+${redis_db != "" ? "" : "#"}0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d ${redis_db} >> /dev/null 2>>$HOME/code/logs/errors.log

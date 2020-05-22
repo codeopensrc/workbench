@@ -11,12 +11,6 @@ variable "root_domain_name" { default = "" }
 variable "deploy_key_location" {}
 variable "chef_local_dir" {}
 
-# variable "ids" { type = list(string) default = [] }
-variable "misc_repos" {
-    type = map(object({ pull=string, stable_version=string, use_stable=string,
-        repo_url=string, repo_name=string }))
-}
-
 variable "leader_hostname_ready" { default = "" }
 variable "admin_hostname_ready" { default = "" }
 variable "db_hostname_ready" { default = "" }
@@ -466,6 +460,12 @@ resource "null_resource" "upload_deploy_key" {
         destination = "/root/.ssh/deploy.key"
     }
 
+    # TODO: Create folder/file creation resource for default folder structure
+    provisioner "file" {
+        content = file("${path.module}/template_files/checks/dns.json")
+        destination = "/etc/consul.d/conf.d/dns.json"
+    }
+
     # TODO: Possibly utilize this to have a useful docker registry variable
     # provisioner "file" {
     #     content = <<-EOF
@@ -477,7 +477,7 @@ resource "null_resource" "upload_deploy_key" {
     # }
 
     provisioner "remote-exec" {
-        inline = ["chmod 0600 /root/.ssh/deploy.key"]
+        inline = ["chmod 0600 /root/.ssh/deploy.key", "chmod 0755 /etc/consul.d/conf.d/dns.json"]
     }
 
     connection {
@@ -487,7 +487,7 @@ resource "null_resource" "upload_deploy_key" {
 }
 
 # TODO: This is temporary until we switch over db urls being application specific
-resource "null_resource" "upload_consul_pg" {
+resource "null_resource" "upload_consul_dbchecks" {
     count = var.role == "db" ? var.servers : 0
     depends_on = [
         null_resource.docker_init,
@@ -503,7 +503,7 @@ resource "null_resource" "upload_consul_pg" {
     ]
 
     provisioner "file" {
-        content = templatefile("${path.module}/template_files/consul_pg.json", {
+        content = templatefile("${path.module}/template_files/checks/consul_pg.json", {
             read_only_pw = var.pg_read_only_pw
             datacenter = var.active_env_provider == "digital_ocean" ? "do1" : "aws1"
             fqdn = var.root_domain_name
@@ -511,8 +511,22 @@ resource "null_resource" "upload_consul_pg" {
         destination = "/etc/consul.d/conf.d/pg.json"
     }
 
+    provisioner "file" {
+        content = file("${path.module}/template_files/checks/consul_mongo.json")
+        destination = "/etc/consul.d/conf.d/mongo.json"
+    }
+
+    provisioner "file" {
+        content = file("${path.module}/template_files/checks/consul_redis.json")
+        destination = "/etc/consul.d/conf.d/redis.json"
+    }
+
     provisioner "remote-exec" {
-        inline = ["chmod 0755 /etc/consul.d/conf.d/pg.json"]
+        inline = [
+            "chmod 0755 /etc/consul.d/conf.d/pg.json",
+            "chmod 0755 /etc/consul.d/conf.d/mongo.json",
+            "chmod 0755 /etc/consul.d/conf.d/redis.json"
+        ]
     }
 
     connection {
@@ -534,7 +548,7 @@ resource "null_resource" "bootstrap" {
         null_resource.consul_file,
         null_resource.consul_file_admin,
         null_resource.upload_deploy_key,
-        null_resource.upload_consul_pg,
+        null_resource.upload_consul_dbchecks,
     ]
 
     provisioner "local-exec" {
@@ -559,10 +573,11 @@ resource "null_resource" "bootstrap" {
     }
 
     provisioner "file" {
-        # Terraform attempts to evaluate the lookup even if the shell would not run the block of code
-        #   inside the if statement, due to terraform evaluating its result before the shell. This is why
-        #   we have to do the tenary statement, making sure misc_repos map has the key before checking
-        #   for the name or url, otherwise terraform throws an error that the map doesn't exist
+        source = "${path.module}/template_files/scripts/"
+        destination = "/root/code/scripts"
+    }
+
+    provisioner "file" {
         content = <<-EOF
 
             DB_BACKUPS_ENABLED=${var.db_backups_enabled}
@@ -570,35 +585,19 @@ resource "null_resource" "bootstrap" {
             SEND_LOGS=${var.send_logs_enabled}
             SEND_JSONS=${var.send_jsons_enabled}
 
-            HAS_CRON_REPO=${ contains(keys(var.misc_repos), "cron") }
-            HAS_SCRIPTS_REPO=${ contains(keys(var.misc_repos), "workscripts") }
-
-            if [ "$HAS_CRON_REPO" = "true" ]; then
-                CRON_REPO_URL=${ contains(keys(var.misc_repos), "cron") ? lookup(var.misc_repos["cron"], "repo_url" ) : "" }
-                CRON_REPO_NAME=${ contains(keys(var.misc_repos), "cron") ? lookup(var.misc_repos["cron"], "repo_name" ) : ""}
-
-                git clone $CRON_REPO_URL /root/repos/$CRON_REPO_NAME
-
-                if [ "$DB_BACKUPS_ENABLED" = "true" ]; then
-                    sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /root/repos/$CRON_REPO_NAME/db/backup*
-                fi
-                if [ "$RUN_SERVICE" = "true" ]; then
-                    sed -i 's/RUN_SERVICE=true/RUN_SERVICE=false/g' /root/repos/$CRON_REPO_NAME/leader/builderQueue*
-                fi
-                if [ "$SEND_LOGS" = "true" ]; then
-                    sed -i 's/SEND_LOGS=true/SEND_LOGS=false/g' /root/repos/$CRON_REPO_NAME/leader/sendDailyLog*
-                fi
-                if [ "$SEND_JSONS" = "true" ]; then
-                    sed -i 's/SEND_JSONS=true/SEND_JSONS=false/g' /root/repos/$CRON_REPO_NAME/leader/sendWeeklyJsons*
-                fi
+            if [ "$DB_BACKUPS_ENABLED" != "true" ]; then
+                sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /root/code/scripts/db/backup*
+            fi
+            if [ "$RUN_SERVICE" != "true" ]; then
+                sed -i 's/RUN_SERVICE=true/RUN_SERVICE=false/g' /root/code/scripts/leader/runService*
+            fi
+            if [ "$SEND_LOGS" != "true" ]; then
+                sed -i 's/SEND_LOGS=true/SEND_LOGS=false/g' /root/code/scripts/leader/sendLog*
+            fi
+            if [ "$SEND_JSONS" != "true" ]; then
+                sed -i 's/SEND_JSONS=true/SEND_JSONS=false/g' /root/code/scripts/leader/sendJsons*
             fi
 
-            if [ "$HAS_SCRIPTS_REPO" = "true" ]; then
-                SCRIPTS_REPO_URL=${ contains(keys(var.misc_repos), "workscripts") ? lookup(var.misc_repos["workscripts"], "repo_url" ) : "" }
-                SCRIPTS_REPO_NAME=${ contains(keys(var.misc_repos), "workscripts") ? lookup(var.misc_repos["workscripts"], "repo_name" ) : ""}
-
-                git clone $SCRIPTS_REPO_URL /root/repos/$SCRIPTS_REPO_NAME
-            fi
             exit 0
         EOF
         destination = "/tmp/cronscripts.sh"
@@ -631,7 +630,7 @@ resource "null_resource" "consul_service" {
         null_resource.consul_file,
         null_resource.consul_file_admin,
         null_resource.upload_deploy_key,
-        null_resource.upload_consul_pg,
+        null_resource.upload_consul_dbchecks,
         null_resource.bootstrap,
     ]
 
@@ -679,7 +678,7 @@ output "end_of_provisioner" {
         null_resource.consul_file,
         null_resource.consul_file_admin,
         null_resource.upload_deploy_key,
-        null_resource.upload_consul_pg,
+        null_resource.upload_consul_dbchecks,
         null_resource.bootstrap,
         null_resource.consul_service,
     ]

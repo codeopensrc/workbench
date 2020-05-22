@@ -1,0 +1,15 @@
+{
+  "service": {
+    "name": "mongo",
+    "tags": ["mongo"],
+    "address": "",
+    "port": 27017,
+    "enableTagOverride": false,
+    "checks": [
+      {
+        "script": "echo 'exit' | mongo",
+        "interval": "30s"
+      }
+    ]
+  }
+}

@@ -11,7 +11,6 @@ module "pg_provisioners" {
     aws_bot_secret_key = var.aws_bot_secret_key
 
     deploy_key_location = var.deploy_key_location
-    misc_repos      = var.misc_repos
     chef_local_dir  = var.chef_local_dir
     chef_client_ver = var.chef_client_ver
 

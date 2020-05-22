@@ -13,7 +13,6 @@ module "db_provisioners" {
     active_env_provider = var.active_env_provider
     root_domain_name = var.root_domain_name
     deploy_key_location = var.deploy_key_location
-    misc_repos      = var.misc_repos
     chef_local_dir  = var.chef_local_dir
     chef_client_ver = var.chef_client_ver
 
@@ -50,9 +49,54 @@ resource "null_resource" "change_db_hostname" {
     }
 }
 
+resource "null_resource" "cron_db" {
+    count      = var.db_servers > 0 ? var.db_servers : 0
+    depends_on = [module.db_provisioners]
+
+    provisioner "remote-exec" {
+        inline = [ "mkdir -p /root/code/cron" ]
+    }
+
+    provisioner "file" {
+        # TODO: aws_bucket_name and region based off imported db's options
+        # TODO: Support multiple dbs for same type of db
+        content = fileexists("${path.module}/template_files/cron/db.tmpl") ? templatefile("${path.module}/template_files/cron/db.tmpl", {
+            aws_bucket_region = var.aws_bucket_region
+            aws_bucket_name = var.aws_bucket_name
+            redis_db = length(local.redis_dbs) > 0 ? local.redis_dbs[0] : ""
+            mongo_db = length(local.mongo_dbs) > 0 ? local.mongo_dbs[0] : ""
+            pg_db = length(local.pg_dbs) > 0 ? local.pg_dbs[0] : ""
+            pg_fn = length(local.pg_fn) > 0 ? local.pg_fn["pg"] : "" # TODO: hack
+        }) : ""
+        destination = "/root/code/cron/db.cron"
+    }
+
+    provisioner "remote-exec" {
+        inline = [ "crontab /root/code/cron/db.cron", "crontab -l" ]
+    }
+
+    connection {
+        host = element(var.db_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
 resource "null_resource" "import_dbs" {
     count      = var.import_dbs && var.db_servers > 0 ? var.db_servers : 0
     depends_on = [module.db_provisioners]
+
+    provisioner "file" {
+        content = file("${path.module}/template_files/import_mongo_db.sh")
+        destination = "~/import_mongo_db.sh"
+    }
+    provisioner "file" {
+        content = file("${path.module}/template_files/import_pg_db.sh")
+        destination = "~/import_pg_db.sh"
+    }
+    provisioner "file" {
+        content = file("${path.module}/template_files/import_redis_db.sh")
+        destination = "~/import_redis_db.sh"
+    }
 
     provisioner "file" {
         content = <<-EOF

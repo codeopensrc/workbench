@@ -105,14 +105,24 @@ variable "app_definitions" {
 
 variable "misc_repos" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
-        repo_url=string, repo_name=string }))
+        repo_url=string, repo_name=string,
+        docker_service_name=string, consul_service_name=string, folder_location=string,
+        logs_prefix=string, email_image=string
+    }))
     default = {
         chef = {
             "pull"                  = "true"
             "stable_version"        = ""
             "use_stable"            = "false"
-            "repo_url"              = ""
+            "repo_url"              = "https://github.com/Cjones90/os.infra.chef.git"
             "repo_name"             = "os.infra.chef"
+
+            # Temporary
+            "docker_service_name"   = ""
+            "consul_service_name"   = ""
+            "folder_location"       = ""
+            "logs_prefix"           = ""
+            "email_image"           = ""
         }
     }
 }
@@ -190,7 +200,7 @@ variable "import_dbs" { default = true }
 
 variable "dbs_to_import" {
     type = list(object({ type=string, aws_bucket=string, aws_region=string,
-        dbname=string, import=string }))
+        dbname=string, import=string, fn=string }))  # TODO: "fn" hack
     default = [
         {
             "type" = ""
@@ -198,6 +208,7 @@ variable "dbs_to_import" {
             "aws_region" = ""
             "dbname" = ""
             "import" = ""
+            "fn" = ""
         },
     ]
 }

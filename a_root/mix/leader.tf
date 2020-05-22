@@ -12,7 +12,6 @@ module "leader_provisioners" {
 
     deploy_key_location = var.deploy_key_location
     root_domain_name = var.root_domain_name
-    misc_repos      = var.misc_repos
     chef_local_dir  = var.chef_local_dir
     chef_client_ver = var.chef_client_ver
     docker_compose_version = var.docker_compose_version
@@ -61,6 +60,44 @@ resource "null_resource" "change_leader_hostname" {
             host = element(var.lead_public_ips, count.index)
             type = "ssh"
         }
+    }
+}
+
+resource "null_resource" "cron_leader" {
+    count      = var.leader_servers > 0 ? var.leader_servers : 0
+    depends_on = [module.leader_provisioners]
+
+    provisioner "remote-exec" {
+        inline = [ "mkdir -p /root/code/cron" ]
+    }
+
+    provisioner "file" {
+        content = fileexists("${path.module}/template_files/cron/leader.tmpl") ? templatefile("${path.module}/template_files/cron/leader.tmpl", {
+            run_service = var.run_service_enabled
+            send_logs = var.send_logs_enabled
+            send_jsons = var.send_jsons_enabled
+            aws_bucket_name = var.aws_bucket_name
+            aws_bucket_region = var.aws_bucket_region
+
+            # Temp
+            docker_service_name = local.docker_service_name
+            consul_service_name = local.consul_service_name
+            folder_location = local.folder_location
+            logs_prefix = local.logs_prefix
+            email_image = local.email_image
+            service_repo_name = local.service_repo_name
+
+        }) : ""
+        destination = "/root/code/cron/leader.cron"
+    }
+
+    provisioner "remote-exec" {
+        inline = [ "crontab /root/code/cron/leader.cron", "crontab -l" ]
+    }
+
+    connection {
+        host = element(var.lead_public_ips, count.index)
+        type = "ssh"
     }
 }
 

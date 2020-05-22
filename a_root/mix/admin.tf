@@ -12,7 +12,6 @@ module "admin_provisioners" {
 
     deploy_key_location = var.deploy_key_location
     root_domain_name = var.root_domain_name
-    misc_repos      = var.misc_repos
     chef_local_dir  = var.chef_local_dir
     chef_client_ver = var.chef_client_ver
 
@@ -41,6 +40,26 @@ resource "null_resource" "change_admin_hostname" {
             host = element(var.admin_public_ips, count.index)
             type = "ssh"
         }
+    }
+}
+
+resource "null_resource" "cron_admin" {
+    count      = var.admin_servers > 0 ? var.admin_servers : 0
+    depends_on = [module.admin_provisioners]
+
+    provisioner "remote-exec" {
+        inline = [ "mkdir -p /root/code/cron" ]
+    }
+    provisioner "file" {
+        content = fileexists("${path.module}/template_files/cron/admin.tmpl") ? file("${path.module}/template_files/cron/admin.tmpl") : ""
+        destination = "/root/code/cron/admin.cron"
+    }
+    provisioner "remote-exec" {
+        inline = [ "crontab /root/code/cron/admin.cron", "crontab -l" ]
+    }
+    connection {
+        host = element(var.admin_public_ips, count.index)
+        type = "ssh"
     }
 }
 
@@ -432,14 +451,35 @@ resource "null_resource" "upload_chef_data_bags" {
     provisioner "file" {
         content = <<-EOF
 
+            HAS_PROXY_REPO=${ contains(keys(var.app_definitions), "proxy") }
+            SERVICE_NAME=""
+
+            if [ "$HAS_PROXY_REPO" = "true" ]; then
+                GREEN_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "green_service" ) : "" };
+                BLUE_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "blue_service" ) : "" };
+                DEFAULT_SERVICE_COLOR=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "default_active" ) : "" };
+                SERVICE_NAME=$GREEN_SERVICE_NAME;
+
+                if [ "$DEFAULT_SERVICE_COLOR" = "blue" ]; then
+                    SERVICE_NAME=$BLUE_SERVICE_NAME;
+                fi
+            fi
+
             cat << EOJ > /tmp/pg.json
                 {
                     "id": "pg",
                     "pass": "${var.pg_md5_password}"
                 }
             EOJ
-
             knife data bag from file secrets /tmp/pg.json
+
+            cat << EOJ > /tmp/docker_service.json
+                {
+                    "id": "docker_service",
+                    "name": "$SERVICE_NAME"
+                }
+            EOJ
+            knife data bag from file secrets /tmp/docker_service.json;
 
         EOF
         destination = "/tmp/upload_chef_data_bags.sh"

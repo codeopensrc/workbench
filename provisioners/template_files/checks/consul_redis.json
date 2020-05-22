@@ -1,0 +1,15 @@
+{
+  "service": {
+    "name": "redis",
+    "tags": ["redis"],
+    "address": "",
+    "port": 6379,
+    "enableTagOverride": false,
+    "checks": [
+      {
+        "script": "redis-cli ping",
+        "interval": "30s"
+      }
+    ]
+  }
+}

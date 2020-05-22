@@ -40,7 +40,7 @@ variable "import_dbs" {}
 
 variable "dbs_to_import" {
     type = list(object({ type=string, aws_bucket=string, aws_region=string,
-        dbname=string, import=string }))
+        dbname=string, import=string, fn=string }))
 }
 
 variable "db_dns" { type = map(object({ url=string, dns_id=string, zone_id=string })) }
@@ -77,7 +77,10 @@ variable "app_definitions" {
 }
 variable "misc_repos" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
-        repo_url=string, repo_name=string }))
+        repo_url=string, repo_name=string,
+        docker_service_name=string, consul_service_name=string, folder_location=string,
+        logs_prefix=string, email_image=string
+    }))
 }
 
 variable "chef_server_url" { default = "" }
@@ -153,6 +156,34 @@ locals {
     db_hostname_ready = (var.db_servers == 1
         ? element(concat(null_resource.change_db_hostname.*.id, [""]), 0)
         : 1)
+
+    redis_dbs = [
+        for db in var.dbs_to_import:
+        db.dbname
+        if db.type == "redis" && db.import == "true"
+    ]
+    pg_dbs = [
+        for db in var.dbs_to_import:
+        db.dbname
+        if db.type == "pg" && db.import == "true"
+    ]
+    mongo_dbs = [
+        for db in var.dbs_to_import:
+        db.dbname
+        if db.type == "mongo" && db.import == "true"
+    ]
+    pg_fn = {
+        for db in var.dbs_to_import:
+        db.type => db.fn
+        if db.type == "pg" && db.import == "true"
+    }
+
+    docker_service_name   = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_service_name" ) : ""
+    consul_service_name   = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "consul_service_name" ) : ""
+    folder_location       = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "folder_location" ) : ""
+    logs_prefix           = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "logs_prefix" ) : ""
+    email_image           = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "email_image" ) : ""
+    service_repo_name     = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : ""
 }
 
 # variable "aws_leaderIP" { default = "" }

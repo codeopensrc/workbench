@@ -1,0 +1,8 @@
+# Name: chef-client
+*/15 * * * * /bin/sleep 61;  /usr/bin/chef-client > /dev/null 2>&1
+
+# Name: Renew Letsencrypt
+MAILTO="root"
+SHELL="/bin/bash"
+HOME="/root"
+0 3 1,10,20 * * export RUN_FROM_CRON=true; bash $HOME/code/scripts/letsencrypt.sh >> $HOME/code/logs/letsencrypt.log 2>>$HOME/code/logs/errors.log
