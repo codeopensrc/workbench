@@ -20,9 +20,9 @@ for i in {0..20}; do
     if [[ $? == 0 ]]; then
         echo "Downloading s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/"$DB_NAME" into ~/code/backups";
         aws s3 cp s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME \
-            ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME --recursive --region $REGION;
+            ~/code/backups/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME --recursive --region $REGION;
         echo "Importing ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME into mongo";
-        mongorestore --db $DB_NAME ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME
+        mongorestore --db $DB_NAME ~/code/backups/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME
         exit;
     fi
 done

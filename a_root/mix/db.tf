@@ -57,6 +57,10 @@ resource "null_resource" "cron_db" {
         inline = [ "mkdir -p /root/code/cron" ]
     }
 
+    triggers = {
+        num_dbs = length(var.dbs_to_import)
+    }
+
     provisioner "file" {
         # TODO: aws_bucket_name and region based off imported db's options
         # TODO: Support multiple dbs for same type of db
@@ -81,7 +85,7 @@ resource "null_resource" "cron_db" {
     }
 }
 
-resource "null_resource" "import_dbs" {
+resource "null_resource" "provision_db_files" {
     count      = var.import_dbs && var.db_servers > 0 ? var.db_servers : 0
     depends_on = [module.db_provisioners]
 
@@ -97,29 +101,35 @@ resource "null_resource" "import_dbs" {
         content = file("${path.module}/template_files/import_redis_db.sh")
         destination = "~/import_redis_db.sh"
     }
+    connection {
+        host = element(var.db_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
+resource "null_resource" "import_dbs" {
+    depends_on = [null_resource.provision_db_files]
+    count = var.import_dbs && var.db_servers > 0 && length(var.dbs_to_import) > 0 ? length(var.dbs_to_import) : 0
 
     provisioner "file" {
         content = <<-EOF
-            %{ for DB in var.dbs_to_import }
-                IMPORT=${DB["import"]};
-                DB_TYPE=${DB["type"]};
-                AWS_BUCKET_NAME=${DB["aws_bucket"]};
-                AWS_BUCKET_REGION=${DB["aws_region"]};
-                DB_NAME=${DB["dbname"]};
+            IMPORT=${var.dbs_to_import[count.index]["import"]};
+            DB_TYPE=${var.dbs_to_import[count.index]["type"]};
+            AWS_BUCKET_NAME=${var.dbs_to_import[count.index]["aws_bucket"]};
+            AWS_BUCKET_REGION=${var.dbs_to_import[count.index]["aws_region"]};
+            DB_NAME=${var.dbs_to_import[count.index]["dbname"]};
 
-                if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
-                    bash ~/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
-                fi
+            if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
+                bash ~/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+            fi
 
-                if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
-                    bash ~/import_pg_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
-                fi
+            if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
+                bash ~/import_pg_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+            fi
 
-                if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
-                    bash ~/import_redis_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
-                fi
-
-            %{ endfor }
+            if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
+                bash ~/import_redis_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+            fi
         EOF
         destination = "/tmp/import_dbs.sh"
     }
@@ -132,7 +142,8 @@ resource "null_resource" "import_dbs" {
     }
 
     connection {
-        host = element(var.db_public_ips, count.index)
+        # TODO: Determine how to handle multiple db servers
+        host = element(var.db_public_ips, 0)
         type = "ssh"
     }
 }

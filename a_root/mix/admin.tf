@@ -74,6 +74,10 @@ resource "null_resource" "add_proxy_hosts" {
     #### TODO: We already register a check/service with consul.. maybe have the app also
     ####   register its consul endpoints as well?
 
+    triggers = {
+        num_apps = length(keys(var.app_definitions))
+    }
+
     provisioner "file" {
         content = <<-EOF
 
@@ -621,6 +625,10 @@ resource "null_resource" "setup_letsencrypt" {
         null_resource.sync_firewalls,
     ]
 
+    triggers = {
+        num_apps = length(keys(var.app_definitions))
+    }
+
     provisioner "file" {
         content = <<-EOF
             ZONE_ID=${var.site_dns[0]["zone_id"]};
@@ -650,12 +658,16 @@ resource "null_resource" "setup_letsencrypt" {
             HAS_PROXY_REPO=${ contains(keys(var.app_definitions), "proxy") }
 
             if [ "$HAS_PROXY_REPO" = "true" ]; then
-                PROXY_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "service_name" ) : "" }
+                PROXY_STACK_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "service_name" ) : "" }
                 PROXY_REPO_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "repo_name" ) : "" }
 
-                docker stack rm $PROXY_SERVICE_NAME
-                sed -i 's/LISTEN_ON_SSL:\s\+"true"/LISTEN_ON_SSL:      "false"/g' $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml
-                docker stack deploy --compose-file $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml $PROXY_SERVICE_NAME --with-registry-auth
+                SSL_CHECK=$(curl "https://${var.root_domain_name}");
+
+                if [ $? -ne 0 ]; then
+                    docker stack rm $PROXY_STACK_NAME
+                    sed -i 's/LISTEN_ON_SSL:\s\+"true"/LISTEN_ON_SSL:      "false"/g' $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml
+                    docker stack deploy --compose-file $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml $PROXY_STACK_NAME --with-registry-auth
+                fi
             fi
         EOF
         destination = "/tmp/turnoff_proxy_ssl.sh"
@@ -696,7 +708,7 @@ resource "null_resource" "setup_letsencrypt" {
     provisioner "remote-exec" {
         inline = [
             "chmod +x /root/code/scripts/letsencrypt.sh",
-            "bash /root/code/scripts/letsencrypt.sh"
+            "export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh"
         ]
     }
 
@@ -741,17 +753,36 @@ resource "null_resource" "add_keys" {
         null_resource.setup_letsencrypt,
     ]
 
+    triggers = {
+        num_apps = length(keys(var.app_definitions))
+    }
+
     provisioner "file" {
         content = <<-EOF
             HAS_PROXY_REPO=${ contains(keys(var.app_definitions), "proxy") }
 
             if [ "$HAS_PROXY_REPO" = "true" ]; then
-                PROXY_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "service_name" ) : "" }
+                PROXY_STACK_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "service_name" ) : "" }
                 PROXY_REPO_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "repo_name" ) : "" }
 
-                docker stack rm $PROXY_SERVICE_NAME
-                sed -i 's/LISTEN_ON_SSL:\s\+"false"/LISTEN_ON_SSL:      "true"/g' $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml
-                docker stack deploy --compose-file $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml $PROXY_SERVICE_NAME --with-registry-auth
+                GREEN_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "green_service" ) : "" };
+                BLUE_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "blue_service" ) : "" };
+                DEFAULT_SERVICE_COLOR=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "default_active" ) : "" };
+                SERVICE_NAME=$GREEN_SERVICE_NAME;
+
+                if [ "$DEFAULT_SERVICE_COLOR" = "blue" ]; then
+                    SERVICE_NAME=$BLUE_SERVICE_NAME;
+                fi
+
+                SSL_CHECK=$(curl "https://${var.root_domain_name}");
+
+                if [ $? -eq 0 ]; then
+                    docker service update $SERVICE_NAME -d --force
+                else
+                    docker stack rm $PROXY_STACK_NAME
+                    sed -i 's/LISTEN_ON_SSL:\s\+"false"/LISTEN_ON_SSL:      "true"/g' $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml
+                    docker stack deploy --compose-file $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml $PROXY_STACK_NAME --with-registry-auth
+                fi
             fi
         EOF
         destination = "/tmp/turnon_proxy_ssl.sh"

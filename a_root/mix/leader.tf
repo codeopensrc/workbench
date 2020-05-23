@@ -172,7 +172,12 @@ resource "null_resource" "sync_leader_with_admin_firewall" {
 
 resource "null_resource" "start_docker_containers" {
     count      = var.leader_servers
-    depends_on = [null_resource.sync_leader_with_admin_firewall]
+    # TODO: Can we cleanly depend on certain imported dbs before starting containers, when adding apps/dbs
+    depends_on = [module.pull_docker_containers, null_resource.sync_leader_with_admin_firewall]
+
+    triggers = {
+        num_apps = length(keys(var.app_definitions))
+    }
 
     provisioner "remote-exec" {
         # We need to version this either in a seperate file or repo as something like

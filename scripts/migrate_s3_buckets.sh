@@ -7,6 +7,7 @@
 INCLUDE_ALL="false"
 INCLUDE_ONLY_YEARS=("2020")
 INCLUDE_ONLY_MONTHS=("01" "02" "03", "04", "05")
+INCLUDE_ONLY_FOLDERS=()
 
 OLDREGION=""
 NEWREGION=""
@@ -90,9 +91,15 @@ fi
 
 if [ "${INCLUDE_ALL}" = "false" ]; then
     # aws --profile $NEWPROFILE s3 sync "s3://$OLDBUCKET" "s3://$NEWBUCKET" --exclude='*' "${INCLUDE_ARGS[@]}" --dryrun
-    aws --profile $NEWPROFILE s3 sync "s3://$OLDBUCKET/auth_backups" "s3://$NEWBUCKET/auth_backups" --exclude='*' "${INCLUDE_ARGS[@]}" --dryrun
-    aws --profile $NEWPROFILE s3 sync "s3://$OLDBUCKET/main_backups" "s3://$NEWBUCKET/main_backups" --exclude='*' "${INCLUDE_ARGS[@]}" --dryrun
-    aws --profile $NEWPROFILE s3 sync "s3://$OLDBUCKET/rer_backups" "s3://$NEWBUCKET/rer_backups" --exclude='*' "${INCLUDE_ARGS[@]}" --dryrun
+    if [[ ${#INCLUDE_ONLY_FOLDERS[@]} -le 0 ]]; then
+        echo -e "Array of folder names required in INCLUDE_ONLY_FOLDERS if INCLUDE_ALL set to false. \nExiting"
+        exit 1
+    fi
+
+    for FOLDER in "${INCLUDE_ONLY_FOLDERS[@]}"; do
+        # echo $FOLDER
+        aws --profile $NEWPROFILE s3 sync "s3://$OLDBUCKET/$FOLDER" "s3://$NEWBUCKET/$FOLDER" --exclude='*' "${INCLUDE_ARGS[@]}" --dryrun
+    done
 fi
 
 

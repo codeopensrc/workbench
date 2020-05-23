@@ -14,7 +14,7 @@ provider "aws" {
     secret_key = var.aws_secret_key
 }
 
-########## OTHER CONFIG/VARIABLES ##########
+########## MISC CONFIG/VARIABLES ##########
 ############################################
 
 # This should be unique per terraform machine/env in order to not have server names clashing
@@ -29,10 +29,17 @@ variable "backup_gitlab" { default = false }
 variable "import_gitlab" { default = false }
 variable "num_gitlab_runners" { default = 0 }
 
+variable "run_service_enabled" { default = false }
+variable "send_logs_enabled" { default = false }
+variable "send_jsons_enabled" { default = false }
+variable "db_backups_enabled" { default = false }
+
+variable "dns_provider" { default = "aws_route53" }
+
 ########## SOFTWARE VERSIONS ##########
 #######################################
 
-variable "gitlab_version" { default = "12.8.1-ce.0" }
+variable "gitlab_version" { default = "12.10.1-ce.0" }
 
 variable "docker_compose_version" { default = "1.19.0" }
 variable "docker_engine_install_url" { default = "https://get.docker.com" }
@@ -43,6 +50,119 @@ variable "chef_server_ver" { default = "12.19.31" }
 variable "chef_dk_ver" { default = "3.8.14" }
 variable "chef_client_ver" { default = "14.11.21" }
 
+########## CLOUD MACHINES ##########
+####################################
+
+# TODO: Azure and Google Cloud providers
+# Options will be digital_ocean, aws, azure, google_cloud
+variable "active_env_provider" { default = "aws" }
+
+variable "admin" { default = 1 }
+variable "leader" { default = 1 }
+variable "db" { default = 1 }
+variable "web" { default = 0 }
+variable "dev" { default = 0 }
+variable "build" { default = 0 }
+variable "mongo" { default = 0 }
+variable "pg" { default = 0 }
+variable "redis" { default = 0 }
+variable "legacy" { default = 0 }
+
+########## Digital Ocean ##########
+variable "do_region" { default = "nyc1" }
+
+variable "do_admin_size" { default = "s-2vcpu-8gb" }
+variable "do_leader_size" { default = "s-2vcpu-4gb" }
+variable "do_db_size" { default = "s-2vcpu-4gb" }
+variable "do_web_size" { default = "1gb" }
+variable "do_dev_size" { default = "1gb" }
+variable "do_legacy_size" { default = "1gb" }
+variable "do_build_size" { default = "s-2vcpu-4gb" }
+variable "do_mongo_size" { default = "s-2vcpu-4gb" }
+variable "do_pg_size" { default = "s-2vcpu-4gb" }
+variable "do_redis_size" { default = "s-2vcpu-4gb" }
+
+
+########## AWS ##########
+variable "aws_region_alias" { default = "awseast" }
+variable "aws_ami" { default = "" } #Ohio -us-east-2
+
+variable "aws_admin_instance_type" { default = "t2.large" }
+variable "aws_leader_instance_type" { default = "t2.medium" }
+variable "aws_db_instance_type" { default = "t2.medium" }
+variable "aws_web_instance_type" { default = "t2.micro" }
+variable "aws_build_instance_type" { default = "t2.micro" }
+variable "aws_mongo_instance_type" { default = "t2.micro" }
+variable "aws_pg_instance_type" { default = "t2.micro" }
+variable "aws_redis_instance_type" { default = "t2.micro" }
+
+
+########## CHEF ##########
+##########################
+# These are necessary for the chef installation on the admin_server
+
+# chef_local_dir is where the credentials for `knife` command are stored
+# This ensures the knife command is unique per terraform env, this way
+#   the knife command run in say 'prod' doesn't affect the nodes in the 'dev' env
+variable "chef_local_dir" { default = "./.chef" }
+variable "chef_remote_dir" { default = "/root/.chef" }
+variable "chef_server_http_port" { default = "8888" }
+variable "chef_server_https_port" { default = "4433" }
+
+
+############ DNS ############
+#############################
+
+# A record
+variable "admin_arecord_aliases" {
+    default = [
+        "cert",
+        "chef",
+        "consul",
+        "gitlab",
+        "registry",
+    ]
+}
+
+variable "db_arecord_aliases" {
+    default = [
+        "mongo.aws1",
+        "mongo.do1",
+        "pg.aws1",
+        "pg.do1",
+        "redis.aws1",
+        "redis.do1",
+    ]
+}
+
+variable "leader_arecord_aliases" {
+    default = [
+        "www"
+    ]
+}
+
+
+############## DB ###########
+#############################
+
+variable "import_dbs" { default = true }
+
+variable "dbs_to_import" {
+    type = list(object({ type=string, aws_bucket=string, aws_region=string,
+        dbname=string, import=string, fn=string }))  # TODO: "fn" hack
+    default = [
+        {
+            "type" = ""
+            "aws_bucket" = ""
+            "aws_region" = ""
+            "dbname" = ""
+            "import" = ""
+            "fn" = ""
+        },
+    ]
+}
+
+
 ########## APPS ##########
 ########################
 
@@ -51,9 +171,6 @@ variable "chef_client_ver" { default = "14.11.21" }
 #  either githubs deploy keys or bitbuckets access keys or gitlabs deploy keys/token
 # Each private repo needs the public key already added
 variable "deploy_key_location" { default = "~/.ssh/repo_read" }
-
-# Docker secrets not added yet - Non-implemented feature in an app needs it
-# dockerconfig apps.json
 
 # TODO: Digital Ocean, Azure, and Google Cloud docker registry options
 # Initial Options: docker_hub, aws_ecr
@@ -125,242 +242,4 @@ variable "misc_repos" {
             "email_image"           = ""
         }
     }
-}
-
-########## CLOUD MACHINES ##########
-####################################
-
-# TODO: Azure and Google Cloud providers
-# Options will be digital_ocean, aws, azure, google_cloud
-variable "active_env_provider" { default = "aws" }
-
-variable "admin" { default = 1 }
-variable "leader" { default = 1 }
-variable "db" { default = 1 }
-variable "web" { default = 0 }
-variable "dev" { default = 0 }
-variable "build" { default = 0 }
-variable "mongo" { default = 0 }
-variable "pg" { default = 0 }
-variable "redis" { default = 0 }
-variable "legacy" { default = 0 }
-
-########## Digital Ocean ##########
-variable "do_region" { default = "nyc1" }
-
-variable "do_admin_size" { default = "s-2vcpu-8gb" }
-variable "do_leader_size" { default = "s-2vcpu-4gb" }
-variable "do_db_size" { default = "s-2vcpu-4gb" }
-variable "do_web_size" { default = "1gb" }
-variable "do_dev_size" { default = "1gb" }
-variable "do_legacy_size" { default = "1gb" }
-variable "do_build_size" { default = "s-2vcpu-4gb" }
-variable "do_mongo_size" { default = "s-2vcpu-4gb" }
-variable "do_pg_size" { default = "s-2vcpu-4gb" }
-variable "do_redis_size" { default = "s-2vcpu-4gb" }
-
-
-########## AWS ##########
-variable "aws_region_alias" { default = "awseast" }
-variable "aws_ami" { default = "" } #Ohio -us-east-2
-
-variable "aws_admin_instance_type" { default = "t2.large" }
-variable "aws_leader_instance_type" { default = "t2.medium" }
-variable "aws_db_instance_type" { default = "t2.medium" }
-variable "aws_web_instance_type" { default = "t2.micro" }
-variable "aws_build_instance_type" { default = "t2.micro" }
-variable "aws_mongo_instance_type" { default = "t2.micro" }
-variable "aws_pg_instance_type" { default = "t2.micro" }
-variable "aws_redis_instance_type" { default = "t2.micro" }
-
-
-########## CHEF ##########
-##########################
-# These are necessary for the chef installation on the admin_server
-
-# chef_local_dir is where the credentials for `knife` command are stored
-# This ensures the knife command is unique per terraform env, this way
-#   the knife command run in say 'prod' doesn't affect the nodes in the 'dev' env
-variable "chef_local_dir" { default = "./.chef" }
-variable "chef_remote_dir" { default = "/root/.chef" }
-variable "chef_server_http_port" { default = "8888" }
-variable "chef_server_https_port" { default = "4433" }
-
-
-########## MISC #######
-#############################
-
-# true/false - Apply changes to db servers
-variable "db_backups_enabled" { default = false }
-
-variable "run_service_enabled" { default = false }
-variable "send_logs_enabled" { default = false }
-variable "send_jsons_enabled" { default = false }
-variable "import_dbs" { default = true }
-
-variable "dbs_to_import" {
-    type = list(object({ type=string, aws_bucket=string, aws_region=string,
-        dbname=string, import=string, fn=string }))  # TODO: "fn" hack
-    default = [
-        {
-            "type" = ""
-            "aws_bucket" = ""
-            "aws_region" = ""
-            "dbname" = ""
-            "import" = ""
-            "fn" = ""
-        },
-    ]
-}
-
-variable "dns_provider" { default = "aws_route53" }
-
-########## CLOUDFLARE #######
-#############################
-
-##########################################################
-##########################################################
-### NOTHING BELOW NEEDS TO BE MODIFIED IF USING ROUTE53 #######
-### Many below variables need to be refactored/deprecated
-##########################################################
-##########################################################
-
-# Below cloudflare/dns variables _should_ be optional to modify DNS settings on cloudflare
-
-# true/false - Apply changes to DNS servers
-##### NOTE: Project no longer uses cloudflare and uses aws_route53
-##### TODO: Remove / Deprecate
-variable "change_db_dns" { default = true }   ## TODO: Untie this from cloudflare
-variable "change_site_dns" { default = true }   ## TODO: Untie this from cloudflare
-variable "change_admin_dns" { default = true }   ## TODO: Untie this from cloudflare
-
-# Each object in the *_dns should be formatted as {"url": "domainname", "dns_id": "id", "zone_id": "id"}
-
-# zone_id is found on the main page for each main domain on cloudflare
-# To get dns id for each domain/subdomain:   GET https://api.cloudflare.com/client/v4/zones/:zone_identifier/dns_records
-# EX:
-# curl -X GET "https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records" \
-# -H "X-Auth-Email: CLOUDFLARE_EMAIL" \
-# -H "X-Auth-Key: CLOUDFLARE_AUTH_KEY" \
-# -H "Content-Type: application/json" | jq '.result[] | {url: .name, dns_id:.id, zone_id: .zone_id}'
-
-# A record
-variable "admin_arecord_aliases" {
-    default = [
-        "cert",
-        "chef",
-        "consul",
-        "gitlab",
-        "registry",
-    ]
-}
-
-variable "db_arecord_aliases" {
-    default = [
-        "mongo.aws1",
-        "mongo.do1",
-        "pg.aws1",
-        "pg.do1",
-        "redis.aws1",
-        "redis.do1",
-    ]
-}
-
-variable "leader_arecord_aliases" {
-    default = [
-        "www"
-    ]
-}
-
-##### NOTE: Project no longer uses cloudflare and uses aws_route53
-##### TODO: Remove / Deprecate
-variable "aws_db_dns" {
-    type = map(object({ url=string, dns_id=string, zone_id=string }))
-    default = {
-        pg = {
-            "url"       = "pg.aws1.DOMAIN.COM"
-            "dns_id"    = ""
-            "zone_id"   = ""
-        }
-        mongo = {
-            "url"       = "mongo.aws1.DOMAIN.COM"
-            "dns_id"    = ""
-            "zone_id"   = ""
-        }
-        redis = {
-            "url"       = "redis.aws1.DOMAIN.COM"
-            "dns_id"    = ""
-            "zone_id"   = ""
-        }
-    }
-}
-
-##### NOTE: Project no longer uses cloudflare and uses aws_route53
-##### TODO: Remove / Deprecate
-variable "do_db_dns" {
-    type = map(object({ url=string, dns_id=string, zone_id=string }))
-    default = {
-        pg = {
-            "url"     = "pg.do1.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        }
-        mongo = {
-            "url"     = "mongo.do1.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        }
-        redis = {
-            "url"     = "redis.do1.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        }
-    }
-}
-
-##### NOTE: Project no longer uses cloudflare and uses aws_route53
-##### TODO: Remove / Deprecate
-variable "site_dns" {
-    type = list(object({ url=string, dns_id=string, zone_id=string }))
-    default = [
-        {
-            "url"     = "DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        },
-    ]
-}
-
-##### NOTE: Project no longer uses cloudflare and uses aws_route53
-##### TODO: Remove / Deprecate
-variable "admin_dns" {
-    type = list(object({ url=string, dns_id=string, zone_id=string }))
-    # We at least need the chef_server_url pointing to it
-    default = [
-        {
-            "url"     = "chef.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        },
-        {
-            "url"     = "consul.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        },
-        {
-            "url"     = "cert.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        },
-        {
-            "url"     = "gitlab.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        },
-        {
-            "url"     = "registry.DOMAIN.COM"
-            "dns_id"  = ""
-            "zone_id" = ""
-        }
-    ]
 }

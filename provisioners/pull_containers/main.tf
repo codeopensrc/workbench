@@ -19,6 +19,7 @@ resource "null_resource" "pull_docker_containers" {
 
     triggers = {
         my_dependencies = "${join(",", var.provisioners_done)}"
+        num_apps = length(keys(var.app_definitions))
     }
 
     provisioner "remote-exec" {
