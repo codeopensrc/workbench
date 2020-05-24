@@ -10,6 +10,7 @@ module "leader_provisioners" {
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
 
+    known_hosts = var.known_hosts
     deploy_key_location = var.deploy_key_location
     root_domain_name = var.root_domain_name
     chef_local_dir  = var.chef_local_dir

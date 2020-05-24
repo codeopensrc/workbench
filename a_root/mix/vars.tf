@@ -69,6 +69,8 @@ variable "import_gitlab" { default = "" }
 variable "gitlab_runner_tokens" { type = map(string) }
 variable "num_gitlab_runners" { default = 0 }
 
+variable "known_hosts" { default = [] }
+
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,

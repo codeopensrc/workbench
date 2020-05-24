@@ -176,6 +176,16 @@ variable "deploy_key_location" { default = "~/.ssh/repo_read" }
 # Initial Options: docker_hub, aws_ecr
 # Aditional Options will be: digital_ocean_registry, azure, google_cloud
 
+variable "known_hosts" {
+    type = list(object({ site=string, pubkey=string }))
+    default = [
+        {
+            site = ""
+            pubkey = ""
+        }
+    ]
+}
+
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,

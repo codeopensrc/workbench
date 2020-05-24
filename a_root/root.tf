@@ -165,6 +165,7 @@ module "mix" {
     gitlab_runner_tokens = var.gitlab_runner_tokens
     num_gitlab_runners = var.num_gitlab_runners
 
+    known_hosts = var.known_hosts
     app_definitions = var.app_definitions
     misc_repos = var.misc_repos
 

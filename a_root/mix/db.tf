@@ -10,6 +10,7 @@ module "db_provisioners" {
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
 
+    known_hosts = var.known_hosts
     active_env_provider = var.active_env_provider
     root_domain_name = var.root_domain_name
     deploy_key_location = var.deploy_key_location
@@ -63,20 +64,42 @@ resource "null_resource" "cron_db" {
 
     provisioner "file" {
         # TODO: aws_bucket_name and region based off imported db's options
-        # TODO: Support multiple dbs for same type of db
-        content = fileexists("${path.module}/template_files/cron/db.tmpl") ? templatefile("${path.module}/template_files/cron/db.tmpl", {
+        content = fileexists("${path.module}/template_files/cron/redisdb.tmpl") ? templatefile("${path.module}/template_files/cron/redisdb.tmpl", {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
-            redis_db = length(local.redis_dbs) > 0 ? local.redis_dbs[0] : ""
-            mongo_db = length(local.mongo_dbs) > 0 ? local.mongo_dbs[0] : ""
-            pg_db = length(local.pg_dbs) > 0 ? local.pg_dbs[0] : ""
+            redis_dbs = length(local.redis_dbs) > 0 ? local.redis_dbs : []
+        }) : ""
+        destination = "/root/code/cron/redisdb.cron"
+    }
+
+    provisioner "file" {
+        # TODO: aws_bucket_name and region based off imported db's options
+        content = fileexists("${path.module}/template_files/cron/mongodb.tmpl") ? templatefile("${path.module}/template_files/cron/mongodb.tmpl", {
+            aws_bucket_region = var.aws_bucket_region
+            aws_bucket_name = var.aws_bucket_name
+            mongo_dbs = length(local.mongo_dbs) > 0 ? local.mongo_dbs : []
+        }) : ""
+        destination = "/root/code/cron/mongodb.cron"
+    }
+
+    provisioner "file" {
+        # TODO: aws_bucket_name and region based off imported db's options
+        content = fileexists("${path.module}/template_files/cron/pgdb.tmpl") ? templatefile("${path.module}/template_files/cron/pgdb.tmpl", {
+            aws_bucket_region = var.aws_bucket_region
+            aws_bucket_name = var.aws_bucket_name
+            pg_dbs = length(local.pg_dbs) > 0 ? local.pg_dbs : []
             pg_fn = length(local.pg_fn) > 0 ? local.pg_fn["pg"] : "" # TODO: hack
         }) : ""
-        destination = "/root/code/cron/db.cron"
+        destination = "/root/code/cron/pgdb.cron"
     }
 
     provisioner "remote-exec" {
-        inline = [ "crontab /root/code/cron/db.cron", "crontab -l" ]
+        inline = [
+            "cd /root/code/cron",
+            "cat redisdb.cron mongodb.cron pgdb.cron > /root/code/cron/db.cron",
+            "crontab /root/code/cron/db.cron",
+            "crontab -l"
+        ]
     }
 
     connection {

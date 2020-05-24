@@ -6,6 +6,7 @@ variable "region" {}
 variable "aws_bot_access_key" {}
 variable "aws_bot_secret_key" {}
 
+variable "known_hosts" { default = [] }
 variable "active_env_provider" { default = "" }
 variable "root_domain_name" { default = "" }
 variable "deploy_key_location" {}
@@ -443,6 +444,11 @@ resource "null_resource" "upload_deploy_key" {
     provisioner "file" {
         content = templatefile("${path.module}/template_files/sshconfig", {
             fqdn = var.root_domain_name
+            known_hosts = [
+                for HOST in var.known_hosts:
+                HOST.site
+                if HOST.site != "gitlab.${var.root_domain_name}"
+            ]
         })
         destination = "/root/.ssh/config"
     }
@@ -451,7 +457,9 @@ resource "null_resource" "upload_deploy_key" {
     #  The entry that goes into known hosts is the PUBLIC key of the ssh SERVER found at /etc/ssh/ssh_host_rsa_key.pub
     #  For the sub domain gitlab.ROOTDOMAIN.COM
     provisioner "file" {
-        content = file("${path.module}/template_files/known_hosts")
+        content = templatefile("${path.module}/template_files/known_hosts", {
+            known_hosts = var.known_hosts
+        })
         destination = "/root/.ssh/known_hosts"
     }
 

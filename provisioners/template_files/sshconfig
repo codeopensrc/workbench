@@ -2,9 +2,13 @@ Host bitbucket.org
 Identityfile ~/.ssh/deploy.key
 IdentitiesOnly yes
 
-Host gitlab.msapps.tk
+%{ for HOST in known_hosts }
+
+Host ${HOST}
 Identityfile ~/.ssh/deploy.key
 IdentitiesOnly yes
+
+%{ endfor }
 
 Host gitlab.${fqdn}
 Identityfile ~/.ssh/deploy.key
