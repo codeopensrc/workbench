@@ -510,6 +510,7 @@ resource "null_resource" "upload_consul_dbchecks" {
         null_resource.upload_deploy_key,
     ]
 
+    # TODO: Conditionally only add checks if we're booting up an instance of that DB type
     provisioner "file" {
         content = templatefile("${path.module}/template_files/checks/consul_pg.json", {
             read_only_pw = var.pg_read_only_pw

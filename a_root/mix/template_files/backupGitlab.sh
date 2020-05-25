@@ -8,13 +8,15 @@
 ### Backup configs
 # gitlab-ctl backup-etc && cd /etc/gitlab/config_backup && cp $(ls -t | head -n1) /secret/gitlab/backups/
 
+OPT_VERSION=""
 
-while getopts "b:r:f" flag; do
+while getopts "b:r:v:f" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         b) BUCKET_NAME=$OPTARG;;
         f) FILE_NAME=$OPTARG;;
         r) REGION=$OPTARG;;
+        v) OPT_VERSION=${OPTARG}_;;
     esac
 done
 
@@ -64,11 +66,11 @@ if [[ "$BACKUPS_ENABLED" = true ]]; then
 
     # The goal is to rsync over the previous days and keep snapshot once a week instead of storing a daily multi gig backup
     /usr/bin/aws s3 cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
-        s3://$BUCKET_NAME/admin_backups/gitlab_backups/$YEAR_MONTH/dump_gitlab_backup_$SUNDAY.tar --region $REGION
+        s3://$BUCKET_NAME/admin_backups/gitlab_backups/$YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar --region $REGION
 
     # Dont keep secrets backup on server I guess? Directly upload the single json file
     /usr/bin/aws s3 cp /etc/gitlab/gitlab-secrets.json \
-        s3://$BUCKET_NAME/admin_backups/gitlab_backups/$YEAR_MONTH/gitlab-secrets_$SUNDAY.json --region $REGION
+        s3://$BUCKET_NAME/admin_backups/gitlab_backups/$YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json --region $REGION
 
 
     # Cleanup every Sunday

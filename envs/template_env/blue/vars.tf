@@ -39,7 +39,7 @@ variable "dns_provider" { default = "aws_route53" }
 ########## SOFTWARE VERSIONS ##########
 #######################################
 
-variable "gitlab_version" { default = "12.10.1-ce.0" }
+variable "gitlab_version" { default = "13.0.0-ce.0" }
 
 variable "docker_compose_version" { default = "1.19.0" }
 variable "docker_engine_install_url" { default = "https://get.docker.com" }
@@ -172,10 +172,6 @@ variable "dbs_to_import" {
 # Each private repo needs the public key already added
 variable "deploy_key_location" { default = "~/.ssh/repo_read" }
 
-# TODO: Digital Ocean, Azure, and Google Cloud docker registry options
-# Initial Options: docker_hub, aws_ecr
-# Aditional Options will be: digital_ocean_registry, azure, google_cloud
-
 variable "known_hosts" {
     type = list(object({ site=string, pubkey=string }))
     default = [
@@ -186,11 +182,14 @@ variable "known_hosts" {
     ]
 }
 
+# TODO: Digital Ocean, Azure, and Google Cloud docker registry options
+# Initial Options: docker_hub, aws_ecr
+# Aditional Options will be: digital_ocean_registry, azure, google_cloud
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
-        green_service=string, blue_service=string, default_active=string, create_subdomain=string }))
+        green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string }))
 
     default = {
         proxy = {
@@ -204,11 +203,12 @@ variable "app_definitions" {
             "docker_registry_url"   = ""
             "docker_registry_user"  = ""
             "docker_registry_pw"    = ""
-            "service_name"          = "proxy"
-            "green_service"         = "proxy_main"
-            "blue_service"          = "proxy_dev"
+            "service_name"          = "proxy"       ## Docker/Consul service name
+            "green_service"         = "proxy_main"  ## Docker/Consul service name
+            "blue_service"          = "proxy_dev"   ## Docker/Consul service name
             "default_active"        = "green"
-            "create_subdomain"      = "false"
+            "create_subdomain"      = "false"   ## Affects dns and letsencrypt
+            "subdomain_name"        = ""        ## Affects dns and letsencrypt
         }
         monitor = {
             "pull"                  = "true"
@@ -221,12 +221,31 @@ variable "app_definitions" {
             "docker_registry_url"   = ""
             "docker_registry_user"  = ""
             "docker_registry_pw"    = ""
-            "service_name"          = "monitor"
-            "green_service"         = "monitor_main"
-            "blue_service"          = "monitor_dev"
+            "service_name"          = "monitor"         ## Docker/Consul service name
+            "green_service"         = "monitor_main"    ## Docker/Consul service name
+            "blue_service"          = "monitor_dev"     ## Docker/Consul service name
             "default_active"        = "green"
-            "create_subdomain"      = "true"  ## Also used for letsencrypt renewal
+            "create_subdomain"      = "true"        ## Affects dns and letsencrypt
+            "subdomain_name"        = "monitor"     ## Affects dns and letsencrypt
         }
+        # template = {
+        #     "pull"                  = "true"
+        #     "stable_version"        = "0.0.1"
+        #     "use_stable"            = "false"
+        #     "repo_url"              = "https://github.com/USER/REPO.git"
+        #     "repo_name"             = "REPO"
+        #     "docker_registry"       = "docker_hub"
+        #     "docker_registry_image" = "ORG/IMAGE"
+        #     "docker_registry_url"   = ""
+        #     "docker_registry_user"  = ""
+        #     "docker_registry_pw"    = ""
+        #     "service_name"          = "sample"          ## Docker/Consul service name
+        #     "green_service"         = "sample_main"     ## Docker/Consul service name
+        #     "blue_service"          = "sample_dev"      ## Docker/Consul service name
+        #     "default_active"        = "green"
+        #     "create_subdomain"      = "true"    ## Affects dns and letsencrypt
+        #     "subdomain_name"        = "www"     ## Affects dns and letsencrypt
+        # }
     }
 }
 

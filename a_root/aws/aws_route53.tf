@@ -7,7 +7,7 @@ data "aws_route53_zone" "default" {
 locals {
     cname_aliases = [
         for app in var.app_definitions:
-        [app.service_name, format("${app.service_name}.db"), format("${app.service_name}.dev"), format("${app.service_name}.dev.db")]
+        [app.subdomain_name, format("${app.subdomain_name}.db"), format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
         if app.create_subdomain == "true"
     ]
 }

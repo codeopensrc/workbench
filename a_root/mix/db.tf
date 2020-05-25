@@ -154,13 +154,13 @@ resource "null_resource" "import_dbs" {
                 bash ~/import_redis_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
             fi
         EOF
-        destination = "/tmp/import_dbs.sh"
+        destination = "/tmp/import_dbs-${count.index}.sh"
     }
 
     provisioner "remote-exec" {
         inline = [
-            "chmod +x /tmp/import_dbs.sh",
-            "/tmp/import_dbs.sh",
+            "chmod +x /tmp/import_dbs-${count.index}.sh",
+            "/tmp/import_dbs-${count.index}.sh",
         ]
     }
 

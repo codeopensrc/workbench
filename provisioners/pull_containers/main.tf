@@ -9,7 +9,7 @@ variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
-        green_service=string, blue_service=string, default_active=string, create_subdomain=string }))
+        green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string }))
 }
 
 variable "provisioners_done" {}

@@ -84,15 +84,15 @@ resource "null_resource" "add_proxy_hosts" {
 
             %{ for APP in var.app_definitions }
 
-                SERVICE_NAME=${APP["service_name"]};
+                SUBDOMAIN_NAME=${APP["subdomain_name"]};
                 GREEN_SERVICE=${APP["green_service"]};
                 BLUE_SERVICE=${APP["blue_service"]};
                 DEFAULT_ACTIVE=${APP["default_active"]};
 
-                consul kv put apps/$SERVICE_NAME/green $GREEN_SERVICE
-                consul kv put apps/$SERVICE_NAME/blue $BLUE_SERVICE
-                consul kv put apps/$SERVICE_NAME/active $DEFAULT_ACTIVE
-                consul kv put applist/$SERVICE_NAME
+                consul kv put apps/$SUBDOMAIN_NAME/green $GREEN_SERVICE
+                consul kv put apps/$SUBDOMAIN_NAME/blue $BLUE_SERVICE
+                consul kv put apps/$SUBDOMAIN_NAME/active $DEFAULT_ACTIVE
+                consul kv put applist/$SUBDOMAIN_NAME
 
             %{ endfor }
 
