@@ -46,6 +46,22 @@ module "leader_provisioners" {
 }
 
 
+resource "null_resource" "leader_folder_provision" {
+    count      = var.leader_servers
+
+    provisioner "remote-exec" {
+        inline = [
+            "mkdir -p /etc/ssl/creds",
+            "mkdir -p /root/code/csv",
+            "mkdir -p /root/code/jsons",
+        ]
+    }
+    connection {
+        host = element(var.lead_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
 resource "null_resource" "change_leader_hostname" {
     count      = var.leader_servers
 
@@ -408,6 +424,7 @@ resource "null_resource" "register_runner" {
     depends_on = [null_resource.install_runner]
 
     # TODO: 1 or 2 prod runners with rest non-prod
+    # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
     provisioner "remote-exec" {
         inline = [
             <<-EOF

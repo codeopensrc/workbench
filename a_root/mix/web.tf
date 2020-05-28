@@ -31,3 +31,18 @@ module "web_provisioners" {
     role = "web"
     joinSwarm = true
 }
+
+resource "null_resource" "web_folder_provision" {
+    count      = var.web_servers
+
+    provisioner "remote-exec" {
+        inline = [
+            "mkdir -p /root/code/csv",
+            "mkdir -p /root/code/jsons",
+        ]
+    }
+    connection {
+        host = element(var.web_public_ips, count.index)
+        type = "ssh"
+    }
+}

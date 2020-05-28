@@ -87,6 +87,51 @@ resource "null_resource" "docker_init" {
     }
 }
 
+
+resource "null_resource" "provision_init" {
+    count = var.servers
+    depends_on = [null_resource.docker_init]
+
+    provisioner "file" {
+        content = <<-EOF
+            [credential]
+                helper = store
+        EOF
+        destination = "/root/.gitconfig"
+    }
+
+    provisioner "file" {
+        source = "${path.module}/template_files/tmux.conf"
+        destination = "/root/.tmux.conf"
+    }
+
+    provisioner "remote-exec" {
+        inline = [
+            "sudo apt-get update",
+            "sudo apt-get install build-essential apt-utils openjdk-8-jdk vim git awscli -y",
+            "mkdir -p /root/repos",
+            "mkdir -p /root/builds",
+            "mkdir -p /root/code",
+            "mkdir -p /root/code/logs",
+            "mkdir -p /root/code/backups",
+            "mkdir -p /root/code/scripts",
+            "mkdir -p /root/.tmux/plugins",
+            "mkdir -p /root/.ssh",
+            "(cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')",
+            "git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm",
+            "ln -s /usr/share/zoneinfo/America/Los_Angeles /etc/localtime",
+            "timedatectl set-timezone 'America/Los_Angeles'",
+        ]
+        # TODO: Configurable timezone
+    }
+
+    connection {
+        host = element(var.public_ips, count.index)
+        type = "ssh"
+    }
+
+}
+
 resource "null_resource" "temp_whitelist" {
     count = var.servers
     depends_on = [null_resource.docker_init]
@@ -225,6 +270,7 @@ resource "null_resource" "update_aws" {
         null_resource.docker_leader,
         null_resource.docker_web,
         null_resource.docker_compose,
+        null_resource.provision_init,
     ]
 
     provisioner "remote-exec" {
@@ -275,10 +321,20 @@ resource "null_resource" "consul_install" {
             "mv ~/consul /usr/local/bin",
             "mkdir -p /etc/consul.d/conf.d"
         ]
-        connection {
-            host = element(var.public_ips, count.index)
-            type = "ssh"
-        }
+    }
+
+    provisioner "file" {
+        content = file("${path.module}/template_files/checks/dns.json")
+        destination = "/etc/consul.d/conf.d/dns.json"
+    }
+
+    provisioner "remote-exec" {
+        inline = [ "chmod 0755 /etc/consul.d/conf.d/dns.json" ]
+    }
+
+    connection {
+        host = element(var.public_ips, count.index)
+        type = "ssh"
     }
 }
 
@@ -468,12 +524,6 @@ resource "null_resource" "upload_deploy_key" {
         destination = "/root/.ssh/deploy.key"
     }
 
-    # TODO: Create folder/file creation resource for default folder structure
-    provisioner "file" {
-        content = file("${path.module}/template_files/checks/dns.json")
-        destination = "/etc/consul.d/conf.d/dns.json"
-    }
-
     # TODO: Possibly utilize this to have a useful docker registry variable
     # provisioner "file" {
     #     content = <<-EOF
@@ -485,7 +535,7 @@ resource "null_resource" "upload_deploy_key" {
     # }
 
     provisioner "remote-exec" {
-        inline = ["chmod 0600 /root/.ssh/deploy.key", "chmod 0755 /etc/consul.d/conf.d/dns.json"]
+        inline = ["chmod 0600 /root/.ssh/deploy.key"]
     }
 
     connection {
