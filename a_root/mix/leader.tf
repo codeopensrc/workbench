@@ -24,9 +24,8 @@ module "leader_provisioners" {
     # consul_wan_leader_ip = var.aws_leaderIP
     consul_wan_leader_ip = var.external_leaderIP
 
-    consul_lan_leader_ip = (length(var.admin_public_ips) > 0
-        ? element(concat(var.admin_public_ips, [""]), var.admin_servers - 1)
-        : element(concat(var.lead_public_ips, [""]), 0))
+    consul_lan_leader_ip = local.consul_lan_leader_ip
+    consul_adv_addresses = local.consul_lead_adv_addresses
 
     datacenter_has_admin = length(var.admin_public_ips) > 0
 

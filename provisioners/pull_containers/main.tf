@@ -64,8 +64,12 @@ resource "null_resource" "pull_docker_containers" {
                         git clone $REPO_URL /root/repos/$REPO_NAME
                         docker pull $DOCKER_IMAGE:latest;
                         (cd /root/repos/$REPO_NAME && git checkout master);
-                        if [ "$USE_STABLE" = "true" ]; then
+
+                        if [ -n "$STABLE_VER" ]; then
                             docker pull $DOCKER_IMAGE:$STABLE_VER;
+                        fi
+
+                        if [ "$USE_STABLE" = "true" ]; then
                             (cd /root/repos/$REPO_NAME && git checkout tags/$STABLE_VER);
                         fi
                     fi

@@ -38,6 +38,10 @@ variable "private_ips" {
     type = list(string)
     default = []
 }
+variable "consul_adv_addresses" {
+    type = list(string)
+    default = []
+}
 
 variable "docker_leader_name" { default = "" }
 
@@ -119,7 +123,7 @@ resource "null_resource" "provision_init" {
             "mkdir -p /root/.ssh",
             "(cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')",
             "git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm",
-            "ln -s /usr/share/zoneinfo/America/Los_Angeles /etc/localtime",
+            "cat /usr/share/zoneinfo/America/Los_Angeles > /etc/localtime",
             "timedatectl set-timezone 'America/Los_Angeles'",
         ]
         # TODO: Configurable timezone
@@ -319,7 +323,8 @@ resource "null_resource" "consul_install" {
             "unzip ~/consul.zip",
             "rm -rf ~/*.zip",
             "mv ~/consul /usr/local/bin",
-            "mkdir -p /etc/consul.d/conf.d"
+            "mkdir -p /etc/consul.d/conf.d",
+            "mkdir -p /etc/consul.d/templates"
         ]
     }
 
@@ -366,8 +371,8 @@ resource "null_resource" "consul_file_admin" {
                 "server": true,
                 "ui": true,
                 "translate_wan_addrs": true,
-                "advertise_addr_wan": "${element(var.public_ips, count.index)}",
-                "advertise_addr": "${element(var.public_ips, count.index)}",
+                "advertise_addr_wan": "${element(var.consul_adv_addresses, count.index)}",
+                "advertise_addr": "${element(var.consul_adv_addresses, count.index)}",
                 "enable_script_checks": true,
                 "autopilot": {
                     "cleanup_dead_servers": true,
@@ -411,8 +416,8 @@ resource "null_resource" "consul_file_leader" {
                 "node_name": "${element(var.names, count.index)}",
                 "server": true,
                 "translate_wan_addrs": true,
-                "advertise_addr_wan": "${element(var.public_ips, count.index)}",
-                "advertise_addr": "${element(var.public_ips, count.index)}",
+                "advertise_addr_wan": "${element(var.consul_adv_addresses, count.index)}",
+                "advertise_addr": "${element(var.consul_adv_addresses, count.index)}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_script_checks": true,
                 "autopilot": {
@@ -453,8 +458,8 @@ resource "null_resource" "consul_file" {
                 "node_name": "${element(var.names, count.index)}",
                 "server": ${var.role == "db" ? true : false},
                 "translate_wan_addrs": true,
-                "advertise_addr_wan": "${element(var.public_ips, count.index)}",
-                "advertise_addr": "${element(var.public_ips, count.index)}",
+                "advertise_addr_wan": "${element(var.consul_adv_addresses, count.index)}",
+                "advertise_addr": "${element(var.consul_adv_addresses, count.index)}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_script_checks": true,
                 "autopilot": {
@@ -567,24 +572,24 @@ resource "null_resource" "upload_consul_dbchecks" {
             datacenter = var.active_env_provider == "digital_ocean" ? "do1" : "aws1"
             fqdn = var.root_domain_name
         })
-        destination = "/etc/consul.d/conf.d/pg.json"
+        destination = "/etc/consul.d/templates/pg.json"
     }
 
     provisioner "file" {
         content = file("${path.module}/template_files/checks/consul_mongo.json")
-        destination = "/etc/consul.d/conf.d/mongo.json"
+        destination = "/etc/consul.d/templates/mongo.json"
     }
 
     provisioner "file" {
         content = file("${path.module}/template_files/checks/consul_redis.json")
-        destination = "/etc/consul.d/conf.d/redis.json"
+        destination = "/etc/consul.d/templates/redis.json"
     }
 
     provisioner "remote-exec" {
         inline = [
-            "chmod 0755 /etc/consul.d/conf.d/pg.json",
-            "chmod 0755 /etc/consul.d/conf.d/mongo.json",
-            "chmod 0755 /etc/consul.d/conf.d/redis.json"
+            "chmod 0755 /etc/consul.d/templates/pg.json",
+            "chmod 0755 /etc/consul.d/templates/mongo.json",
+            "chmod 0755 /etc/consul.d/templates/redis.json"
         ]
     }
 
@@ -690,7 +695,6 @@ resource "null_resource" "consul_service" {
         null_resource.consul_file_admin,
         null_resource.upload_deploy_key,
         null_resource.upload_consul_dbchecks,
-        null_resource.bootstrap,
     ]
 
     provisioner "file" {
@@ -752,12 +756,16 @@ resource "null_resource" "destroy_chef_node" {
     ####### On Destroy ######
     # TODO: If installing chef never completed, do not run as 'knife node delete' hangs
     # TODO: Add some time of ping/"if server up" command to https://chef.DOMAIN.COM/organizations/ORG/nodes/NODE and if failed, skip
+    # curl should work...
     # If having trouble removing on destroy (due to admin being destroyed first), remove the instances from the .tfstate state file
     provisioner "local-exec" {
+        # If 301 redirect to https then its up
         when = destroy
         command = <<-EOF
             echo ${var.chef_server_ready}
-            if [ -d "${var.chef_local_dir}" ]; then
+
+            SERVER_RES_CODE=$(curl -I "http://chef.${var.root_domain_name}" 2>/dev/null | head -n 1 | cut -d " " -f2)
+            if [ -d "${var.chef_local_dir}" ] && [ "$SERVER_RES_CODE" = "301" ]; then
                 knife node delete ${element(var.names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
                 knife client delete ${element(var.names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
             fi
@@ -772,37 +780,43 @@ resource "null_resource" "destroy" {
     count      = var.servers
     depends_on = [null_resource.docker_init]
 
-    provisioner "file" {
-        when = destroy
-        content = <<-EOF
-            if [ "${var.role == "manager"}" = "true" ]; then
-                docker node update --availability="drain" ${element(var.names, count.index)}
-                sleep 20;
-                docker node demote ${element(var.names, count.index)}
-                sleep 5
-            fi
-        EOF
-        destination = "/tmp/leave.sh"
-    }
-
-    ####### On Destroy ######
-    provisioner "remote-exec" {
-        when = destroy
-        ## TODO: Review all folders we create/modify on the server and remove them
-        ##   for no actual reason in particular, just being thorough
-        inline = [
-            "chmod +x /tmp/leave.sh",
-            "/tmp/leave.sh",
-            "docker swarm leave",
-            "docker swarm leave --force;",
-            "rm -rf /root",
-            "systemctl stop consul.service",
-            "rm -rf /etc/ssl",
-            "exit 0;"
-        ]
-        on_failure = continue
-
-    }
+    # TODO: Need to trigger these on scaling down but not on a "terraform destroy"
+    # Or maybe a seperate paramater to set to run: scaling_down=true, false by default
+    # provisioner "file" {
+    #     when = destroy
+    #     content = <<-EOF
+    #         if [ "${var.role == "manager"}" = "true" ]; then
+    #             docker node update --availability="drain" ${element(var.names, count.index)}
+    #             sleep 20;
+    #             docker node demote ${element(var.names, count.index)}
+    #             sleep 5
+    #         fi
+    #     EOF
+    #     destination = "/tmp/leave.sh"
+    # }
+    #
+    # ####### On Destroy ######
+    # provisioner "remote-exec" {
+    #     when = destroy
+    #     ## TODO: Review all folders we create/modify on the server and remove them
+    #     ##   for no actual reason in particular, just being thorough
+    #     inline = [
+    #         "chmod +x /tmp/leave.sh",
+    #         "/tmp/leave.sh",
+    #         "docker swarm leave",
+    #         "docker swarm leave --force;",
+    #         "systemctl stop consul.service",
+    #         "rm -rf /etc/ssl",
+    #         "exit 0;"
+    #     ]
+    #     on_failure = continue
+    # }
+    #
+    # connection {
+    #     host    = element(var.public_ips, count.index)
+    #     type    = "ssh"
+    #     timeout = "45s"
+    # }
 
     # Remove any previous docker-machine references to this name
     provisioner "local-exec" {
@@ -812,11 +826,5 @@ resource "null_resource" "destroy" {
             exit 0;
         EOF
         on_failure = continue
-    }
-
-    connection {
-        host    = element(var.public_ips, count.index)
-        type    = "ssh"
-        timeout = "45s"
     }
 }

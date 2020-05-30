@@ -1,16 +1,42 @@
-resource "aws_security_group" "default_ports" {
-    name = var.server_name_prefix
+resource "aws_security_group" "db_ports" {
+    name = "${local.vpc_name}_db_sg"
+    vpc_id = aws_vpc.terraform_vpc.id
     tags = {
-        Name = var.server_name_prefix
+        Name = "${local.vpc_name}_db_sg"
     }
 
     ingress {
-        description = "ssh"
-        from_port   = 22
-        to_port     = 22
-        cidr_blocks = ["0.0.0.0/0"]
+        description = "postgresql"
+        from_port   = 5432
+        to_port     = 5432
+        cidr_blocks = [var.cidr_block]
         protocol    = "tcp"
     }
+    ingress {
+        description = "redis"
+        from_port   = 6379
+        to_port     = 6379
+        cidr_blocks = [var.cidr_block]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "mongo"
+        from_port   = 27017
+        to_port     = 27017
+        cidr_blocks = [var.cidr_block]
+        protocol    = "tcp"
+    }
+
+}
+
+resource "aws_security_group" "app_ports" {
+    name = "${local.vpc_name}_app_sg"
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name = "${local.vpc_name}_app_sg"
+    }
+
+    # If we ever seperate 80/443 to external load balancers we can move to diff group
     ingress {
         description = "http"
         from_port   = 80
@@ -25,52 +51,12 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "tcp"
     }
+
+    # App/Api
     ingress {
-        description = "postgresql"
-        from_port   = 5432
-        to_port     = 5432
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "redis"
-        from_port   = 6379
-        to_port     = 6379
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "mongo"
-        from_port   = 27017
-        to_port     = 27017
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "consul1"
-        from_port   = 8300
-        to_port     = 8302
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "consul2"
-        from_port   = 8400
-        to_port     = 8400
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "consul3"
-        from_port   = 8500
-        to_port     = 8500
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "consul4"
-        from_port   = 8600
-        to_port     = 8600
+        description = "Docker Swarm TCP2"
+        from_port   = 2377
+        to_port     = 2377
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "tcp"
     }
@@ -82,11 +68,11 @@ resource "aws_security_group" "default_ports" {
         protocol    = "tcp"
     }
     ingress {
-        description = "Docker Swarm TCP2"
-        from_port   = 2377
-        to_port     = 2377
+        description = "Docker Swarm UDP2"
+        from_port   = 4789
+        to_port     = 4789
         cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
+        protocol    = "udp"
     }
     ingress {
         description = "Docker Swarm UDP1"
@@ -96,12 +82,46 @@ resource "aws_security_group" "default_ports" {
         protocol    = "udp"
     }
     ingress {
-        description = "Docker Swarm UDP2"
-        from_port   = 4789
-        to_port     = 4789
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "udp"
+        description = "Docker Bridge"
+        from_port   = 0
+        to_port     = 65535
+        cidr_blocks = ["172.16.0.0/12"]
+        protocol    = "tcp"
     }
+    # We allow all ports by default for user, but this will ensure we can at least
+    #  make a docker-machine connection even if that rule is deleted
+    ingress {
+        description = "Docker Machine (user)"
+        from_port   = 2376
+        to_port     = 2376
+        cidr_blocks = ["${var.docker_machine_ip}/32"]
+        protocol    = "tcp"
+    }
+}
+
+
+resource "aws_security_group" "admin_ports" {
+    name = "${local.vpc_name}_admin_sg"
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name = "${local.vpc_name}_admin_sg"
+    }
+
+    ingress {
+        description = "http"
+        from_port   = 80
+        to_port     = 80
+        cidr_blocks = ["0.0.0.0/0"]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "https"
+        from_port   = 443
+        to_port     = 443
+        cidr_blocks = ["0.0.0.0/0"]
+        protocol    = "tcp"
+    }
+
     ingress {
         description = "LetsEncrypt"
         from_port   = 7080
@@ -109,6 +129,7 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "tcp"
     }
+    # Soon to deprecate chef
     ingress {
         description = "Chef_Http"
         from_port   = 8888
@@ -130,18 +151,28 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "tcp"
     }
+}
+
+
+resource "aws_security_group" "default_ports" {
+    name = "${local.vpc_name}_default_sg"
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name = "${local.vpc_name}_default_sg"
+    }
+
     ingress {
-        description = "Docker Bridge"
-        from_port   = 0
-        to_port     = 65535
-        cidr_blocks = ["172.16.0.0/12"]
+        description = "ssh"
+        from_port   = 22
+        to_port     = 22
+        cidr_blocks = ["0.0.0.0/0"]
         protocol    = "tcp"
     }
     ingress {
         description = "localhost1"
         from_port   = 0
         to_port     = 65535
-        cidr_blocks = ["127.0.0.0/32"]
+        cidr_blocks = ["127.0.0.0/20"]
         protocol    = "tcp"
     }
     ingress {
@@ -151,14 +182,8 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["192.168.0.0/20"]
         protocol    = "tcp"
     }
-    ingress {
-        description = "Docker Machine (user)"
-        from_port   = 2376
-        to_port     = 2376
-        cidr_blocks = ["${var.docker_machine_ip}/32"]
-        protocol    = "tcp"
-    }
-    # Default allow terraform user to every port as well
+
+    # Default allow terraform user to every port
     ingress {
         description = "All User"
         from_port   = 0
@@ -166,7 +191,37 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["${var.docker_machine_ip}/32"]
         protocol    = "tcp"
     }
-    # Allow all traffic out
+
+    # Consul communication between vpc
+    ingress {
+        description = "consul1"
+        from_port   = 8300
+        to_port     = 8302
+        cidr_blocks = [var.cidr_block]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "consul2"
+        from_port   = 8400
+        to_port     = 8400
+        cidr_blocks = [var.cidr_block]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "consul3"
+        from_port   = 8500
+        to_port     = 8500
+        cidr_blocks = [var.cidr_block]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "consul4"
+        from_port   = 8600
+        to_port     = 8600
+        cidr_blocks = [var.cidr_block]
+        protocol    = "tcp"
+    }
+
     egress {
         description = "All traffic"
         from_port   = 0
@@ -174,15 +229,4 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "-1"
     }
-
-
-
-    # ingress {
-    #     description = "Unicorn"
-    #     from_port   = 8080
-    #     to_port     = 8080
-    #     cidr_blocks = ["0.0.0.0/0"]
-    #     protocol    = "tcp"
-    # }
-
 }

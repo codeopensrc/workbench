@@ -1,5 +1,6 @@
 resource "aws_instance" "admin" {
     count = var.active_env_provider == "aws" ? var.admin_servers : 0
+    depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
     ami = var.aws_ami
     # ami = data.aws_ami.ubuntu.id
@@ -13,9 +14,9 @@ resource "aws_instance" "admin" {
         volume_size = 30
     }
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.admin_ports.id]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -37,10 +38,10 @@ resource "aws_instance" "build" {
         ignore_changes= [ tags ]
     }
 
-    depends_on = [aws_instance.lead]
+    depends_on = [aws_instance.lead, aws_internet_gateway.igw]
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
     vpc_security_group_ids = [aws_security_group.default_ports.id]
 
     provisioner "remote-exec" {
@@ -55,6 +56,7 @@ resource "aws_instance" "build" {
 
 resource "aws_instance" "db" {
     count = var.active_env_provider == "aws" ? var.db_servers : 0
+    depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
     ami = var.aws_ami
     instance_type = var.aws_db_instance_type
@@ -67,9 +69,9 @@ resource "aws_instance" "db" {
         volume_size = 30
     }
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -91,11 +93,16 @@ resource "aws_instance" "dev" {
         ignore_changes= [ tags ]
     }
 
-    depends_on = [aws_instance.lead]
+    depends_on = [aws_instance.lead, aws_internet_gateway.igw]
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    # Maybe add these for more open server access on a throwaway machine
+    # aws_security_group.db_ports.id,
+    # aws_security_group.app_ports.id
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -110,6 +117,7 @@ resource "aws_instance" "dev" {
 # TODO: USE MODULO FOR MORE LEADERS
 resource "aws_instance" "lead" {
     count = var.active_env_provider == "aws" ? var.leader_servers : 0
+    depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
     ami = var.aws_ami
     # ami = data.aws_ami.ubuntu.id
@@ -123,9 +131,9 @@ resource "aws_instance" "lead" {
         volume_size = 20
     }
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.app_ports.id]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -139,6 +147,7 @@ resource "aws_instance" "lead" {
 
 resource "aws_instance" "mongo" {
     count = var.active_env_provider == "aws" ? var.mongo_servers : 0
+    depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
     ami = var.aws_ami
     instance_type = var.aws_mongo_instance_type
@@ -147,9 +156,9 @@ resource "aws_instance" "mongo" {
         ignore_changes= [ tags ]
     }
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -163,6 +172,7 @@ resource "aws_instance" "mongo" {
 
 resource "aws_instance" "pg" {
     count = var.active_env_provider == "aws" ? var.pg_servers : 0
+    depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
     ami = var.aws_ami
     instance_type = var.aws_pg_instance_type
@@ -171,9 +181,9 @@ resource "aws_instance" "pg" {
         ignore_changes= [ tags ]
     }
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -188,6 +198,7 @@ resource "aws_instance" "pg" {
 
 resource "aws_instance" "redis" {
     count = var.active_env_provider == "aws" ? var.redis_servers : 0
+    depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
     ami = var.aws_ami
     instance_type = var.aws_redis_instance_type
@@ -196,9 +207,9 @@ resource "aws_instance" "redis" {
         ignore_changes= [ tags ]
     }
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -220,11 +231,11 @@ resource "aws_instance" "web" {
         ignore_changes= [ tags ]
     }
 
-    depends_on = [aws_instance.lead]
+    depends_on = [aws_instance.lead, aws_internet_gateway.igw]
 
-    # We're using a single rule for all machines in AWS since we adjust on machine level
-    #  until we go further indepth with AWS security groups
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    associate_public_ip_address = true
+    subnet_id              = aws_subnet.public_subnet.id
+    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.app_ports.id]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]

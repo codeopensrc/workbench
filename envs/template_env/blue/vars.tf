@@ -25,10 +25,10 @@ variable "server_name_prefix" { default = "NAME-blue" }
 # It should remain an empty string in version control
 variable "join_machine_id" { default = "" }
 
-variable "backup_gitlab" { default = false }
 variable "import_gitlab" { default = false }
 variable "num_gitlab_runners" { default = 0 }
 
+variable "gitlab_backups_enabled" { default = false }
 variable "run_service_enabled" { default = false }
 variable "send_logs_enabled" { default = false }
 variable "send_jsons_enabled" { default = false }
@@ -39,7 +39,7 @@ variable "dns_provider" { default = "aws_route53" }
 ########## SOFTWARE VERSIONS ##########
 #######################################
 
-variable "gitlab_version" { default = "13.0.0-ce.0" }
+variable "gitlab_version" { default = "13.0.3-ce.0" }
 
 variable "docker_compose_version" { default = "1.19.0" }
 variable "docker_engine_install_url" { default = "https://get.docker.com" }
@@ -260,6 +260,9 @@ variable "misc_repos" {
             "pull"                  = "true"
             "stable_version"        = ""
             "use_stable"            = "false"
+            # os.infra.chef#0.1.0 still has firewall rules on machine level while 0.2.0 removed UFW rules
+            # If using digital ocean servers, use 0.1.0 for now until a terraform/DO implementation is
+            #   added, otherwise aws servers work with 0.2.* using vpc and security groups
             "repo_url"              = "https://github.com/Cjones90/os.infra.chef.git"
             "repo_name"             = "os.infra.chef"
 

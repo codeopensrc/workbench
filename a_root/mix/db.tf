@@ -20,9 +20,8 @@ module "db_provisioners" {
     docker_engine_install_url = var.docker_engine_install_url
     consul_version        = var.consul_version
 
-    consul_lan_leader_ip = (length(var.admin_public_ips) > 0
-        ? element(concat(var.admin_public_ips, [""]), var.admin_servers - 1)
-        : element(concat(var.lead_public_ips, [""]), 0))
+    consul_lan_leader_ip = local.consul_lan_leader_ip
+    consul_adv_addresses = local.consul_db_adv_addresses
 
     role = "db"
     db_backups_enabled = var.db_backups_enabled
@@ -82,6 +81,7 @@ resource "null_resource" "cron_db" {
         destination = "/root/code/cron/mongodb.cron"
     }
 
+    # Modify /etc/postgresql/POSTGRES_VER/main/pg_hba.conf once installation in terraform
     provisioner "file" {
         # TODO: aws_bucket_name and region based off imported db's options
         content = fileexists("${path.module}/template_files/cron/pgdb.tmpl") ? templatefile("${path.module}/template_files/cron/pgdb.tmpl", {
@@ -144,14 +144,17 @@ resource "null_resource" "import_dbs" {
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
                 bash ~/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
                 bash ~/import_pg_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                cp /etc/consul.d/templates/pg.json /etc/consul.d/conf.d/pg.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
                 bash ~/import_redis_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                cp /etc/consul.d/templates/redis.json /etc/consul.d/conf.d/redis.json
             fi
         EOF
         destination = "/tmp/import_dbs-${count.index}.sh"
@@ -161,6 +164,7 @@ resource "null_resource" "import_dbs" {
         inline = [
             "chmod +x /tmp/import_dbs-${count.index}.sh",
             "/tmp/import_dbs-${count.index}.sh",
+            "consul reload"
         ]
     }
 

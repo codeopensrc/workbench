@@ -99,7 +99,7 @@ module "root" {
 
     deploy_key_location = var.deploy_key_location
 
-    backup_gitlab = var.backup_gitlab
+    gitlab_backups_enabled = var.gitlab_backups_enabled
     import_gitlab = var.import_gitlab
     gitlab_runner_tokens = var.gitlab_runner_tokens
     num_gitlab_runners = var.num_gitlab_runners

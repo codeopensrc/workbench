@@ -21,7 +21,8 @@ module "admin_provisioners" {
     consul_version         = var.consul_version
 
     # TODO: This might cause a problem when launching the 2nd admin server when swapping
-    consul_lan_leader_ip = element(concat(var.admin_public_ips, [""]), 0)
+    consul_lan_leader_ip = local.consul_lan_leader_ip
+    consul_adv_addresses = local.consul_admin_adv_addresses
 
     role = "admin"
 }
@@ -52,7 +53,11 @@ resource "null_resource" "cron_admin" {
         inline = [ "mkdir -p /root/code/cron" ]
     }
     provisioner "file" {
-        content = fileexists("${path.module}/template_files/cron/admin.tmpl") ? file("${path.module}/template_files/cron/admin.tmpl") : ""
+        content = fileexists("${path.module}/template_files/cron/admin.tmpl") ? templatefile("${path.module}/template_files/cron/admin.tmpl", {
+            gitlab_backups_enabled = var.gitlab_backups_enabled
+            aws_bucket_region = var.aws_bucket_region
+            aws_bucket_name = var.aws_bucket_name
+        }) : ""
         destination = "/root/code/cron/admin.cron"
     }
     provisioner "remote-exec" {
@@ -109,6 +114,7 @@ resource "null_resource" "add_proxy_hosts" {
         inline = [
             "chmod +x /tmp/consulkeys.sh",
             "/tmp/consulkeys.sh",
+            "rm /tmp/consulkeys.sh",
         ]
     }
     connection {
@@ -229,15 +235,26 @@ resource "null_resource" "restore_gitlab" {
 
     provisioner "file" {
         content = file("${path.module}/template_files/importGitlab.sh")
-        destination = "/tmp/importGitlab.sh"
+        destination = "/root/code/scripts/importGitlab.sh"
+    }
+
+    provisioner "file" {
+        content = file("${path.module}/template_files/backupGitlab.sh")
+        destination = "/root/code/scripts/backupGitlab.sh"
     }
 
     provisioner "remote-exec" {
         inline = [
-            "chmod +x /tmp/importGitlab.sh",
-            (var.import_gitlab
-                ? "/tmp/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name}"
-                : "echo 0"),
+            <<-EOF
+                chmod +x /root/code/scripts/importGitlab.sh;
+                ${var.import_gitlab ? "bash /root/code/scripts/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name};" : ""}
+
+                GITLAB_BACKUPS_ENABLED=${var.gitlab_backups_enabled};
+                if [ "$GITLAB_BACKUPS_ENABLED" != "true" ]; then
+                    sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /root/code/scripts/backupGitlab.sh;
+                fi
+                exit 0;
+            EOF
         ]
     }
 
@@ -798,43 +815,6 @@ resource "null_resource" "add_keys" {
 
     connection {
         host = element(var.lead_public_ips, 0)
-        type = "ssh"
-    }
-}
-
-# TODO: Only backup if main server or dev backup with diff naming convention
-resource "null_resource" "backup_server" {
-    count = var.admin_servers
-    depends_on = [
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-    ]
-
-
-    provisioner "file" {
-        when = destroy
-        content = file("${path.module}/template_files/backupGitlab.sh")
-        destination = "/tmp/backupGitlab.sh"
-    }
-
-    provisioner "remote-exec" {
-        when = destroy
-        inline = [
-            "chmod +x /tmp/backupGitlab.sh",
-            (var.backup_gitlab
-                ? "echo 0"
-                : "sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /tmp/backupGitlab.sh"),
-            (var.backup_gitlab
-                ? "cat /tmp/backupGitlab.sh"
-                : "echo BACKUPS disabled"),
-            (var.backup_gitlab
-                ? "bash /tmp/backupGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name}"
-                : "echo 0"),
-        ]
-    }
-
-    connection {
-        host = element(var.admin_public_ips, count.index)
         type = "ssh"
     }
 }
