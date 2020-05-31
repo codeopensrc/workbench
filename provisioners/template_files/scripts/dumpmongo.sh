@@ -9,12 +9,9 @@ while getopts "d:" flag; do
     esac
 done
 
-if [ -z "$DB" ]; then
-     echo "Please specify a database to dump from mongo: -d DBNAME"
-     exit;
+if [ -n "$DB" ]; then
+    mongodump --db $DB --out $HOME/code/backups/"$DB"_backups/"$DB"_"$TODAY"/
+else
+    mongodump --out $HOME/code/backups/mongo_backups/mongo_full_"$TODAY"/
 fi
-
-
-mongodump --db $DB --out $HOME/code/backups/"$DB"_backups/"$DB"_"$TODAY"/
-
 echo "Backup completed : "  $(date)

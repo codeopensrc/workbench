@@ -7,7 +7,7 @@
     "enableTagOverride": false,
     "checks": [
       {
-        "script": "echo 'exit' | mongo",
+        "script": "echo 'exit' | mongo --host ${ip_address}",
         "interval": "30s"
       }
     ]

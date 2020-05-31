@@ -1,10 +1,11 @@
 #!/bin/bash
 
-while getopts "b:r:d:" flag; do
+while getopts "b:r:h:d:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         b) BUCKET_NAME=$OPTARG;;
         d) DB_NAME=$OPTARG;;
+        h) HOST=$OPTARG;;
         r) REGION=$OPTARG;;
     esac
 done
@@ -22,7 +23,11 @@ for i in {0..20}; do
         aws s3 cp s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME \
             ~/code/backups/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME --recursive --region $REGION;
         echo "Importing ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME into mongo";
-        mongorestore --db $DB_NAME ~/code/backups/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME
+        if [ -n $HOST ]; then
+            mongorestore --host $HOST --db $DB_NAME ~/code/backups/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME
+        else
+            mongorestore --db $DB_NAME ~/code/backups/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME
+        fi
         exit;
     fi
 done

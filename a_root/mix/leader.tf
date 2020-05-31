@@ -142,33 +142,14 @@ module "pull_docker_containers" {
     aws_ecr_region   = var.aws_ecr_region
 }
 
-resource "null_resource" "chef_client_initial_run" {
-    count      = var.leader_servers > 0 ? 1 : 0
-    depends_on = [null_resource.change_db_dns]
-
-    triggers = {
-        # TODO: Run this anytime we add a server - leader, web, db, etc
-        #   Needs to be after the new server has been bootstrapped however, not sure what to do about that yet
-        run_chef_client = var.leader_servers
-    }
-
-    provisioner "local-exec" {
-        command = <<-EOF
-            knife ssh 'role:*' 'chef-client' --identity-file ~/.ssh/id_rsa -x root -a ipaddress
-            sleep 30
-        EOF
-    }
-}
-
 resource "null_resource" "sync_leader_with_admin_firewall" {
     count      = var.admin_servers
-    depends_on = [null_resource.chef_client_initial_run]
+    depends_on = [null_resource.change_db_dns]
 
     provisioner "file" {
         content = <<-EOF
             check_consul() {
 
-                chef-client;
                 consul kv put leader_bootstrapped true;
 
                 ADMIN_READY=$(consul kv get admin_ready);

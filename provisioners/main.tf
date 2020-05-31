@@ -572,7 +572,9 @@ resource "null_resource" "upload_consul_dbchecks" {
     }
 
     provisioner "file" {
-        content = file("${path.module}/template_files/checks/consul_mongo.json")
+        content = templatefile("${path.module}/template_files/checks/consul_mongo.json", {
+            ip_address = element(var.active_env_provider == "aws" ? var.private_ips : var.public_ips, count.index)
+        })
         destination = "/etc/consul.d/templates/mongo.json"
     }
 

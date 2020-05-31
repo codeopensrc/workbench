@@ -124,54 +124,49 @@ resource "null_resource" "provision_db_files" {
         content = file("${path.module}/template_files/import_redis_db.sh")
         destination = "~/import_redis_db.sh"
     }
+    provisioner "file" {
+        content = file("${path.module}/template_files/install/install_redis.sh")
+        destination = "~/code/scripts/install_redis.sh"
+    }
+    provisioner "file" {
+        content = file("${path.module}/template_files/install/install_mongo.sh")
+        destination = "~/code/scripts/install_mongo.sh"
+    }
+    # provisioner "file" {
+    #     content = file("${path.module}/template_files/install/install_pg.sh")
+    #     destination = "~/code/scripts/install_pg.sh"
+    # }
     connection {
         host = element(var.db_public_ips, count.index)
         type = "ssh"
     }
 }
 
-# NOTE: We're installing redis/all dbs by default until we can further modularize install and import
-resource "null_resource" "install_redis" {
+resource "null_resource" "install_dbs" {
     count      = var.db_servers > 0 ? var.db_servers : 0
-    depends_on = [module.db_provisioners]
+    depends_on = [module.db_provisioners, null_resource.provision_db_files]
 
     provisioner "remote-exec" {
-        # TODO: Setup to bind to private net/vpc instead of relying soley on the security group/firewall
-        # NOTE: The empty lines are important between ./install_server.sh <<-EOI  and   EOI
-        # It denotes an empty/default response to redis install questions
+        # TODO: Setup to bind to private net/vpc instead of relying soley on the security group/firewall for all dbs
+        # "chmod +x ~/code/scripts/install_pg.sh",
+        # "bash ~/code/scripts/install_pg.sh",
         inline = [
-            <<-EOF
-                REDIS_VERSION="5.0.9"
-                sudo apt-get update;
-                sudo apt-get install -y tcl8.5;
-                curl -L http://download.redis.io/releases/redis-$REDIS_VERSION.tar.gz > /tmp/redis-$REDIS_VERSION.tar.gz;
-                cd /tmp; mkdir -p /var/lib/redis; tar xzf redis-$REDIS_VERSION.tar.gz -C /var/lib/redis;
-                cd /var/lib/redis/redis-$REDIS_VERSION; make clean && make;
-                cd /var/lib/redis/redis-$REDIS_VERSION; make install;
-                sed -i 's/bind 127\.0\.0\.1/bind 0\.0\.0\.0/' /var/lib/redis/redis-$REDIS_VERSION/redis.conf;
-                sed -i 's/protected-mode yes/protected-mode no/' /var/lib/redis/redis-$REDIS_VERSION/redis.conf;
-                cd /var/lib/redis/redis-$REDIS_VERSION/utils;
-                ./install_server.sh <<-EOI
-
-                /var/lib/redis/redis.conf
-
-                /var/lib/redis
-
-
-                EOI
-                sudo update-rc.d redis_6379 defaults;
-                sudo service redis_6379 start;
-            EOF
+            "chmod +x ~/code/scripts/install_redis.sh",
+            "chmod +x ~/code/scripts/install_mongo.sh",
+            (length(local.redis_dbs) > 0 ? "bash ~/code/scripts/install_redis.sh -v 5.0.9;" : ""),
+            (length(local.mongo_dbs) > 0
+                ? "bash ~/code/scripts/install_mongo.sh -v 4.2.7 -i ${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)}"
+                : "")
         ]
-        connection {
-            host = element(var.db_public_ips, var.db_servers - 1)
-            type = "ssh"
-        }
+    }
+    connection {
+        host = element(var.db_public_ips, count.index)
+        type = "ssh"
     }
 }
 
 resource "null_resource" "import_dbs" {
-    depends_on = [null_resource.provision_db_files, null_resource.install_redis]
+    depends_on = [null_resource.provision_db_files, null_resource.install_dbs]
     count = var.import_dbs && var.db_servers > 0 && length(var.dbs_to_import) > 0 ? length(var.dbs_to_import) : 0
 
     provisioner "file" {
@@ -181,9 +176,10 @@ resource "null_resource" "import_dbs" {
             AWS_BUCKET_NAME=${var.dbs_to_import[count.index]["aws_bucket"]};
             AWS_BUCKET_REGION=${var.dbs_to_import[count.index]["aws_region"]};
             DB_NAME=${var.dbs_to_import[count.index]["dbname"]};
+            HOST=${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)}
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
-                bash ~/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                bash ~/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME -h $HOST;
                 cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
             fi
 
