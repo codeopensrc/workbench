@@ -2,7 +2,6 @@
 
 DOMAIN=${fqdn}
 WEBROOT=/var/www/html
-CHEF_REPO=${chef_repo}
 DRY_RUN=${dry_run}
 
 RENEW=(sudo certbot certonly --webroot --expand --non-interactive --agree-tos --email ${email} -w $WEBROOT -d $DOMAIN)

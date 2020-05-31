@@ -473,20 +473,6 @@ resource "null_resource" "upload_chef_data_bags" {
     provisioner "file" {
         content = <<-EOF
 
-            HAS_PROXY_REPO=${ contains(keys(var.app_definitions), "proxy") }
-            SERVICE_NAME=""
-
-            if [ "$HAS_PROXY_REPO" = "true" ]; then
-                GREEN_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "green_service" ) : "" };
-                BLUE_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "blue_service" ) : "" };
-                DEFAULT_SERVICE_COLOR=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "default_active" ) : "" };
-                SERVICE_NAME=$GREEN_SERVICE_NAME;
-
-                if [ "$DEFAULT_SERVICE_COLOR" = "blue" ]; then
-                    SERVICE_NAME=$BLUE_SERVICE_NAME;
-                fi
-            fi
-
             cat << EOJ > /tmp/pg.json
                 {
                     "id": "pg",
@@ -494,14 +480,6 @@ resource "null_resource" "upload_chef_data_bags" {
                 }
             EOJ
             knife data bag from file secrets /tmp/pg.json
-
-            cat << EOJ > /tmp/docker_service.json
-                {
-                    "id": "docker_service",
-                    "name": "$SERVICE_NAME"
-                }
-            EOJ
-            knife data bag from file secrets /tmp/docker_service.json;
 
         EOF
         destination = "/tmp/upload_chef_data_bags.sh"
@@ -674,7 +652,6 @@ resource "null_resource" "setup_letsencrypt" {
             app_definitions = var.app_definitions,
             fqdn = var.root_domain_name,
             email = var.chef_email,
-            chef_repo = var.misc_repos["chef"]["repo_name"],
             dry_run = false
         })
         destination = "/root/code/scripts/letsencrypt_vars.sh"

@@ -626,7 +626,7 @@ resource "null_resource" "bootstrap" {
     provisioner "local-exec" {
         command = <<-EOF
             ssh-keygen -R ${element(var.public_ips, count.index)};
-            ROLE=${var.role == "db" || var.role == "manager" ? var.role : ""}
+            ROLE=${var.role == "db" ? var.role : ""}
             if [ -n "$ROLE" ]; then
                 knife bootstrap ${element(var.public_ips, count.index)} --sudo \
                     --identity-file ~/.ssh/id_rsa --node-name ${element(var.names, count.index)} \
