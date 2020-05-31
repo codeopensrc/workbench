@@ -27,6 +27,10 @@ resource "aws_security_group" "db_ports" {
         protocol    = "tcp"
     }
 
+    lifecycle {
+        create_before_destroy = true
+    }
+
 }
 
 resource "aws_security_group" "app_ports" {
@@ -97,6 +101,10 @@ resource "aws_security_group" "app_ports" {
         cidr_blocks = ["${var.docker_machine_ip}/32"]
         protocol    = "tcp"
     }
+
+    lifecycle {
+        create_before_destroy = true
+    }
 }
 
 
@@ -150,6 +158,10 @@ resource "aws_security_group" "admin_ports" {
         to_port     = 9683
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "tcp"
+    }
+
+    lifecycle {
+        create_before_destroy = true
     }
 }
 
@@ -229,6 +241,10 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "-1"
     }
+
+    lifecycle {
+        create_before_destroy = true
+    }
 }
 
 resource "aws_security_group" "ext_db" {
@@ -268,6 +284,10 @@ resource "aws_security_group" "ext_db" {
         ]
         protocol    = "tcp"
     }
+
+    lifecycle {
+        create_before_destroy = true
+    }
 }
 
 resource "aws_security_group" "ext_remote" {
@@ -286,5 +306,9 @@ resource "aws_security_group" "ext_remote" {
             "${OBJ.ip}/32"
         ]
         protocol    = "tcp"
+    }
+
+    lifecycle {
+        create_before_destroy = true
     }
 }

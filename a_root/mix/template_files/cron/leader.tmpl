@@ -21,3 +21,10 @@ MAILTO="root"
 SHELL="/bin/bash"
 HOME="/root"
 ${run_service ? "" : "#"}45 4 * * 2-5 /usr/bin/docker rm $(/usr/bin/docker ps -aq -f status=exited)
+
+# Name: Check SSL
+MAILTO="root"
+SHELL="/bin/bash"
+HOME="/root"
+# 15 min after checking renewal on admin
+${check_ssl ? "" : "#"}15 3 1,10,20 * * bash $HOME/code/scripts/checkssl.sh

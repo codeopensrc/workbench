@@ -61,6 +61,20 @@ resource "null_resource" "leader_folder_provision" {
     }
 }
 
+resource "null_resource" "ssl_check" {
+    count      = var.leader_servers > 0 ? 1 : 0
+
+    provisioner "file" {
+        content = file("${path.module}/template_files/checkssl.sh")
+        destination = "/root/code/scripts/checkssl.sh"
+    }
+
+    connection {
+        host = element(var.lead_public_ips, 0)
+        type = "ssh"
+    }
+}
+
 resource "null_resource" "change_leader_hostname" {
     count      = var.leader_servers
 
@@ -94,6 +108,7 @@ resource "null_resource" "cron_leader" {
             send_jsons = var.send_jsons_enabled
             aws_bucket_name = var.aws_bucket_name
             aws_bucket_region = var.aws_bucket_region
+            check_ssl = count.index == 0 ? true : false
 
             # Temp
             docker_service_name = local.docker_service_name
