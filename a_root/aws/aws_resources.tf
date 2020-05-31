@@ -16,8 +16,11 @@ resource "aws_instance" "admin" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.admin_ports.id]
-
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.admin_ports.id,
+        aws_security_group.ext_remote.id,
+    ]
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
         connection {
@@ -42,7 +45,10 @@ resource "aws_instance" "build" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id]
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.ext_remote.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -71,7 +77,12 @@ resource "aws_instance" "db" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.db_ports.id,
+        aws_security_group.ext_remote.id,
+        aws_security_group.ext_db.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -102,6 +113,7 @@ resource "aws_instance" "dev" {
     # aws_security_group.app_ports.id
     vpc_security_group_ids = [
         aws_security_group.default_ports.id,
+        aws_security_group.ext_remote.id,
     ]
 
     provisioner "remote-exec" {
@@ -133,7 +145,11 @@ resource "aws_instance" "lead" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.app_ports.id]
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.app_ports.id,
+        aws_security_group.ext_remote.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -158,7 +174,12 @@ resource "aws_instance" "mongo" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.db_ports.id,
+        aws_security_group.ext_remote.id,
+        aws_security_group.ext_db.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -183,7 +204,12 @@ resource "aws_instance" "pg" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.db_ports.id,
+        aws_security_group.ext_remote.id,
+        aws_security_group.ext_db.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -209,7 +235,12 @@ resource "aws_instance" "redis" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.db_ports.id]
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.db_ports.id,
+        aws_security_group.ext_remote.id,
+        aws_security_group.ext_db.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
@@ -235,7 +266,11 @@ resource "aws_instance" "web" {
 
     associate_public_ip_address = true
     subnet_id              = aws_subnet.public_subnet.id
-    vpc_security_group_ids = [aws_security_group.default_ports.id, aws_security_group.app_ports.id]
+    vpc_security_group_ids = [
+        aws_security_group.default_ports.id,
+        aws_security_group.app_ports.id,
+        aws_security_group.ext_remote.id,
+    ]
 
     provisioner "remote-exec" {
         inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]

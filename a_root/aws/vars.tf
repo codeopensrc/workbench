@@ -43,3 +43,6 @@ variable "app_definitions" {
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
         green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string }))
 }
+
+variable "app_ips" { default = [] }
+variable "station_ips" { default = [] }

@@ -182,6 +182,20 @@ variable "known_hosts" {
     ]
 }
 
+variable "app_ips" {
+    type = list(object({ name=string, ip=string }))
+    default = [
+        {name = "example_app_public_ip", ip = "123.123.123.123"},
+    ]
+}
+
+variable "station_ips" {
+    type = list(object({ name=string, ip=string }))
+    default = [
+        {name = "example_workstation_public_ip", ip = "123.123.123.123"},
+    ]
+}
+
 # TODO: Digital Ocean, Azure, and Google Cloud docker registry options
 # Initial Options: docker_hub, aws_ecr
 # Aditional Options will be: digital_ocean_registry, azure, google_cloud

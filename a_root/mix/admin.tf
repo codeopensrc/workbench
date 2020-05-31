@@ -520,41 +520,6 @@ resource "null_resource" "upload_chef_data_bags" {
     }
 }
 
-resource "null_resource" "admin_bootstrap" {
-    count = var.admin_servers
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-        null_resource.install_chef_dk,
-        null_resource.provision_chef_dk,
-        null_resource.upload_chef_cookbooks,
-        null_resource.upload_chef_data_bags,
-    ]
-
-    provisioner "local-exec" {
-        command = <<-EOF
-            knife node delete ${element(var.admin_names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
-            knife client delete ${element(var.admin_names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
-            docker-machine ssh ${element(var.admin_names, count.index)} 'sudo rm /etc/chef/client.pem';
-            exit 0;
-        EOF
-    }
-
-    # TODO: This needs to be uploaded after cookbook upload but before
-    # PG_PASSWORD is currently md5 hashed in chef. Need cookbook/databage to get password from consul
-    # knife data bag from file secrets ~/code/chef/data_bags/secrets/pg.json
-    provisioner "local-exec" {
-        command = <<-EOF
-            knife bootstrap ${element(var.admin_public_ips, count.index)} --sudo \
-                --identity-file ~/.ssh/id_rsa --node-name ${element(var.admin_names, count.index)} \
-                --run-list 'role[admin]' --config ${var.chef_local_dir}/knife.rb
-        EOF
-    }
-}
 
 resource "null_resource" "sync_firewalls" {
     count = var.admin_servers
@@ -568,8 +533,7 @@ resource "null_resource" "sync_firewalls" {
         null_resource.install_chef_dk,
         null_resource.provision_chef_dk,
         null_resource.upload_chef_cookbooks,
-        null_resource.upload_chef_data_bags,
-        null_resource.admin_bootstrap,
+        null_resource.upload_chef_data_bags
     ]
 
     provisioner "file" {
@@ -588,7 +552,6 @@ resource "null_resource" "sync_firewalls" {
             }
 
             check_consul() {
-                chef-client;
                 LEADER_BOOTSTRAPPED=$(consul kv get leader_bootstrapped);
                 DB_BOOTSTRAPPED=$(consul kv get db_bootstrapped);
 
@@ -638,7 +601,6 @@ resource "null_resource" "setup_letsencrypt" {
         null_resource.provision_chef_dk,
         null_resource.upload_chef_cookbooks,
         null_resource.upload_chef_data_bags,
-        null_resource.admin_bootstrap,
         null_resource.change_proxy_dns,
         null_resource.sync_firewalls,
     ]
@@ -765,7 +727,6 @@ resource "null_resource" "add_keys" {
         null_resource.provision_chef_dk,
         null_resource.upload_chef_cookbooks,
         null_resource.upload_chef_data_bags,
-        null_resource.admin_bootstrap,
         null_resource.change_proxy_dns,
         null_resource.sync_firewalls,
         null_resource.setup_letsencrypt,

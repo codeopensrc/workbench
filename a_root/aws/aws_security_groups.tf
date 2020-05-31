@@ -230,3 +230,61 @@ resource "aws_security_group" "default_ports" {
         protocol    = "-1"
     }
 }
+
+resource "aws_security_group" "ext_db" {
+    name = "${local.vpc_name}_ext_db_sg"
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name = "${local.vpc_name}_ext_db_sg"
+    }
+
+    ingress {
+        description = "postgresql"
+        from_port   = 5432
+        to_port     = 5432
+        cidr_blocks = [
+            for OBJ in var.app_ips:
+            "${OBJ.ip}/32"
+        ]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "redis"
+        from_port   = 6379
+        to_port     = 6379
+        cidr_blocks = [
+            for OBJ in var.app_ips:
+            "${OBJ.ip}/32"
+        ]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "mongo"
+        from_port   = 27017
+        to_port     = 27017
+        cidr_blocks = [
+            for OBJ in var.app_ips:
+            "${OBJ.ip}/32"
+        ]
+        protocol    = "tcp"
+    }
+}
+
+resource "aws_security_group" "ext_remote" {
+    name = "${local.vpc_name}_ext_remote_sg"
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name = "${local.vpc_name}_ext_remote_sg"
+    }
+
+    ingress {
+        description = "All Ports"
+        from_port   = 0
+        to_port     = 65535
+        cidr_blocks = [
+            for OBJ in var.station_ips:
+            "${OBJ.ip}/32"
+        ]
+        protocol    = "tcp"
+    }
+}

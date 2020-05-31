@@ -106,6 +106,8 @@ variable "import_gitlab" { default = "" }
 variable "gitlab_runner_tokens" { type = map(string) }
 variable "num_gitlab_runners" { default = 0 }
 
+variable "app_ips" { default = [] }
+variable "station_ips" { default = [] }
 variable "known_hosts" { default = [] }
 
 variable "app_definitions" {

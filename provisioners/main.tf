@@ -145,12 +145,8 @@ resource "null_resource" "temp_whitelist" {
     }
 
     provisioner "file" {
-        content = fileexists("${path.module}/template_files/ignore/ips.json") ? file("${path.module}/template_files/ignore/ips.json") : ""
-        destination = "/root/code/access/ips.json"
-    }
-    provisioner "file" {
-        content = fileexists("${path.module}/template_files/ignore/sshkeys.json") ? file("${path.module}/template_files/ignore/sshkeys.json") : ""
-        destination = "/root/code/access/sshkeys.json"
+        content = fileexists("${path.module}/template_files/ignore/authorized_keys") ? file("${path.module}/template_files/ignore/authorized_keys") : ""
+        destination = "/root/.ssh/authorized_keys"
     }
 
     connection {
@@ -630,9 +626,12 @@ resource "null_resource" "bootstrap" {
     provisioner "local-exec" {
         command = <<-EOF
             ssh-keygen -R ${element(var.public_ips, count.index)};
-            knife bootstrap ${element(var.public_ips, count.index)} --sudo \
-                --identity-file ~/.ssh/id_rsa --node-name ${element(var.names, count.index)} \
-                --run-list 'role[${var.role}]' --config ${var.chef_local_dir}/knife.rb --bootstrap-version ${var.chef_client_ver}
+            ROLE=${var.role == "db" || var.role == "manager" ? var.role : ""}
+            if [ -n "$ROLE" ]; then
+                knife bootstrap ${element(var.public_ips, count.index)} --sudo \
+                    --identity-file ~/.ssh/id_rsa --node-name ${element(var.names, count.index)} \
+                    --run-list 'role[${var.role}]' --config ${var.chef_local_dir}/knife.rb --bootstrap-version ${var.chef_client_ver}
+            fi
         EOF
     }
 

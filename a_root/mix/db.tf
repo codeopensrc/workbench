@@ -130,8 +130,48 @@ resource "null_resource" "provision_db_files" {
     }
 }
 
+# NOTE: We're installing redis/all dbs by default until we can further modularize install and import
+resource "null_resource" "install_redis" {
+    count      = var.db_servers > 0 ? var.db_servers : 0
+    depends_on = [module.db_provisioners]
+
+    provisioner "remote-exec" {
+        # TODO: Setup to bind to private net/vpc instead of relying soley on the security group/firewall
+        # NOTE: The empty lines are important between ./install_server.sh <<-EOI  and   EOI
+        # It denotes an empty/default response to redis install questions
+        inline = [
+            <<-EOF
+                REDIS_VERSION="5.0.9"
+                sudo apt-get update;
+                sudo apt-get install -y tcl8.5;
+                curl -L http://download.redis.io/releases/redis-$REDIS_VERSION.tar.gz > /tmp/redis-$REDIS_VERSION.tar.gz;
+                cd /tmp; mkdir -p /var/lib/redis; tar xzf redis-$REDIS_VERSION.tar.gz -C /var/lib/redis;
+                cd /var/lib/redis/redis-$REDIS_VERSION; make clean && make;
+                cd /var/lib/redis/redis-$REDIS_VERSION; make install;
+                sed -i 's/bind 127\.0\.0\.1/bind 0\.0\.0\.0/' /var/lib/redis/redis-$REDIS_VERSION/redis.conf;
+                sed -i 's/protected-mode yes/protected-mode no/' /var/lib/redis/redis-$REDIS_VERSION/redis.conf;
+                cd /var/lib/redis/redis-$REDIS_VERSION/utils;
+                ./install_server.sh <<-EOI
+
+                /var/lib/redis/redis.conf
+
+                /var/lib/redis
+
+
+                EOI
+                sudo update-rc.d redis_6379 defaults;
+                sudo service redis_6379 start;
+            EOF
+        ]
+        connection {
+            host = element(var.db_public_ips, var.db_servers - 1)
+            type = "ssh"
+        }
+    }
+}
+
 resource "null_resource" "import_dbs" {
-    depends_on = [null_resource.provision_db_files]
+    depends_on = [null_resource.provision_db_files, null_resource.install_redis]
     count = var.import_dbs && var.db_servers > 0 && length(var.dbs_to_import) > 0 ? length(var.dbs_to_import) : 0
 
     provisioner "file" {

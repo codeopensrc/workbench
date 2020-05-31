@@ -28,6 +28,9 @@ module "digital_ocean" {
     do_mongo_size    = var.do_mongo_size
     do_pg_size    = var.do_pg_size
     do_redis_size    = var.do_redis_size
+
+    app_ips = var.app_ips
+    station_ips = var.station_ips
 }
 
 module "aws" {
@@ -69,6 +72,9 @@ module "aws" {
     db_arecord_aliases = var.db_arecord_aliases
     leader_arecord_aliases = var.leader_arecord_aliases
     app_definitions = var.app_definitions
+
+    app_ips = var.app_ips
+    station_ips = var.station_ips
 }
 
 module "mix" {

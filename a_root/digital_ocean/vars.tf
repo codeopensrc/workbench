@@ -26,3 +26,6 @@ variable "do_legacy_size" {}
 variable "do_mongo_size" {}
 variable "do_pg_size" {}
 variable "do_redis_size" {}
+
+variable "app_ips" { default = [] }
+variable "station_ips" { default = [] }
