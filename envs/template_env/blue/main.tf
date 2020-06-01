@@ -8,7 +8,6 @@
 # Also ONLY if you are commenting/uncommenting the following:
 # do_leaderIP
 # aws_leaderIP
-# external_chef_id
 
 module "root" {
     source             = "../../../a_root"
@@ -28,7 +27,6 @@ module "root" {
 
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
-    pg_md5_password = var.pg_md5_password
     docker_machine_ip = var.docker_machine_ip
     # Address this
     # Address this
@@ -116,25 +114,9 @@ module "root" {
     gitlab_version         = var.gitlab_version
 
     chef_server_url = var.chef_server_url
-    chef_server_http_port = var.chef_server_http_port
-    chef_server_https_port = var.chef_server_https_port
-
-    chef_remote_dir = var.chef_remote_dir
-    chef_local_dir  = var.chef_local_dir
-    chef_user       = var.chef_user
-    chef_fn         = var.chef_fn
-    chef_ln         = var.chef_ln
     chef_email      = var.chef_email
-    chef_pw         = var.chef_pw
-    chef_org_short  = var.chef_org_short
-    chef_org_full   = var.chef_org_full
-    chef_org_user   = var.chef_org_user
-    chef_server_ver = var.chef_server_ver
-    chef_dk_ver     = var.chef_dk_ver
-    chef_client_ver = var.chef_client_ver
 
     root_domain_name = var.root_domain_name
     # Doesn't wait for aws leader to be created, but aws_ip is created very quickly
     # aws_leaderIP = "${module.aws.aws_ip}"
-    # external_chef_id = "${module.aws.aws_chef_id}"
 }

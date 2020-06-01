@@ -137,28 +137,6 @@ resource "aws_security_group" "admin_ports" {
         cidr_blocks = ["0.0.0.0/0"]
         protocol    = "tcp"
     }
-    # Soon to deprecate chef
-    ingress {
-        description = "Chef_Http"
-        from_port   = 8888
-        to_port     = 8888
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "Chef_Https"
-        from_port   = 4433
-        to_port     = 4433
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
-    ingress {
-        description = "Chef oc_bifrost"
-        from_port   = 9683
-        to_port     = 9683
-        cidr_blocks = ["0.0.0.0/0"]
-        protocol    = "tcp"
-    }
 
     lifecycle {
         create_before_destroy = true

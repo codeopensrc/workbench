@@ -10,14 +10,11 @@ variable "known_hosts" { default = [] }
 variable "active_env_provider" { default = "" }
 variable "root_domain_name" { default = "" }
 variable "deploy_key_location" {}
-variable "chef_local_dir" {}
 
 variable "leader_hostname_ready" { default = "" }
 variable "admin_hostname_ready" { default = "" }
 variable "db_hostname_ready" { default = "" }
 
-variable "chef_server_ready" { default = "" }
-variable "chef_client_ver" { default = "" }
 variable "datacenter_has_admin" { default = "" }
 
 variable "pg_read_only_pw" { default = "" }
@@ -111,8 +108,6 @@ resource "null_resource" "provision_init" {
 
     provisioner "remote-exec" {
         inline = [
-            "sudo apt-get update",
-            "sudo apt-get install build-essential apt-utils openjdk-8-jdk vim git awscli -y",
             "mkdir -p /root/repos",
             "mkdir -p /root/builds",
             "mkdir -p /root/code",
@@ -122,11 +117,51 @@ resource "null_resource" "provision_init" {
             "mkdir -p /root/.tmux/plugins",
             "mkdir -p /root/.ssh",
             "(cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')",
-            "git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm",
             "cat /usr/share/zoneinfo/America/Los_Angeles > /etc/localtime",
             "timedatectl set-timezone 'America/Los_Angeles'",
+            "sudo apt-get update",
+            "sudo apt-get install build-essential apt-utils openjdk-8-jdk vim git awscli -y",
+            "git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm",
         ]
         # TODO: Configurable timezone
+    }
+
+    provisioner "file" {
+        source = "${path.module}/template_files/scripts/"
+        destination = "/root/code/scripts"
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+
+            DB_BACKUPS_ENABLED=${var.db_backups_enabled}
+            RUN_SERVICE=${var.run_service_enabled}
+            SEND_LOGS=${var.send_logs_enabled}
+            SEND_JSONS=${var.send_jsons_enabled}
+
+            if [ "$DB_BACKUPS_ENABLED" != "true" ]; then
+                sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /root/code/scripts/db/backup*
+            fi
+            if [ "$RUN_SERVICE" != "true" ]; then
+                sed -i 's/RUN_SERVICE=true/RUN_SERVICE=false/g' /root/code/scripts/leader/runService*
+            fi
+            if [ "$SEND_LOGS" != "true" ]; then
+                sed -i 's/SEND_LOGS=true/SEND_LOGS=false/g' /root/code/scripts/leader/sendLog*
+            fi
+            if [ "$SEND_JSONS" != "true" ]; then
+                sed -i 's/SEND_JSONS=true/SEND_JSONS=false/g' /root/code/scripts/leader/sendJsons*
+            fi
+
+            exit 0
+        EOF
+        destination = "/tmp/cronscripts.sh"
+    }
+
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/cronscripts.sh",
+            "/tmp/cronscripts.sh"
+        ]
     }
 
     connection {
@@ -297,8 +332,6 @@ resource "null_resource" "update_aws" {
     }
 }
 
-# NOTE: We manually install/configure consul over chef as the chef cookbook was outdated
-#  and we don't have sufficient knowledge how to create a "proper" one just yet
 resource "null_resource" "consul_install" {
     count = var.servers
     depends_on = [
@@ -565,8 +598,7 @@ resource "null_resource" "upload_consul_dbchecks" {
     provisioner "file" {
         content = templatefile("${path.module}/template_files/checks/consul_pg.json", {
             read_only_pw = var.pg_read_only_pw
-            datacenter = var.active_env_provider == "digital_ocean" ? "do1" : "aws1"
-            fqdn = var.root_domain_name
+            ip_address = element(var.active_env_provider == "aws" ? var.private_ips : var.public_ips, count.index)
         })
         destination = "/etc/consul.d/templates/pg.json"
     }
@@ -596,91 +628,6 @@ resource "null_resource" "upload_consul_dbchecks" {
         type = "ssh"
     }
 }
-
-resource "null_resource" "bootstrap" {
-    count = var.role == "admin" ? 0 : var.servers
-    depends_on = [
-        null_resource.docker_init,
-        null_resource.docker_leader,
-        null_resource.docker_web,
-        null_resource.docker_compose,
-        null_resource.update_aws,
-        null_resource.consul_install,
-        null_resource.consul_file_leader,
-        null_resource.consul_file,
-        null_resource.consul_file_admin,
-        null_resource.upload_deploy_key,
-        null_resource.upload_consul_dbchecks,
-    ]
-
-    provisioner "local-exec" {
-        # Cant have this step run until we are sure cookbooks/databags are uploaded - which is the last step
-        #   when provisioning the admin server. We use this line to force wait    echo ${var.chef_server_ready}
-        command = <<-EOF
-            echo ${var.chef_server_ready}
-            knife node delete ${element(var.names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
-            knife client delete ${element(var.names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
-            docker-machine ssh ${element(var.names, count.index)} 'sudo rm /etc/chef/client.pem';
-            exit 0;
-        EOF
-    }
-
-    provisioner "local-exec" {
-        command = <<-EOF
-            ssh-keygen -R ${element(var.public_ips, count.index)};
-            ROLE=${var.role == "db" ? var.role : ""}
-            if [ -n "$ROLE" ]; then
-                knife bootstrap ${element(var.public_ips, count.index)} --sudo \
-                    --identity-file ~/.ssh/id_rsa --node-name ${element(var.names, count.index)} \
-                    --run-list 'role[${var.role}]' --config ${var.chef_local_dir}/knife.rb --bootstrap-version ${var.chef_client_ver}
-            fi
-        EOF
-    }
-
-    provisioner "file" {
-        source = "${path.module}/template_files/scripts/"
-        destination = "/root/code/scripts"
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-
-            DB_BACKUPS_ENABLED=${var.db_backups_enabled}
-            RUN_SERVICE=${var.run_service_enabled}
-            SEND_LOGS=${var.send_logs_enabled}
-            SEND_JSONS=${var.send_jsons_enabled}
-
-            if [ "$DB_BACKUPS_ENABLED" != "true" ]; then
-                sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /root/code/scripts/db/backup*
-            fi
-            if [ "$RUN_SERVICE" != "true" ]; then
-                sed -i 's/RUN_SERVICE=true/RUN_SERVICE=false/g' /root/code/scripts/leader/runService*
-            fi
-            if [ "$SEND_LOGS" != "true" ]; then
-                sed -i 's/SEND_LOGS=true/SEND_LOGS=false/g' /root/code/scripts/leader/sendLog*
-            fi
-            if [ "$SEND_JSONS" != "true" ]; then
-                sed -i 's/SEND_JSONS=true/SEND_JSONS=false/g' /root/code/scripts/leader/sendJsons*
-            fi
-
-            exit 0
-        EOF
-        destination = "/tmp/cronscripts.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/cronscripts.sh",
-            "/tmp/cronscripts.sh",
-        ]
-    }
-    connection {
-        host = element(var.public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-
 
 resource "null_resource" "consul_service" {
     count = var.servers
@@ -733,6 +680,7 @@ resource "null_resource" "consul_service" {
 output "end_of_provisioner" {
     depends_on = [
         null_resource.docker_init,
+        null_resource.provision_init,
         null_resource.docker_leader,
         null_resource.docker_web,
         null_resource.docker_compose,
@@ -743,38 +691,11 @@ output "end_of_provisioner" {
         null_resource.consul_file_admin,
         null_resource.upload_deploy_key,
         null_resource.upload_consul_dbchecks,
-        null_resource.bootstrap,
         null_resource.consul_service,
     ]
     value = null_resource.consul_service.*.id
 }
 
-
-resource "null_resource" "destroy_chef_node" {
-    count      = var.servers
-    depends_on = [null_resource.docker_init]
-
-    ####### On Destroy ######
-    # TODO: If installing chef never completed, do not run as 'knife node delete' hangs
-    # TODO: Add some time of ping/"if server up" command to https://chef.DOMAIN.COM/organizations/ORG/nodes/NODE and if failed, skip
-    # curl should work...
-    # If having trouble removing on destroy (due to admin being destroyed first), remove the instances from the .tfstate state file
-    provisioner "local-exec" {
-        # If 301 redirect to https then its up
-        when = destroy
-        command = <<-EOF
-            echo ${var.chef_server_ready}
-
-            SERVER_RES_CODE=$(curl -I "http://chef.${var.root_domain_name}" 2>/dev/null | head -n 1 | cut -d " " -f2)
-            if [ -d "${var.chef_local_dir}" ] && [ "$SERVER_RES_CODE" = "301" ]; then
-                knife node delete ${element(var.names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
-                knife client delete ${element(var.names, count.index)} --config ${var.chef_local_dir}/knife.rb -y;
-            fi
-            exit 0;
-        EOF
-        on_failure = continue
-    }
-}
 
 # TODO: Need separate destroying mechanisms for admin and leader
 resource "null_resource" "destroy" {

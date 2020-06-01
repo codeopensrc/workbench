@@ -46,15 +46,15 @@ variable "docker_engine_install_url" { default = "https://get.docker.com" }
 
 variable "consul_version" { default = "1.0.6" }
 
-variable "chef_server_ver" { default = "12.19.31" }
-variable "chef_dk_ver" { default = "3.8.14" }
-variable "chef_client_ver" { default = "14.11.21" }
-
 ########## CLOUD MACHINES ##########
 ####################################
 
 # TODO: Azure and Google Cloud providers
 # Options will be digital_ocean, aws, azure, google_cloud
+
+#### DISCLAIMER: THIS DOES NOT CREATE A FIREWALL ON DIGITAL OCEAN AT THIS TIME
+#### Switched AWS module over to aws_security groups while a digital ocean/UFW implementation has
+####   not yet been re-implemented
 variable "active_env_provider" { default = "aws" }
 
 variable "admin" { default = 1 }
@@ -97,19 +97,6 @@ variable "aws_pg_instance_type" { default = "t2.micro" }
 variable "aws_redis_instance_type" { default = "t2.micro" }
 
 
-########## CHEF ##########
-##########################
-# These are necessary for the chef installation on the admin_server
-
-# chef_local_dir is where the credentials for `knife` command are stored
-# This ensures the knife command is unique per terraform env, this way
-#   the knife command run in say 'prod' doesn't affect the nodes in the 'dev' env
-variable "chef_local_dir" { default = "./.chef" }
-variable "chef_remote_dir" { default = "/root/.chef" }
-variable "chef_server_http_port" { default = "8888" }
-variable "chef_server_https_port" { default = "4433" }
-
-
 ############ DNS ############
 #############################
 
@@ -136,9 +123,7 @@ variable "db_arecord_aliases" {
 }
 
 variable "leader_arecord_aliases" {
-    default = [
-        "www"
-    ]
+    default = [ "www" ]
 }
 
 
@@ -271,14 +256,11 @@ variable "misc_repos" {
     }))
     default = {
         chef = {
-            "pull"                  = "true"
+            "pull"                  = ""
             "stable_version"        = ""
-            "use_stable"            = "false"
-            # os.infra.chef#0.1.0 still has firewall rules on machine level while 0.2.0 removed UFW rules
-            # If using digital ocean servers, use 0.1.0 for now until a terraform/DO implementation is
-            #   added, otherwise aws servers work with 0.2.* using vpc and security groups
-            "repo_url"              = "https://github.com/Cjones90/os.infra.chef.git"
-            "repo_name"             = "os.infra.chef"
+            "use_stable"            = ""
+            "repo_url"              = ""
+            "repo_name"             = ""
 
             # Temporary
             "docker_service_name"   = ""

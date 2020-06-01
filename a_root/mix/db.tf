@@ -14,8 +14,6 @@ module "db_provisioners" {
     active_env_provider = var.active_env_provider
     root_domain_name = var.root_domain_name
     deploy_key_location = var.deploy_key_location
-    chef_local_dir  = var.chef_local_dir
-    chef_client_ver = var.chef_client_ver
 
     docker_engine_install_url = var.docker_engine_install_url
     consul_version        = var.consul_version
@@ -26,9 +24,6 @@ module "db_provisioners" {
     role = "db"
     db_backups_enabled = var.db_backups_enabled
     pg_read_only_pw = var.pg_read_only_pw
-
-    # Variable to ensure the cookbooks are uploaded before bootstrapping
-    chef_server_ready = local.chef_server_ready
 }
 
 resource "null_resource" "change_db_hostname" {
@@ -81,7 +76,6 @@ resource "null_resource" "cron_db" {
         destination = "/root/code/cron/mongodb.cron"
     }
 
-    # Modify /etc/postgresql/POSTGRES_VER/main/pg_hba.conf once installation in terraform
     provisioner "file" {
         # TODO: aws_bucket_name and region based off imported db's options
         content = fileexists("${path.module}/template_files/cron/pgdb.tmpl") ? templatefile("${path.module}/template_files/cron/pgdb.tmpl", {
@@ -114,28 +108,28 @@ resource "null_resource" "provision_db_files" {
 
     provisioner "file" {
         content = file("${path.module}/template_files/import_mongo_db.sh")
-        destination = "~/import_mongo_db.sh"
+        destination = "/root/import_mongo_db.sh"
     }
     provisioner "file" {
         content = file("${path.module}/template_files/import_pg_db.sh")
-        destination = "~/import_pg_db.sh"
+        destination = "/root/import_pg_db.sh"
     }
     provisioner "file" {
         content = file("${path.module}/template_files/import_redis_db.sh")
-        destination = "~/import_redis_db.sh"
+        destination = "/root/import_redis_db.sh"
     }
     provisioner "file" {
         content = file("${path.module}/template_files/install/install_redis.sh")
-        destination = "~/code/scripts/install_redis.sh"
+        destination = "/root/code/scripts/install_redis.sh"
     }
     provisioner "file" {
         content = file("${path.module}/template_files/install/install_mongo.sh")
-        destination = "~/code/scripts/install_mongo.sh"
+        destination = "/root/code/scripts/install_mongo.sh"
     }
-    # provisioner "file" {
-    #     content = file("${path.module}/template_files/install/install_pg.sh")
-    #     destination = "~/code/scripts/install_pg.sh"
-    # }
+    provisioner "file" {
+        content = file("${path.module}/template_files/install/install_pg.sh")
+        destination = "/root/code/scripts/install_pg.sh"
+    }
     connection {
         host = element(var.db_public_ips, count.index)
         type = "ssh"
@@ -148,15 +142,20 @@ resource "null_resource" "install_dbs" {
 
     provisioner "remote-exec" {
         # TODO: Setup to bind to private net/vpc instead of relying soley on the security group/firewall for all dbs
-        # "chmod +x ~/code/scripts/install_pg.sh",
-        # "bash ~/code/scripts/install_pg.sh",
         inline = [
-            "chmod +x ~/code/scripts/install_redis.sh",
-            "chmod +x ~/code/scripts/install_mongo.sh",
-            (length(local.redis_dbs) > 0 ? "bash ~/code/scripts/install_redis.sh -v 5.0.9;" : ""),
+            "chmod +x /root/code/scripts/install_redis.sh",
+            "chmod +x /root/code/scripts/install_mongo.sh",
+            "chmod +x /root/code/scripts/install_pg.sh",
+            (length(local.redis_dbs) > 0
+                ? "bash /root/code/scripts/install_redis.sh -v 5.0.9;"
+                : "echo 0;"),
             (length(local.mongo_dbs) > 0
-                ? "bash ~/code/scripts/install_mongo.sh -v 4.2.7 -i ${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)}"
-                : "")
+                ? "bash /root/code/scripts/install_mongo.sh -v 4.2.7 -i ${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)};"
+                : "echo 0;"),
+            (length(local.pg_dbs) > 0
+                ? "bash /root/code/scripts/install_pg.sh -v 9.5;"
+                : "echo 0;"),
+            "exit 0;"
         ]
     }
     connection {
@@ -258,7 +257,6 @@ resource "null_resource" "sync_db_with_admin_firewall" {
         content = <<-EOF
             check_consul() {
 
-                chef-client;
                 consul kv put db_bootstrapped true;
 
                 ADMIN_READY=$(consul kv get admin_ready);
@@ -267,8 +265,8 @@ resource "null_resource" "sync_db_with_admin_firewall" {
                     echo "Firewalls ready: DB"
                     exit 0;
                 else
-                    echo "Waiting 60 for admin firewall";
-                    sleep 60;
+                    echo "Waiting 30 for admin firewall";
+                    sleep 30;
                     check_consul
                 fi
             }

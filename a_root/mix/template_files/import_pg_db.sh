@@ -1,11 +1,14 @@
 #!/bin/bash
 
-while getopts "b:r:d:u:" flag; do
+PROFILE=default
+
+while getopts "b:r:p:d:u:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         b) BUCKET_NAME=$OPTARG;;
         d) DB_NAME=$OPTARG;;
         r) REGION=$OPTARG;;
+        p) PROFILE=$OPTARG;;
         u) DB_USER=$OPTARG;;
     esac
 done
@@ -21,10 +24,10 @@ if [[ -z $REGION ]]; then echo "Please provide region using -r REGION"; exit ; f
 for i in {0..20}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     echo "Checking $DATE";
-    aws s3 ls s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME.gz --region $REGION;
+    aws --profile $PROFILE s3 ls s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME.gz --region $REGION;
     if [[ $? == 0 ]]; then
         echo "Downloading s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/"$DB_NAME".gz into ~/code/backups";
-        aws s3 cp s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME.gz ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME.gz --region $REGION;
+        aws --profile $PROFILE s3 cp s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME.gz ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME.gz --region $REGION;
         echo "Create DB $DB_NAME";
         createdb -T template0 -U $POSTGRES_USER $DB_NAME;
         echo "Importing ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME.gz into postgres";

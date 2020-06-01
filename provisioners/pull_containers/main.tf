@@ -23,8 +23,6 @@ resource "null_resource" "pull_docker_containers" {
     }
 
     provisioner "remote-exec" {
-        # TODO: Look into possibly having the git cloning be done in chef and have
-        #   them stay in sync with master
         # TODO: Have production always pull stable
 
         # TODO: Need to use correct Docker Registry credentials per Docker Image to log in to that registry

@@ -13,8 +13,6 @@ module "admin_provisioners" {
     known_hosts = var.known_hosts
     deploy_key_location = var.deploy_key_location
     root_domain_name = var.root_domain_name
-    chef_local_dir  = var.chef_local_dir
-    chef_client_ver = var.chef_client_ver
 
     docker_compose_version = var.docker_compose_version
     docker_engine_install_url  = var.docker_engine_install_url
@@ -264,240 +262,6 @@ resource "null_resource" "restore_gitlab" {
     }
 }
 
-# TODO: Get rid of chef over ansible
-resource "null_resource" "install_chef_server" {
-    count = var.admin_servers
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-    ]
-
-    # Some helper commands to re-run/re-provision chef
-    # chef-server-ctl upgrade
-    # chef-server-ctl start
-    # chef-server-ctl cleanup
-    # "echo 'nginx["'"non_ssl_port"'"]=${var.chef_server_http_port}' /etc/opscode/chef-server.rb",
-    # "echo 'nginx["ssl_port"]=${var.chef_server_https_port}' /etc/opscode/chef-server.rb",
-    provisioner "file" {
-        content = <<-EOF
-            nginx['non_ssl_port'] = ${var.chef_server_http_port}
-            nginx['ssl_port'] = ${var.chef_server_https_port}
-            nginx['url'] = 'https://chef.${var.root_domain_name}:${var.chef_server_https_port}/'
-            nginx['server_name'] = 'chef.${var.root_domain_name}'
-            bookshelf['vip_port'] = ${var.chef_server_https_port}
-            bookshelf['external_url'] = 'https://chef.${var.root_domain_name}:${var.chef_server_https_port}'
-            opscode_erchef['base_resource_url'] = 'https://chef.${var.root_domain_name}:${var.chef_server_https_port}'
-        EOF
-        destination = "/tmp/chef-server.rb"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "curl -L https://packages.chef.io/files/stable/chef-server/${var.chef_server_ver}/ubuntu/${var.ubuntu_ver}/chef-server-core_${var.chef_server_ver}-1_amd64.deb > /tmp/chef-server-core-${var.chef_server_ver}.deb",
-            "sudo dpkg -i /tmp/chef-server-core-${var.chef_server_ver}.deb",
-            "cp /tmp/chef-server.rb /etc/opscode/chef-server.rb",
-            "chef-server-ctl reconfigure",
-            "mkdir -p ${var.chef_remote_dir}",
-            "chef-server-ctl user-create ${var.chef_user} ${var.chef_fn} ${var.chef_ln} ${var.chef_email} '${var.chef_pw}' --filename ${var.chef_remote_dir}/${var.chef_user}.pem",
-            "chef-server-ctl org-create ${var.chef_org_short} '${var.chef_org_full}' --association_user ${var.chef_org_user} --filename ${var.chef_remote_dir}/${var.chef_org_short}-validator.pem"
-        ]
-    }
-    connection {
-        host = element(var.admin_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-
-
-resource "null_resource" "install_chef_dk" {
-    count = var.admin_servers
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-    ]
-
-    provisioner "remote-exec" {
-        inline = [
-            "curl -L https://packages.chef.io/files/stable/chefdk/${var.chef_dk_ver}/ubuntu/${var.ubuntu_ver}/chefdk_${var.chef_dk_ver}-1_amd64.deb > /tmp/chefdk_${var.chef_dk_ver}-1_amd64.deb",
-            "sudo dpkg -i /tmp/chefdk_${var.chef_dk_ver}-1_amd64.deb",
-            <<-EOF
-                echo 'eval "$(chef shell-init bash)"' >> ~/.bash_profile
-            EOF
-        ]
-        connection {
-            host = element(var.admin_public_ips, count.index)
-            type = "ssh"
-        }
-    }
-
-}
-
-
-resource "null_resource" "provision_chef_dk" {
-    count = var.admin_servers
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-        null_resource.install_chef_dk,
-    ]
-
-    provisioner "file" {
-        content = <<-EOF
-            current_dir = File.dirname(__FILE__)
-            log_level                :info
-            log_location             STDOUT
-            node_name                "${var.chef_user}"
-            client_key               "#{current_dir}/${var.chef_user}.pem"
-            validation_client_name   "${var.chef_org_short}-validator"
-            validation_key           "#{current_dir}/${var.chef_org_short}-validator.pem"
-            chef_server_url          "https://${var.chef_server_url}:${var.chef_server_https_port}/organizations/${var.chef_org_short}"
-            syntax_check_cache_path  "#{ENV['HOME']}/.chef/syntaxcache"
-            cookbook_path            ["#{current_dir}/../cookbooks"]
-        EOF
-        destination = "${var.chef_remote_dir}/knife.rb"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "cd ${var.chef_remote_dir} && knife ssl fetch",
-        ]
-    }
-
-    provisioner "local-exec" {
-        # Do some stuff to pull down the chef pem file and place into local directory
-        command = <<-EOF
-            NUM_BACKUPS=$(ls -la | grep .chef.backup | wc -l)
-            mv ${var.chef_local_dir} ${var.chef_local_dir}.backup-$NUM_BACKUPS
-            mkdir -p ${var.chef_local_dir};
-            docker-machine scp ${element(var.admin_names, count.index)}:${var.chef_remote_dir}/${var.chef_user}.pem ${var.chef_local_dir}/${var.chef_user}.pem;
-            docker-machine scp ${element(var.admin_names, count.index)}:${var.chef_remote_dir}/${var.chef_org_short}-validator.pem ${var.chef_local_dir}/${var.chef_org_short}-validator.pem;
-            docker-machine scp ${element(var.admin_names, count.index)}:${var.chef_remote_dir}/knife.rb ${var.chef_local_dir}/knife.rb;
-            knife ssl fetch --config ${var.chef_local_dir}/knife.rb
-        EOF
-
-    }
-
-    connection {
-        host = element(var.admin_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-
-resource "null_resource" "upload_chef_cookbooks" {
-    count = var.admin_servers
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-        null_resource.install_chef_dk,
-        null_resource.provision_chef_dk,
-    ]
-
-    provisioner "file" {
-        content = <<-EOF
-
-            HAS_CHEF_REPO=${ contains(keys(var.misc_repos), "chef") }
-
-            if [ "$HAS_CHEF_REPO" = "true" ]; then
-                CHEF_REPO_URL=${ contains(keys(var.misc_repos), "chef") ? lookup(var.misc_repos["chef"], "repo_url" ) : "" }
-                CHEF_REPO_NAME=${ contains(keys(var.misc_repos), "chef") ? lookup(var.misc_repos["chef"], "repo_name" ) : "" }
-
-                git clone $CHEF_REPO_URL /root/repos/$CHEF_REPO_NAME;
-                (cd /root/repos/$CHEF_REPO_NAME && git checkout master && git fetch && git pull);
-
-                for BOOK in `dir /root/repos/$CHEF_REPO_NAME/cookbooks`; do
-                    berks install --berksfile /root/repos/$CHEF_REPO_NAME/cookbooks/$BOOK/Berksfile;
-                    berks upload --berksfile /root/repos/$CHEF_REPO_NAME/cookbooks/$BOOK/Berksfile --force;
-                done
-
-                knife data bag create secrets
-                knife data bag from file secrets /root/repos/$CHEF_REPO_NAME/data_bags/secrets
-
-                for ROLE in `ls /root/repos/$CHEF_REPO_NAME/roles -p | grep -v /`; do
-                    knife role from file /root/repos/$CHEF_REPO_NAME/roles/$ROLE;
-                done
-            else
-                echo "Cannot proceed without chef repo"
-                echo "Exiting"
-                exit 1;
-            fi
-
-        EOF
-        destination = "/tmp/upload_cookbooks.sh"
-    }
-
-    provisioner "remote-exec" {
-        # Clone down the chef repo and `berks upload` the cookbooks to self
-        inline = [
-            "chmod +x /tmp/upload_cookbooks.sh",
-            "/tmp/upload_cookbooks.sh",
-        ]
-    }
-
-    connection {
-        host = element(var.admin_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-resource "null_resource" "upload_chef_data_bags" {
-    count = var.admin_servers
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-        null_resource.install_chef_dk,
-        null_resource.provision_chef_dk,
-        null_resource.upload_chef_cookbooks,
-    ]
-
-    provisioner "file" {
-        content = <<-EOF
-
-            cat << EOJ > /tmp/pg.json
-                {
-                    "id": "pg",
-                    "pass": "${var.pg_md5_password}"
-                }
-            EOJ
-            knife data bag from file secrets /tmp/pg.json
-
-        EOF
-        destination = "/tmp/upload_chef_data_bags.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/upload_chef_data_bags.sh",
-            "/tmp/upload_chef_data_bags.sh",
-        ]
-    }
-
-    connection {
-        host = element(var.admin_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
 
 resource "null_resource" "sync_firewalls" {
     count = var.admin_servers
@@ -507,11 +271,6 @@ resource "null_resource" "sync_firewalls" {
         null_resource.change_admin_dns,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-        null_resource.install_chef_dk,
-        null_resource.provision_chef_dk,
-        null_resource.upload_chef_cookbooks,
-        null_resource.upload_chef_data_bags
     ]
 
     provisioner "file" {
@@ -523,8 +282,8 @@ resource "null_resource" "sync_firewalls" {
                     echo "Docker containers up";
                     exit 0;
                 else
-                    echo "Waiting 60 for docker containers";
-                    sleep 60;
+                    echo "Waiting 30 for docker containers";
+                    sleep 30;
                     check_docker
                 fi
             }
@@ -574,11 +333,6 @@ resource "null_resource" "setup_letsencrypt" {
         null_resource.change_admin_dns,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-        null_resource.install_chef_dk,
-        null_resource.provision_chef_dk,
-        null_resource.upload_chef_cookbooks,
-        null_resource.upload_chef_data_bags,
         null_resource.change_proxy_dns,
         null_resource.sync_firewalls,
     ]
@@ -699,11 +453,6 @@ resource "null_resource" "add_keys" {
         null_resource.change_admin_dns,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        null_resource.install_chef_server,
-        null_resource.install_chef_dk,
-        null_resource.provision_chef_dk,
-        null_resource.upload_chef_cookbooks,
-        null_resource.upload_chef_data_bags,
         null_resource.change_proxy_dns,
         null_resource.sync_firewalls,
         null_resource.setup_letsencrypt,

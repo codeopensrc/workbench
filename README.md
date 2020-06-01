@@ -1,7 +1,6 @@
 ## NOTES
 * Under active development
 * Lot of unused code/old comments
-* Requires currently non-public repo to run until firewall and misc configuration re-factored
 * Even this README is a little old as it now uses old dns configuration
 
 ## NOTE: README out of date

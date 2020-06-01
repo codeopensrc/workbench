@@ -11,8 +11,6 @@ module "web_provisioners" {
     aws_bot_secret_key = var.aws_bot_secret_key
 
     deploy_key_location = var.deploy_key_location
-    chef_local_dir  = var.chef_local_dir
-    chef_client_ver = var.chef_client_ver
 
     docker_compose_version = var.docker_compose_version
     docker_engine_install_url  = var.docker_engine_install_url

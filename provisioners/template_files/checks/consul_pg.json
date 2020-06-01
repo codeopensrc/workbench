@@ -7,7 +7,7 @@
     "enableTagOverride": false,
     "checks": [
       {
-        "script": "echo '\\q' | psql postgresql://pgcheck:${read_only_pw}@pg.${datacenter}.${fqdn}/postgres",
+        "script": "echo '\\q' | psql postgresql://pgcheck:${read_only_pw}@${ip_address}/postgres",
         "interval": "30s"
       }
     ]

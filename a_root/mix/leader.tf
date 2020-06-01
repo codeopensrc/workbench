@@ -13,8 +13,7 @@ module "leader_provisioners" {
     known_hosts = var.known_hosts
     deploy_key_location = var.deploy_key_location
     root_domain_name = var.root_domain_name
-    chef_local_dir  = var.chef_local_dir
-    chef_client_ver = var.chef_client_ver
+
     docker_compose_version = var.docker_compose_version
     docker_engine_install_url  = var.docker_engine_install_url
     consul_version         = var.consul_version
@@ -35,9 +34,6 @@ module "leader_provisioners" {
     run_service_enabled = var.run_service_enabled
     send_jsons_enabled = var.send_jsons_enabled
     send_logs_enabled = var.send_logs_enabled
-
-    # Variable to ensure the cookbooks are uploaded before bootstrapping
-    chef_server_ready = local.chef_server_ready
 
     db_hostname_ready = local.db_hostname_ready
     admin_hostname_ready = local.admin_hostname_ready
@@ -61,20 +57,6 @@ resource "null_resource" "leader_folder_provision" {
     }
 }
 
-resource "null_resource" "ssl_check" {
-    count      = var.leader_servers > 0 ? 1 : 0
-
-    provisioner "file" {
-        content = file("${path.module}/template_files/checkssl.sh")
-        destination = "/root/code/scripts/checkssl.sh"
-    }
-
-    connection {
-        host = element(var.lead_public_ips, 0)
-        type = "ssh"
-    }
-}
-
 resource "null_resource" "change_leader_hostname" {
     count      = var.leader_servers
 
@@ -90,6 +72,21 @@ resource "null_resource" "change_leader_hostname" {
             host = element(var.lead_public_ips, count.index)
             type = "ssh"
         }
+    }
+}
+
+resource "null_resource" "ssl_check" {
+    count      = var.leader_servers > 0 ? 1 : 0
+    depends_on = [module.leader_provisioners]
+
+    provisioner "file" {
+        content = file("${path.module}/template_files/checkssl.sh")
+        destination = "/root/code/scripts/checkssl.sh"
+    }
+
+    connection {
+        host = element(var.lead_public_ips, 0)
+        type = "ssh"
     }
 }
 
@@ -158,8 +155,8 @@ resource "null_resource" "sync_leader_with_admin_firewall" {
                     echo "Firewalls ready: Leader"
                     exit 0;
                 else
-                    echo "Waiting 60 for admin firewall";
-                    sleep 60;
+                    echo "Waiting 15 for admin firewall";
+                    sleep 15;
                     check_consul
                 fi
             }
@@ -194,15 +191,17 @@ resource "null_resource" "start_docker_containers" {
     provisioner "remote-exec" {
         # We need to version this either in a seperate file or repo as something like
         # "default services/containers" for better transparency
-
+        # TODO: Adjustable DOCKER_OVERLAY_SUBNET
         inline = [
             <<-EOF
                 SLEEP_FOR=$((5 + $((${count.index} * 8)) ))
                 echo "WAITING $SLEEP_FOR seconds"
                 sleep $SLEEP_FOR
 
+                DOCKER_OVERLAY_SUBNET="192.168.0.0/16"
+
                 NET_UP=$(docker network inspect proxy)
-                if [ $? -eq 1 ]; then docker network create --attachable --driver overlay --subnet 192.168.0.0/16 proxy; fi
+                if [ $? -eq 1 ]; then docker network create --attachable --driver overlay --subnet $DOCKER_OVERLAY_SUBNET proxy; fi
 
                 ### NOTE: Once we move to blue/turquiose/green, we'll have to make
                 ###  sure we bring up the correct service (_blue or _green, not _main)

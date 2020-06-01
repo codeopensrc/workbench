@@ -1,4 +1,3 @@
-variable "ubuntu_ver" { default = "16.04"}
 
 variable "active_env_provider" { default = "" }
 variable "region" { default = "" }
@@ -91,7 +90,6 @@ variable "docker_machine_ip" {}
 
 variable "aws_bot_access_key" { default = "" }
 variable "aws_bot_secret_key" { default = "" }
-variable "pg_md5_password" { default = "" }
 variable "pg_read_only_pw" { default = "" }
 
 variable "docker_compose_version" {}
@@ -125,26 +123,8 @@ variable "misc_repos" {
 }
 
 variable "chef_server_url" { default = "" }
-variable "chef_server_http_port" { default = "" }
-variable "chef_server_https_port" { default = "" }
-
-variable "chef_remote_dir" { default = "" }
-variable "chef_local_dir" { default = "" }
-
-variable "chef_user" { default = "" }
-variable "chef_fn" { default = "" }
-variable "chef_ln" { default = "" }
 variable "chef_email" { default = "" }
-variable "chef_pw" { default = "" }
 
-variable "chef_org_short" { default = "" }
-variable "chef_org_full" { default = "" }
-variable "chef_org_user" { default = "" }
-
-variable "chef_server_ver" { default = "" }
-variable "chef_dk_ver" { default = "" }
-variable "chef_client_ver" { default = "" }
 
 variable "do_leaderIP" { default = ""}
 variable "aws_leaderIP" { default = "" }
-variable "external_chef_id" { default = "" }

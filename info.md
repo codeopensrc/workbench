@@ -1,7 +1,6 @@
 ### WIP
 ### Things needed
 Software on Linux workstation:  
-chefdk  
 terraform  
 docker-machine  
 
