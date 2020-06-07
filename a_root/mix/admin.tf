@@ -1,6 +1,11 @@
-
+### NOTE: The goal is to turn these into "roles" that can all be applied to the
+###   same server and also multiple servers to scale
+###  IE, In one env, it has 1 server that does all: leader, admin, and db
+###  Another can have 1 server as admin and leader with seperate db server
+###  Another can have 1 server with all roles and scale out aditional servers as leader servers
+###  Simplicity/Flexibility/Adaptability
 module "admin_provisioners" {
-    source      = "../../provisioners"
+    source      = "./modules/misc"
     servers     = var.admin_servers
     names       = var.admin_names
     public_ips  = var.admin_public_ips
@@ -9,10 +14,6 @@ module "admin_provisioners" {
 
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
-
-    known_hosts = var.known_hosts
-    deploy_key_location = var.deploy_key_location
-    root_domain_name = var.root_domain_name
 
     docker_compose_version = var.docker_compose_version
     docker_engine_install_url  = var.docker_engine_install_url
@@ -25,51 +26,65 @@ module "admin_provisioners" {
     role = "admin"
 }
 
-resource "null_resource" "change_admin_hostname" {
-    count      = var.admin_servers
+module "admin_hostname" {
+    source = "./modules/hostname"
 
-    provisioner "remote-exec" {
-        inline = [
-            "sudo hostnamectl set-hostname ${var.chef_server_url}",
-            "sed -i 's/.*${var.server_name_prefix}-${var.region}.*/127.0.1.1 ${var.chef_server_url} ${element(var.admin_names, count.index)}/' /etc/hosts",
-            "sed -i '$ a 127.0.1.1 ${var.chef_server_url} ${element(var.admin_names, count.index)}' /etc/hosts",
-            "sed -i '$ a ${element(var.admin_public_ips, count.index)} ${var.chef_server_url} chef' /etc/hosts",
-            "cat /etc/hosts"
-        ]
-        connection {
-            host = element(var.admin_public_ips, count.index)
-            type = "ssh"
-        }
-    }
+    server_name_prefix = var.server_name_prefix
+    region = var.region
+
+    hostname = var.chef_server_url
+    names = var.admin_names
+    servers = var.admin_servers
+    public_ips = var.admin_public_ips
+    alt_hostname = "chef"
 }
 
-resource "null_resource" "cron_admin" {
-    count      = var.admin_servers > 0 ? var.admin_servers : 0
-    depends_on = [module.admin_provisioners]
+module "admin_cron" {
+    source = "./modules/cron"
 
-    provisioner "remote-exec" {
-        inline = [ "mkdir -p /root/code/cron" ]
+    role = "admin"
+    aws_bucket_region = var.aws_bucket_region
+    aws_bucket_name = var.aws_bucket_name
+    servers = var.admin_servers
+    public_ips = var.admin_public_ips
+
+    templates = {
+        admin = "admin.tmpl"
     }
-    provisioner "file" {
-        content = fileexists("${path.module}/template_files/cron/admin.tmpl") ? templatefile("${path.module}/template_files/cron/admin.tmpl", {
-            gitlab_backups_enabled = var.gitlab_backups_enabled
-            aws_bucket_region = var.aws_bucket_region
-            aws_bucket_name = var.aws_bucket_name
-        }) : ""
-        destination = "/root/code/cron/admin.cron"
+    destinations = {
+        admin = "/root/code/cron/admin.cron"
     }
-    provisioner "remote-exec" {
-        inline = [ "crontab /root/code/cron/admin.cron", "crontab -l" ]
-    }
-    connection {
-        host = element(var.admin_public_ips, count.index)
-        type = "ssh"
-    }
+    remote_exec = ["crontab /root/code/cron/admin.cron", "crontab -l"]
+
+    # Admin specific
+    gitlab_backups_enabled = var.gitlab_backups_enabled
+    prev_module_output = module.admin_provisioners.output
 }
 
+module "admin_provision_files" {
+    source = "./modules/provision"
+
+    role = "admin"
+    servers = var.admin_servers
+    public_ips = var.admin_public_ips
+    private_ips = var.admin_private_ips
+
+    known_hosts = var.known_hosts
+    deploy_key_location = var.deploy_key_location
+    root_domain_name = var.root_domain_name
+    prev_module_output = module.admin_cron.output
+}
+
+
+### NOTE: Only thing for this is consul needs to be installed
 resource "null_resource" "add_proxy_hosts" {
     count      = var.admin_servers
-    depends_on = [module.admin_provisioners]
+    depends_on = [
+        module.admin_provisioners,
+        module.admin_hostname,
+        module.admin_cron,
+        module.admin_provision_files
+    ]
 
     #### TODO: Find a way to gradually migrate from blue -> green and vice versa vs
     ####   just sending all req suddenly from blue to green
@@ -121,56 +136,10 @@ resource "null_resource" "add_proxy_hosts" {
     }
 }
 
-# TODO: Deprecate/Use only if cloudflare as DNS
-resource "null_resource" "change_admin_dns" {
-    # We're gonna simply modify existing dns for now. To worry about creating/deleting/modifying
-    # would require more effort for only slightly more flexability thats not needed at the moment
-    count = var.change_admin_dns && var.admin_servers > 0 ? length(var.admin_dns) : 0
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname
-    ]
-
-    triggers = {
-        #### NOTE: WE NEED TO CHANGE THE DNS TO THE NEW MACHINE OR WE CANT PROVISION ANYTHING
-        ####   We should make a backup chef domain to use and implement logic to allow
-        ####   more than one chef dns/domain in order for it to be a fairly seemless
-        ####   swap with ability to roll back in case of errors
-        update_admin_dns = (length(var.admin_names) > 1
-            ? element(concat(var.admin_names, [""]), var.admin_servers - 1)
-            : element(concat(var.admin_names, [""]), 0))
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            <<-EOF
-                DNS_ID=${var.admin_dns[count.index]["dns_id"]};
-                ZONE_ID=${var.admin_dns[count.index]["zone_id"]};
-                URL=${var.admin_dns[count.index]["url"]};
-                IP=${element(var.admin_public_ips,var.admin_servers - 1)};
-
-                # curl -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" \
-                # -H "X-Auth-Email: ${var.cloudflare_email}" \
-                # -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-                # -H "Content-Type: application/json" \
-                # --data '{"type": "A", "name": "'$URL'", "content": "'$IP'", "proxied": false}';
-                exit 0;
-            EOF
-        ]
-        connection {
-            host = element(var.admin_public_ips,var.admin_servers - 1)
-            type = "ssh"
-        }
-    }
-}
 
 resource "null_resource" "install_gitlab" {
     count = var.admin_servers
-    depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-    ]
+    depends_on = [ null_resource.add_proxy_hosts ]
 
     # # After renewing certs possibly
     # sudo gitlab-ctl hup nginx
@@ -202,9 +171,9 @@ resource "null_resource" "install_gitlab" {
                 sleep 5;
                 sudo gitlab-ctl reconfigure
             EOF
-
-
         ]
+
+
         # Enable pages
         # pages_external_url "http://pages.example.com/"
         # gitlab_pages['enable'] = false
@@ -225,10 +194,8 @@ resource "null_resource" "install_gitlab" {
 resource "null_resource" "restore_gitlab" {
     count = var.admin_servers
     depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
-        null_resource.install_gitlab
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
     ]
 
     provisioner "file" {
@@ -263,12 +230,10 @@ resource "null_resource" "restore_gitlab" {
 }
 
 
-resource "null_resource" "sync_firewalls" {
+resource "null_resource" "docker_ready" {
     count = var.admin_servers
     depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
+        null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
     ]
@@ -276,7 +241,7 @@ resource "null_resource" "sync_firewalls" {
     provisioner "file" {
         content = <<-EOF
             check_docker() {
-                LEADER_READY=$(consul kv get leader_ready);
+                LEADER_READY=$(consul kv get init/leader_ready);
 
                 if [ "$LEADER_READY" = "true" ]; then
                     echo "Docker containers up";
@@ -288,31 +253,15 @@ resource "null_resource" "sync_firewalls" {
                 fi
             }
 
-            check_consul() {
-                LEADER_BOOTSTRAPPED=$(consul kv get leader_bootstrapped);
-                DB_BOOTSTRAPPED=$(consul kv get db_bootstrapped);
-
-                if [ "$LEADER_BOOTSTRAPPED" = "true" ] && [  "$DB_BOOTSTRAPPED" = "true" ]; then
-                    consul kv put admin_ready true
-                    echo "Admin firewall ready";
-                    check_docker
-                else
-                    echo "Waiting 60 for bootstrapped leader & db";
-                    sleep 60;
-                    check_consul
-                fi
-            }
-
-
-            check_consul
+            check_docker
         EOF
-        destination = "/tmp/sync_admin_firewall.sh"
+        destination = "/tmp/docker_ready.sh"
     }
 
     provisioner "remote-exec" {
         inline = [
-            "chmod +x /tmp/sync_admin_firewall.sh",
-            "/tmp/sync_admin_firewall.sh",
+            "chmod +x /tmp/docker_ready.sh",
+            "/tmp/docker_ready.sh",
         ]
     }
     connection {
@@ -323,43 +272,27 @@ resource "null_resource" "sync_firewalls" {
 
 #### NOTE: Current problem is admin not allowing leader/db in though firewall, thus
 ####        a consul cluster leader not being chosen before the proxy_main service is brought online
-#### NEW: null_resource.sync_firewalls is fixing this issue for now
+#### NEW: null_resource.docker_ready is fixing this issue for now
 
+
+#### TODO: NEEDS TO BE STANDALONE
+# Needs to be run on a single node without external dependency
+# All calls to subdmain -> leader server. Leader needs containers + db. Files need to be stored on admin (for now)
+# Leader does ssl and somehow sync to admin. Or admin handles check, but does not require external leader/proxy
+#   but does not also interupt leader/proxy
+
+# TODO: Turn this into an ansible playbook
 resource "null_resource" "setup_letsencrypt" {
     count = var.leader_servers > 0 ? 1 : 0
     depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
+        null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        null_resource.change_proxy_dns,
-        null_resource.sync_firewalls,
+        null_resource.docker_ready,
     ]
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-            ZONE_ID=${var.site_dns[0]["zone_id"]};
-            curl -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/settings/always_use_https" \
-            -H "X-Auth-Email: ${var.cloudflare_email}" \
-            -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-            -H "Content-Type: application/json" \
-            --data '{"value":"off"}';
-            exit 0;
-        EOF
-        destination = "/tmp/turnof_cloudflare_ssl.sh"
-    }
-
-    provisioner "remote-exec" {
-        # Turn off cloudflare https redirect temporarily when getting SSL using letsencrypt
-        inline = [
-            "chmod +x /tmp/turnof_cloudflare_ssl.sh",
-        ]
-        # "/tmp/turnof_cloudflare_ssl.sh",
     }
 
     ## Intially setting up letsencrypt, proxy needs to be setup using http even though we launch it using https
@@ -423,21 +356,6 @@ resource "null_resource" "setup_letsencrypt" {
         ]
     }
 
-    ## NOTE: Initial chef runs were having a problem communicating with chef.domain
-    #   I believe its due to requests to chef.domain were https instead of http when always_use_https
-    # provisioner "remote-exec" {
-    #     # Turn cloudflare https redirect back on
-    #     inline = <<-EOF
-    #         ZONE_ID=${lookup(var.site_dns[0], "zone_id")};
-    #         curl -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/settings/always_use_https" \
-    #         -H "X-Auth-Email: ${var.cloudflare_email}" \
-    #         -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-    #         -H "Content-Type: application/json" \
-    #         --data '{"value":"on"}';
-    #         exit 0;
-    #     EOF
-    # }
-
     connection {
         host = element(var.admin_public_ips, count.index)
         type = "ssh"
@@ -445,17 +363,17 @@ resource "null_resource" "setup_letsencrypt" {
 
 }
 
+
+# TODO: Turn this into an ansible playbook
+# Restart service, re-fetching ssl keys
 resource "null_resource" "add_keys" {
     count = var.leader_servers > 0 ? 1 : 0
     depends_on = [
-        module.admin_provisioners,
-        null_resource.change_admin_hostname,
-        null_resource.change_admin_dns,
+        null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        null_resource.change_proxy_dns,
-        null_resource.sync_firewalls,
-        null_resource.setup_letsencrypt,
+        null_resource.docker_ready,
+        null_resource.setup_letsencrypt
     ]
 
     triggers = {

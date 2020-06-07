@@ -89,52 +89,40 @@ variable "chef_email" { default = "" }
 
 variable "admin_private_ips" { type = list(string) }
 variable "lead_private_ips" { type = list(string) }
-variable "build_private_ips" { type = list(string) }
 variable "db_private_ips" { type = list(string) }
-variable "dev_private_ips" { type = list(string) }
-variable "mongo_private_ips" { type = list(string) }
-variable "pg_private_ips" { type = list(string) }
-variable "redis_private_ips" { type = list(string) }
-variable "web_private_ips" { type = list(string) }
+# variable "build_private_ips" { type = list(string) }
+# variable "dev_private_ips" { type = list(string) }
+# variable "mongo_private_ips" { type = list(string) }
+# variable "pg_private_ips" { type = list(string) }
+# variable "redis_private_ips" { type = list(string) }
+# variable "web_private_ips" { type = list(string) }
 
 variable "admin_public_ips" { type = list(string) }
 variable "lead_public_ips" { type = list(string) }
-variable "build_public_ips" { type = list(string) }
 variable "db_public_ips" { type = list(string) }
-variable "dev_public_ips" { type = list(string) }
-variable "mongo_public_ips" { type = list(string) }
-variable "pg_public_ips" { type = list(string) }
-variable "redis_public_ips" { type = list(string) }
-variable "web_public_ips" { type = list(string) }
+# variable "build_public_ips" { type = list(string) }
+# variable "dev_public_ips" { type = list(string) }
+# variable "mongo_public_ips" { type = list(string) }
+# variable "pg_public_ips" { type = list(string) }
+# variable "redis_public_ips" { type = list(string) }
+# variable "web_public_ips" { type = list(string) }
 
 variable "admin_names" { type = list(string) }
 variable "lead_names" { type = list(string) }
-variable "build_names" { type = list(string) }
 variable "db_names" { type = list(string) }
-variable "dev_names" { type = list(string) }
-variable "mongo_names" { type = list(string) }
-variable "pg_names" { type = list(string) }
-variable "redis_names" { type = list(string) }
-variable "web_names" { type = list(string) }
+# variable "build_names" { type = list(string) }
+# variable "dev_names" { type = list(string) }
+# variable "mongo_names" { type = list(string) }
+# variable "pg_names" { type = list(string) }
+# variable "redis_names" { type = list(string) }
+# variable "web_names" { type = list(string) }
 
 variable "db_ids" { type = list(string) }
-variable "mongo_ids" { type = list(string) }
-variable "pg_ids" { type = list(string) }
-variable "redis_ids" { type = list(string) }
+# variable "mongo_ids" { type = list(string) }
+# variable "pg_ids" { type = list(string) }
+# variable "redis_ids" { type = list(string) }
 
 locals {
-
-    leader_hostname_ready = (var.leader_servers == 1
-        ? element(concat(null_resource.change_leader_hostname.*.id, [""]), 0)
-        : 1)
-
-    admin_hostname_ready = (var.admin_servers == 1
-        ? element(concat(null_resource.change_admin_hostname.*.id, [""]), 0)
-        : 1)
-
-    db_hostname_ready = (var.db_servers == 1
-        ? element(concat(null_resource.change_db_hostname.*.id, [""]), 0)
-        : 1)
 
     redis_dbs = [
         for db in var.dbs_to_import:
@@ -170,15 +158,14 @@ locals {
     consul_admin_adv_addresses = var.active_env_provider == "aws" ? var.admin_private_ips : var.admin_public_ips
     consul_lead_adv_addresses = var.active_env_provider == "aws" ? var.lead_private_ips : var.lead_public_ips
     consul_db_adv_addresses = var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips
-    # admin_private_ips
-    # lead_private_ips
-    # build_private_ips
-    # db_private_ips
-    # dev_private_ips
-    # mongo_private_ips
-    # pg_private_ips
-    # redis_private_ips
-    # web_private_ips
+
+    # consul_build_adv_addresses = var.active_env_provider == "aws" ? var.build_private_ips : var.build_public_ips
+    # consul_dev_adv_addresses = var.active_env_provider == "aws" ? var.dev_private_ips : var.dev_public_ips
+    # consul_mongo_adv_addresses = var.active_env_provider == "aws" ? var.mongo_private_ips : var.mongo_public_ips
+    # consul_pg_adv_addresses = var.active_env_provider == "aws" ? var.pg_private_ips : var.pg_public_ips
+    # consul_redis_adv_addresses = var.active_env_provider == "aws" ? var.redis_private_ips : var.redis_public_ips
+    # consul_web_adv_addresses = var.active_env_provider == "aws" ? var.web_private_ips : var.web_public_ips
+
 }
 
 # variable "aws_leaderIP" { default = "" }

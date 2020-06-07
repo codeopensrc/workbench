@@ -6,22 +6,7 @@ variable "region" {}
 variable "aws_bot_access_key" {}
 variable "aws_bot_secret_key" {}
 
-variable "known_hosts" { default = [] }
-variable "active_env_provider" { default = "" }
-variable "root_domain_name" { default = "" }
-variable "deploy_key_location" {}
-
-variable "leader_hostname_ready" { default = "" }
-variable "admin_hostname_ready" { default = "" }
-variable "db_hostname_ready" { default = "" }
-
 variable "datacenter_has_admin" { default = "" }
-
-variable "pg_read_only_pw" { default = "" }
-variable "db_backups_enabled" { default = false }
-variable "run_service_enabled" { default = false }
-variable "send_logs_enabled" { default = false }
-variable "send_jsons_enabled" { default = false }
 
 variable "names" {
     type = list(string)
@@ -75,9 +60,6 @@ resource "null_resource" "docker_init" {
         # "https://get.docker.com"    Dockers default engine install url
         # "https://releases.rancher.com/install-docker/${var.docker_engine_version}"    To download specific version
         command = <<-EOF
-            echo ${var.leader_hostname_ready}
-            echo ${var.admin_hostname_ready}
-            echo ${var.db_hostname_ready}
 
             docker-machine create --driver generic --generic-ip-address=${element(var.public_ips, count.index)} \
             --generic-ssh-key ~/.ssh/id_rsa --engine-install-url "${var.docker_engine_install_url}" \
@@ -88,107 +70,6 @@ resource "null_resource" "docker_init" {
     }
 }
 
-
-resource "null_resource" "provision_init" {
-    count = var.servers
-    depends_on = [null_resource.docker_init]
-
-    provisioner "file" {
-        content = <<-EOF
-            [credential]
-                helper = store
-        EOF
-        destination = "/root/.gitconfig"
-    }
-
-    provisioner "file" {
-        source = "${path.module}/template_files/tmux.conf"
-        destination = "/root/.tmux.conf"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "mkdir -p /root/repos",
-            "mkdir -p /root/builds",
-            "mkdir -p /root/code",
-            "mkdir -p /root/code/logs",
-            "mkdir -p /root/code/backups",
-            "mkdir -p /root/code/scripts",
-            "mkdir -p /root/.tmux/plugins",
-            "mkdir -p /root/.ssh",
-            "(cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')",
-            "cat /usr/share/zoneinfo/America/Los_Angeles > /etc/localtime",
-            "timedatectl set-timezone 'America/Los_Angeles'",
-            "sudo apt-get update",
-            "sudo apt-get install build-essential apt-utils openjdk-8-jdk vim git awscli -y",
-            "git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm",
-        ]
-        # TODO: Configurable timezone
-    }
-
-    provisioner "file" {
-        source = "${path.module}/template_files/scripts/"
-        destination = "/root/code/scripts"
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-
-            DB_BACKUPS_ENABLED=${var.db_backups_enabled}
-            RUN_SERVICE=${var.run_service_enabled}
-            SEND_LOGS=${var.send_logs_enabled}
-            SEND_JSONS=${var.send_jsons_enabled}
-
-            if [ "$DB_BACKUPS_ENABLED" != "true" ]; then
-                sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /root/code/scripts/db/backup*
-            fi
-            if [ "$RUN_SERVICE" != "true" ]; then
-                sed -i 's/RUN_SERVICE=true/RUN_SERVICE=false/g' /root/code/scripts/leader/runService*
-            fi
-            if [ "$SEND_LOGS" != "true" ]; then
-                sed -i 's/SEND_LOGS=true/SEND_LOGS=false/g' /root/code/scripts/leader/sendLog*
-            fi
-            if [ "$SEND_JSONS" != "true" ]; then
-                sed -i 's/SEND_JSONS=true/SEND_JSONS=false/g' /root/code/scripts/leader/sendJsons*
-            fi
-
-            exit 0
-        EOF
-        destination = "/tmp/cronscripts.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/cronscripts.sh",
-            "/tmp/cronscripts.sh"
-        ]
-    }
-
-    connection {
-        host = element(var.public_ips, count.index)
-        type = "ssh"
-    }
-
-}
-
-resource "null_resource" "temp_whitelist" {
-    count = var.servers
-    depends_on = [null_resource.docker_init]
-
-    provisioner "remote-exec" {
-        inline = [ "mkdir -p /root/code/access" ]
-    }
-
-    provisioner "file" {
-        content = fileexists("${path.module}/template_files/ignore/authorized_keys") ? file("${path.module}/template_files/ignore/authorized_keys") : ""
-        destination = "/root/.ssh/authorized_keys"
-    }
-
-    connection {
-        host = element(var.public_ips, count.index)
-        type = "ssh"
-    }
-}
 
 resource "null_resource" "docker_leader" {
     count      = var.joinSwarm && var.role == "manager" ? var.servers : 0
@@ -305,7 +186,6 @@ resource "null_resource" "update_aws" {
         null_resource.docker_leader,
         null_resource.docker_web,
         null_resource.docker_compose,
-        null_resource.provision_init,
     ]
 
     provisioner "remote-exec" {
@@ -339,7 +219,7 @@ resource "null_resource" "consul_install" {
         null_resource.docker_leader,
         null_resource.docker_web,
         null_resource.docker_compose,
-        null_resource.update_aws,
+        null_resource.update_aws
     ]
 
     # Install consul
@@ -352,18 +232,8 @@ resource "null_resource" "consul_install" {
             "unzip ~/consul.zip",
             "rm -rf ~/*.zip",
             "mv ~/consul /usr/local/bin",
-            "mkdir -p /etc/consul.d/conf.d",
-            "mkdir -p /etc/consul.d/templates"
+            "mkdir -p /etc/consul.d",
         ]
-    }
-
-    provisioner "file" {
-        content = file("${path.module}/template_files/checks/dns.json")
-        destination = "/etc/consul.d/conf.d/dns.json"
-    }
-
-    provisioner "remote-exec" {
-        inline = [ "chmod 0755 /etc/consul.d/conf.d/dns.json" ]
     }
 
     connection {
@@ -380,7 +250,7 @@ resource "null_resource" "consul_file_admin" {
         null_resource.docker_web,
         null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install,
+        null_resource.consul_install
     ]
 
     provisioner "remote-exec" {
@@ -427,7 +297,7 @@ resource "null_resource" "consul_file_leader" {
         null_resource.docker_web,
         null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install,
+        null_resource.consul_install
     ]
 
     provisioner "file" {
@@ -473,7 +343,7 @@ resource "null_resource" "consul_file" {
         null_resource.docker_web,
         null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install,
+        null_resource.consul_install
     ]
 
     provisioner "file" {
@@ -508,127 +378,6 @@ resource "null_resource" "consul_file" {
 
 }
 
-resource "null_resource" "upload_deploy_key" {
-    count = var.servers
-    depends_on = [
-        null_resource.docker_init,
-        null_resource.docker_leader,
-        null_resource.docker_web,
-        null_resource.docker_compose,
-        null_resource.update_aws,
-        null_resource.consul_install,
-        null_resource.consul_file_leader,
-        null_resource.consul_file,
-        null_resource.consul_file_admin,
-    ]
-
-    provisioner "remote-exec" {
-        inline = [
-            "rm /root/.ssh/known_hosts",
-            "rm /root/.ssh/config",
-            "rm /root/.ssh/deploy.key",
-            "ls /root/.ssh",
-        ]
-    }
-
-    provisioner "file" {
-        content = templatefile("${path.module}/template_files/sshconfig", {
-            fqdn = var.root_domain_name
-            known_hosts = [
-                for HOST in var.known_hosts:
-                HOST.site
-                if HOST.site != "gitlab.${var.root_domain_name}"
-            ]
-        })
-        destination = "/root/.ssh/config"
-    }
-
-    # NOTE: Populate the known_hosts entry for auxiliary servers AFTER we upload our backed up ssh keys to the admin server
-    #  The entry that goes into known hosts is the PUBLIC key of the ssh SERVER found at /etc/ssh/ssh_host_rsa_key.pub
-    #  For the sub domain gitlab.ROOTDOMAIN.COM
-    provisioner "file" {
-        content = templatefile("${path.module}/template_files/known_hosts", {
-            known_hosts = var.known_hosts
-        })
-        destination = "/root/.ssh/known_hosts"
-    }
-
-    provisioner "file" {
-        content = file("${var.deploy_key_location}")
-        destination = "/root/.ssh/deploy.key"
-    }
-
-    # TODO: Possibly utilize this to have a useful docker registry variable
-    # provisioner "file" {
-    #     content = <<-EOF
-    #         #!/bin/bash
-    #
-    #         export DOCKER_REGISTRY=""
-    #     EOF
-    #     destination = "/root/.bash_aliases"
-    # }
-
-    provisioner "remote-exec" {
-        inline = ["chmod 0600 /root/.ssh/deploy.key"]
-    }
-
-    connection {
-        host = element(var.public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-# TODO: This is temporary until we switch over db urls being application specific
-resource "null_resource" "upload_consul_dbchecks" {
-    count = var.role == "db" ? var.servers : 0
-    depends_on = [
-        null_resource.docker_init,
-        null_resource.docker_leader,
-        null_resource.docker_web,
-        null_resource.docker_compose,
-        null_resource.update_aws,
-        null_resource.consul_install,
-        null_resource.consul_file_leader,
-        null_resource.consul_file,
-        null_resource.consul_file_admin,
-        null_resource.upload_deploy_key,
-    ]
-
-    # TODO: Conditionally only add checks if we're booting up an instance of that DB type
-    provisioner "file" {
-        content = templatefile("${path.module}/template_files/checks/consul_pg.json", {
-            read_only_pw = var.pg_read_only_pw
-            ip_address = element(var.active_env_provider == "aws" ? var.private_ips : var.public_ips, count.index)
-        })
-        destination = "/etc/consul.d/templates/pg.json"
-    }
-
-    provisioner "file" {
-        content = templatefile("${path.module}/template_files/checks/consul_mongo.json", {
-            ip_address = element(var.active_env_provider == "aws" ? var.private_ips : var.public_ips, count.index)
-        })
-        destination = "/etc/consul.d/templates/mongo.json"
-    }
-
-    provisioner "file" {
-        content = file("${path.module}/template_files/checks/consul_redis.json")
-        destination = "/etc/consul.d/templates/redis.json"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod 0755 /etc/consul.d/templates/pg.json",
-            "chmod 0755 /etc/consul.d/templates/mongo.json",
-            "chmod 0755 /etc/consul.d/templates/redis.json"
-        ]
-    }
-
-    connection {
-        host = element(var.public_ips, count.index)
-        type = "ssh"
-    }
-}
-
 resource "null_resource" "consul_service" {
     count = var.servers
     depends_on = [
@@ -640,9 +389,7 @@ resource "null_resource" "consul_service" {
         null_resource.consul_install,
         null_resource.consul_file_leader,
         null_resource.consul_file,
-        null_resource.consul_file_admin,
-        null_resource.upload_deploy_key,
-        null_resource.upload_consul_dbchecks,
+        null_resource.consul_file_admin
     ]
 
     provisioner "file" {
@@ -656,31 +403,57 @@ resource "null_resource" "consul_service" {
             WantedBy = multi-user.target
         EOF
         destination = "/etc/systemd/system/consul.service"
-        connection {
-            host = element(var.public_ips, count.index)
-            type = "ssh"
-        }
+    }
+
+
+    provisioner "file" {
+
+        # Loop/Depend on admin being bootstrapped before leaving here
+        content = <<-EOF
+
+            mkdir -p /etc/consul.d/conf.d
+            systemctl start consul.service
+            systemctl enable consul.service
+            service sshd restart
+            sleep 10
+
+            check_consul_status() {
+                LAST_CMD=$(consul reload);
+
+                if [ $? -eq 0 ]; then
+                    echo "Consul online";
+                    exit 0;
+                else
+                    echo "Restarting consul and waiting another 30s for bootstrapped consul server";
+                    systemctl start consul.service
+                    sleep 30;
+                    check_consul_status
+                fi
+            }
+
+            check_consul_status
+
+        EOF
+        destination = "/tmp/startconsul.sh"
     }
 
     provisioner "remote-exec" {
         inline = [
-            "systemctl start consul.service",
-            "systemctl enable consul.service",
-            "service sshd restart",
-            "sleep 10"
+            "chmod +x /tmp/startconsul.sh",
+            "/tmp/startconsul.sh",
         ]
-        connection {
-            host = element(var.public_ips, count.index)
-            type = "ssh"
-        }
+    }
+
+    connection {
+        host = element(var.public_ips, count.index)
+        type = "ssh"
     }
 
 }
 
-output "end_of_provisioner" {
+output "output" {
     depends_on = [
         null_resource.docker_init,
-        null_resource.provision_init,
         null_resource.docker_leader,
         null_resource.docker_web,
         null_resource.docker_compose,
@@ -689,64 +462,7 @@ output "end_of_provisioner" {
         null_resource.consul_file_leader,
         null_resource.consul_file,
         null_resource.consul_file_admin,
-        null_resource.upload_deploy_key,
-        null_resource.upload_consul_dbchecks,
         null_resource.consul_service,
     ]
     value = null_resource.consul_service.*.id
-}
-
-
-# TODO: Need separate destroying mechanisms for admin and leader
-resource "null_resource" "destroy" {
-    count      = var.servers
-    depends_on = [null_resource.docker_init]
-
-    # TODO: Need to trigger these on scaling down but not on a "terraform destroy"
-    # Or maybe a seperate paramater to set to run: scaling_down=true, false by default
-    # provisioner "file" {
-    #     when = destroy
-    #     content = <<-EOF
-    #         if [ "${var.role == "manager"}" = "true" ]; then
-    #             docker node update --availability="drain" ${element(var.names, count.index)}
-    #             sleep 20;
-    #             docker node demote ${element(var.names, count.index)}
-    #             sleep 5
-    #         fi
-    #     EOF
-    #     destination = "/tmp/leave.sh"
-    # }
-    #
-    # ####### On Destroy ######
-    # provisioner "remote-exec" {
-    #     when = destroy
-    #     ## TODO: Review all folders we create/modify on the server and remove them
-    #     ##   for no actual reason in particular, just being thorough
-    #     inline = [
-    #         "chmod +x /tmp/leave.sh",
-    #         "/tmp/leave.sh",
-    #         "docker swarm leave",
-    #         "docker swarm leave --force;",
-    #         "systemctl stop consul.service",
-    #         "rm -rf /etc/ssl",
-    #         "exit 0;"
-    #     ]
-    #     on_failure = continue
-    # }
-    #
-    # connection {
-    #     host    = element(var.public_ips, count.index)
-    #     type    = "ssh"
-    #     timeout = "45s"
-    # }
-
-    # Remove any previous docker-machine references to this name
-    provisioner "local-exec" {
-        when = destroy
-        command = <<-EOF
-            docker-machine rm ${element(var.names, count.index)} -y;
-            exit 0;
-        EOF
-        on_failure = continue
-    }
 }

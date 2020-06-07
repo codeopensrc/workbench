@@ -254,20 +254,5 @@ variable "misc_repos" {
         docker_service_name=string, consul_service_name=string, folder_location=string,
         logs_prefix=string, email_image=string
     }))
-    default = {
-        chef = {
-            "pull"                  = ""
-            "stable_version"        = ""
-            "use_stable"            = ""
-            "repo_url"              = ""
-            "repo_name"             = ""
-
-            # Temporary
-            "docker_service_name"   = ""
-            "consul_service_name"   = ""
-            "folder_location"       = ""
-            "logs_prefix"           = ""
-            "email_image"           = ""
-        }
-    }
+    default = {}
 }

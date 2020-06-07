@@ -17,11 +17,12 @@ resource "aws_vpc" "terraform_vpc" {
 # ^
 # query/create subnets
 resource "aws_subnet" "public_subnet" {
-  vpc_id     = aws_vpc.terraform_vpc.id
-  cidr_block = cidrsubnet(aws_vpc.terraform_vpc.cidr_block, 8, 2)
-  tags = {
-    Name          = "subnet_${local.vpc_name}"
-  }
+    vpc_id     = aws_vpc.terraform_vpc.id
+    map_public_ip_on_launch = true
+    cidr_block = cidrsubnet(aws_vpc.terraform_vpc.cidr_block, 8, 2)
+    tags = {
+        Name          = "subnet_${local.vpc_name}"
+    }
 }
 
 # ^
@@ -43,18 +44,18 @@ resource "aws_route_table" "rtb" {
 # ^
 # route
 resource "aws_route" "internet_access" {
-  route_table_id         = aws_route_table.rtb.id
-  gateway_id             = aws_internet_gateway.igw.id
-  destination_cidr_block = "0.0.0.0/0"
+    route_table_id         = aws_route_table.rtb.id
+    gateway_id             = aws_internet_gateway.igw.id
+    destination_cidr_block = "0.0.0.0/0"
 }
 
 # ^
 # query/create igw
 resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.terraform_vpc.id
-  tags = {
-    Name          = "IG_${local.vpc_name}"
-  }
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name          = "IG_${local.vpc_name}"
+    }
 }
 
 

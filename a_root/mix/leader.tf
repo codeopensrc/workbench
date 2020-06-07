@@ -1,6 +1,11 @@
-
+### NOTE: The goal is to turn these into "roles" that can all be applied to the
+###   same server and also multiple servers to scale
+###  IE, In one env, it has 1 server that does all: leader, admin, and db
+###  Another can have 1 server as admin and leader with seperate db server
+###  Another can have 1 server with all roles and scale out aditional servers as leader servers
+###  Simplicity/Flexibility/Adaptability
 module "leader_provisioners" {
-    source      = "../../provisioners"
+    source      = "./modules/misc"
     servers     = var.leader_servers
     names       = var.lead_names
     public_ips  = var.lead_public_ips
@@ -9,10 +14,6 @@ module "leader_provisioners" {
 
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
-
-    known_hosts = var.known_hosts
-    deploy_key_location = var.deploy_key_location
-    root_domain_name = var.root_domain_name
 
     docker_compose_version = var.docker_compose_version
     docker_engine_install_url  = var.docker_engine_install_url
@@ -31,327 +32,87 @@ module "leader_provisioners" {
     role = "manager"
     joinSwarm = true
     installCompose = true
+}
+
+module "leader_hostname" {
+    source = "./modules/hostname"
+
+    server_name_prefix = var.server_name_prefix
+    region = var.region
+
+    hostname = var.root_domain_name
+    names = var.lead_names
+    servers = var.leader_servers
+    public_ips = var.lead_public_ips
+    alt_hostname = var.root_domain_name
+}
+
+module "leader_cron" {
+    source = "./modules/cron"
+
+    role = "lead"
+    aws_bucket_region = var.aws_bucket_region
+    aws_bucket_name = var.aws_bucket_name
+    servers = var.leader_servers
+    public_ips = var.lead_public_ips
+
+    templates = {
+        leader = "leader.tmpl"
+    }
+    destinations = {
+        leader = "/root/code/cron/leader.cron"
+    }
+    remote_exec = ["crontab /root/code/cron/leader.cron", "crontab -l"]
+
+    # Leader specific
+    run_service = var.run_service_enabled
+    send_logs = var.send_logs_enabled
+    send_jsons = var.send_jsons_enabled
+
+    # Temp Leader specific
+    docker_service_name = local.docker_service_name
+    consul_service_name = local.consul_service_name
+    folder_location = local.folder_location
+    logs_prefix = local.logs_prefix
+    email_image = local.email_image
+    service_repo_name = local.service_repo_name
+    prev_module_output = module.leader_provisioners.output
+}
+
+module "leader_provision_files" {
+    source = "./modules/provision"
+
+    role = "lead"
+    servers = var.leader_servers
+    public_ips = var.lead_public_ips
+
     run_service_enabled = var.run_service_enabled
     send_jsons_enabled = var.send_jsons_enabled
     send_logs_enabled = var.send_logs_enabled
 
-    db_hostname_ready = local.db_hostname_ready
-    admin_hostname_ready = local.admin_hostname_ready
-    leader_hostname_ready = local.leader_hostname_ready
+    known_hosts = var.known_hosts
+    deploy_key_location = var.deploy_key_location
+    root_domain_name = var.root_domain_name
+    prev_module_output = module.leader_cron.output
 }
 
+module "docker" {
+    source = "./modules/docker"
 
-resource "null_resource" "leader_folder_provision" {
-    count      = var.leader_servers
-
-    provisioner "remote-exec" {
-        inline = [
-            "mkdir -p /etc/ssl/creds",
-            "mkdir -p /root/code/csv",
-            "mkdir -p /root/code/jsons",
-        ]
-    }
-    connection {
-        host = element(var.lead_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-resource "null_resource" "change_leader_hostname" {
-    count      = var.leader_servers
-
-    provisioner "remote-exec" {
-        inline = [
-            "sudo hostnamectl set-hostname ${var.root_domain_name}",
-            "sed -i 's/.*${var.server_name_prefix}-${var.region}.*/127.0.1.1 ${var.root_domain_name} ${element(var.lead_names, count.index)}/' /etc/hosts",
-            "sed -i '$ a 127.0.1.1 ${var.root_domain_name} ${element(var.lead_names, count.index)}' /etc/hosts",
-            "sed -i '$ a ${element(var.lead_public_ips, count.index)} ${var.root_domain_name} ${var.root_domain_name}' /etc/hosts",
-            "cat /etc/hosts"
-        ]
-        connection {
-            host = element(var.lead_public_ips, count.index)
-            type = "ssh"
-        }
-    }
-}
-
-resource "null_resource" "ssl_check" {
-    count      = var.leader_servers > 0 ? 1 : 0
-    depends_on = [module.leader_provisioners]
-
-    provisioner "file" {
-        content = file("${path.module}/template_files/checkssl.sh")
-        destination = "/root/code/scripts/checkssl.sh"
-    }
-
-    connection {
-        host = element(var.lead_public_ips, 0)
-        type = "ssh"
-    }
-}
-
-resource "null_resource" "cron_leader" {
-    count      = var.leader_servers > 0 ? var.leader_servers : 0
-    depends_on = [module.leader_provisioners]
-
-    provisioner "remote-exec" {
-        inline = [ "mkdir -p /root/code/cron" ]
-    }
-
-    provisioner "file" {
-        content = fileexists("${path.module}/template_files/cron/leader.tmpl") ? templatefile("${path.module}/template_files/cron/leader.tmpl", {
-            run_service = var.run_service_enabled
-            send_logs = var.send_logs_enabled
-            send_jsons = var.send_jsons_enabled
-            aws_bucket_name = var.aws_bucket_name
-            aws_bucket_region = var.aws_bucket_region
-            check_ssl = count.index == 0 ? true : false
-
-            # Temp
-            docker_service_name = local.docker_service_name
-            consul_service_name = local.consul_service_name
-            folder_location = local.folder_location
-            logs_prefix = local.logs_prefix
-            email_image = local.email_image
-            service_repo_name = local.service_repo_name
-
-        }) : ""
-        destination = "/root/code/cron/leader.cron"
-    }
-
-    provisioner "remote-exec" {
-        inline = [ "crontab /root/code/cron/leader.cron", "crontab -l" ]
-    }
-
-    connection {
-        host = element(var.lead_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-module "pull_docker_containers" {
-    source = "../../provisioners/pull_containers"
-
-    provisioners_done = module.leader_provisioners.end_of_provisioner
     servers = var.leader_servers
     public_ips = var.lead_public_ips
     app_definitions = var.app_definitions
     aws_ecr_region   = var.aws_ecr_region
+
+    registry_ready = null_resource.restore_gitlab[0].id
+    prev_module_output = module.leader_provision_files.output
 }
 
-resource "null_resource" "sync_leader_with_admin_firewall" {
-    count      = var.admin_servers
-    depends_on = [null_resource.change_db_dns]
-
-    provisioner "file" {
-        content = <<-EOF
-            check_consul() {
-
-                consul kv put leader_bootstrapped true;
-
-                ADMIN_READY=$(consul kv get admin_ready);
-
-                if [ "$ADMIN_READY" = "true" ]; then
-                    echo "Firewalls ready: Leader"
-                    exit 0;
-                else
-                    echo "Waiting 15 for admin firewall";
-                    sleep 15;
-                    check_consul
-                fi
-            }
-
-            check_consul
-        EOF
-        destination = "/tmp/sync_leader_firewall.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/sync_leader_firewall.sh",
-            "/tmp/sync_leader_firewall.sh",
-        ]
-    }
-
-    connection {
-        host = element(var.lead_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
-resource "null_resource" "start_docker_containers" {
-    count      = var.leader_servers
-    # TODO: Can we cleanly depend on certain imported dbs before starting containers, when adding apps/dbs
-    depends_on = [module.pull_docker_containers, null_resource.sync_leader_with_admin_firewall]
-
-    triggers = {
-        num_apps = length(keys(var.app_definitions))
-    }
-
-    provisioner "remote-exec" {
-        # We need to version this either in a seperate file or repo as something like
-        # "default services/containers" for better transparency
-        # TODO: Adjustable DOCKER_OVERLAY_SUBNET
-        inline = [
-            <<-EOF
-                SLEEP_FOR=$((5 + $((${count.index} * 8)) ))
-                echo "WAITING $SLEEP_FOR seconds"
-                sleep $SLEEP_FOR
-
-                DOCKER_OVERLAY_SUBNET="192.168.0.0/16"
-
-                NET_UP=$(docker network inspect proxy)
-                if [ $? -eq 1 ]; then docker network create --attachable --driver overlay --subnet $DOCKER_OVERLAY_SUBNET proxy; fi
-
-                ### NOTE: Once we move to blue/turquiose/green, we'll have to make
-                ###  sure we bring up the correct service (_blue or _green, not _main)
-
-                %{ for APP in var.app_definitions }
-
-                    CHECK_SERVICE=${APP["green_service"]};
-                    REPO_NAME=${APP["repo_name"]};
-                    SERVICE_NAME=${APP["service_name"]};
-
-                    APP_UP=$(docker service ps $CHECK_SERVICE)
-                    [ -z "$APP_UP" ] && (cd /root/repos/$REPO_NAME && docker stack deploy --compose-file docker-compose.yml $SERVICE_NAME --with-registry-auth)
-
-                %{ endfor }
-
-                consul kv put leader_ready true;
-
-                exit 0
-            EOF
-        ]
-        connection {
-            host = element(var.lead_public_ips, count.index)
-            type = "ssh"
-        }
-    }
-}
-
-# NOTE: Hopefully eliminated the circular dependency by not depending on the leader provisioners explicitly
-resource "null_resource" "change_proxy_dns" {
-    # We're gonna simply modify existing dns for now. To worry about creating/deleting/modifying
-    # would require more effort for only slightly more flexability thats not needed at the moment
-    count      = var.change_site_dns && var.leader_servers > 0 ? length(var.site_dns) : 0
-    depends_on = [null_resource.start_docker_containers]
-
-    triggers = {
-        # v4
-        # TODO: We must keep our servers to one swarm for the moment due to the limitation
-        #    of the current "proxy" server running in a docker container. If we have multiple swarms,
-        #    whatever swarm the DNS is routing to, itll only route to that swarm. We need an external
-        #    load balancer/proxy to proxy requests either on a new software end or provider specific
-        #    options (Digital Ocean, AWS, Azure) or Cloudflare.
-        # For now, we only want to change the DNS to the very last server if the number of server changes
-        #   regardless if we sizing up or down.
-        update_proxy_dns = var.leader_servers
-    }
-
-    lifecycle {
-        create_before_destroy = true
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            <<-EOF
-                DNS_ID=${var.site_dns[count.index]["dns_id"]};
-                ZONE_ID=${var.site_dns[count.index]["zone_id"]};
-                URL=${var.site_dns[count.index]["url"]};
-                IP=${element(var.lead_public_ips, var.leader_servers - 1)};
-
-                # curl -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" \
-                # -H "X-Auth-Email: ${var.cloudflare_email}" \
-                # -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-                # -H "Content-Type: application/json" \
-                # --data '{"type": "A", "name": "'$URL'", "content": "'$IP'", "proxied": false}';
-                exit 0;
-            EOF
-        ]
-        connection {
-            host = element(var.lead_public_ips, 0)
-            type = "ssh"
-        }
-    }
-}
-
-
-resource "null_resource" "create_app_subdomains" {
-    # count      = var.leader_servers
-    count      = 0
-    depends_on = [null_resource.change_proxy_dns]
-
-    provisioner "remote-exec" {
-
-        # A_RECORDS=(cert chef consul mongo.aws1 mongo.do1 pg.aws1 pg.do1 redis.aws1 redis.do1 www $ROOT_DOMAIN_NAME)
-        # for A_RECORD in ${A_RECORDS[@]}; do
-        #     curl -X POST "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
-        #          -H "X-Auth-Email: ${cloudflare_email}" \
-        #          -H "X-Auth-Key: ${cloudflare_auth_key}" \
-        #          -H "Content-Type: application/json" \
-        #          --data '{"type":"A","name":"'${A_RECORD}'","content":"127.0.0.1","ttl":1,"priority":10,"proxied":false}'
-        # done
-
-        inline = [
-            <<-EOF
-
-                ZONE_ID=${var.cloudflare_zone_id}
-                ROOT_DOMAIN=${var.root_domain_name}
-
-                %{ for APP in var.app_definitions }
-
-                    CNAME_RECORD1=${APP["service_name"]};
-                    CNAME_RECORD2=${APP["service_name"]}.dev;
-                    CNAME_RECORD3=${APP["service_name"]}.db;
-                    CNAME_RECORD4=${APP["service_name"]}.dev.db;
-
-                    CREATE_SUBDOMAIN=${APP["create_subdomain"]};
-
-                    if [ "$CREATE_SUBDOMAIN" = "true" ]; then
-
-                        curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
-                            -H "X-Auth-Email: ${var.cloudflare_email}" \
-                            -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-                            -H "Content-Type: application/json" \
-                            --data '{"type":"CNAME","name":"'$CNAME_RECORD1'","content":"'$ROOT_DOMAIN'","ttl":1,"priority":10,"proxied":false}'
-
-                        curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
-                            -H "X-Auth-Email: ${var.cloudflare_email}" \
-                            -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-                            -H "Content-Type: application/json" \
-                            --data '{"type":"CNAME","name":"'$CNAME_RECORD2'","content":"'$ROOT_DOMAIN'","ttl":1,"priority":10,"proxied":false}'
-
-                        curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
-                            -H "X-Auth-Email: ${var.cloudflare_email}" \
-                            -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-                            -H "Content-Type: application/json" \
-                            --data '{"type":"CNAME","name":"'$CNAME_RECORD3'","content":"'$ROOT_DOMAIN'","ttl":1,"priority":10,"proxied":false}'
-
-                        curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
-                            -H "X-Auth-Email: ${var.cloudflare_email}" \
-                            -H "X-Auth-Key: ${var.cloudflare_auth_key}" \
-                            -H "Content-Type: application/json" \
-                            --data '{"type":"CNAME","name":"'$CNAME_RECORD4'","content":"'$ROOT_DOMAIN'","ttl":1,"priority":10,"proxied":false}'
-                    fi
-
-                    sleep 2;
-
-                %{ endfor }
-
-                exit 0
-            EOF
-        ]
-        connection {
-            host = element(var.lead_public_ips, count.index)
-            type = "ssh"
-        }
-    }
-}
 
 resource "null_resource" "install_runner" {
     count = var.leader_servers
-    # depends_on = [null_resource.create_app_subdomains]
-    depends_on = [null_resource.change_proxy_dns]
+    # TODO: Do we need an output from the last resource or will it wait for all resources
+    depends_on = [ module.docker ]
 
     provisioner "file" {
         content = <<-EOF
