@@ -39,6 +39,10 @@ variable "chef_server_url" { default = "chef.DOMAIN.COM" }
 # This is used for the fqdn
 variable "root_domain_name" { default = "DOMAIN.COM" }
 
+# This should be unique per terraform machine/env in order to not have server names clashing
+# Replace USER with your name and ENV with [prod, dev, test, stage, w/e]
+variable "server_name_prefix" { default = "NAME-blue" }
+
 variable "gitlab_runner_tokens" {
     type = map(string)
     default = {
