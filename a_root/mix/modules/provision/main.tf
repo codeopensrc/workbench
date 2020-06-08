@@ -56,12 +56,12 @@ resource "null_resource" "base_files" {
             "mkdir -p /root/.ssh",
             "mkdir -p /root/.tmux/plugins",
             "mkdir -p /etc/ssl/creds",
-            "(cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')",
-            "cat /usr/share/zoneinfo/America/Los_Angeles > /etc/localtime",
+            "[ ! -f /root/.ssh/id_rsa ] && (cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')",
+            "[ ! -d /root/.tmux/plugins/tpm ] && git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm",
+            "cp /usr/share/zoneinfo/America/Los_Angeles /etc/localtime",
             "timedatectl set-timezone 'America/Los_Angeles'",
             "sudo apt-get update",
-            "sudo apt-get install build-essential apt-utils openjdk-8-jdk vim git awscli -y",
-            "git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm",
+            "sudo apt-get install build-essential apt-utils openjdk-8-jdk vim git awscli jq -y"
         ]
         # TODO: Configurable timezone
     }

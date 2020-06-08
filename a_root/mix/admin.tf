@@ -36,6 +36,7 @@ module "admin_hostname" {
     names = var.admin_names
     servers = var.admin_servers
     public_ips = var.admin_public_ips
+    private_ips = var.admin_private_ips
     alt_hostname = "chef"
 }
 
@@ -208,11 +209,15 @@ resource "null_resource" "restore_gitlab" {
         destination = "/root/code/scripts/backupGitlab.sh"
     }
 
+    # NOTE: Sleep is for internal api, takes a second after a restore
+    # Otherwise git clones and docker pulls won't work in the next step
     provisioner "remote-exec" {
         inline = [
             <<-EOF
                 chmod +x /root/code/scripts/importGitlab.sh;
+
                 ${var.import_gitlab ? "bash /root/code/scripts/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name};" : ""}
+                ${var.import_gitlab ? "sleep 90" : ""}
 
                 GITLAB_BACKUPS_ENABLED=${var.gitlab_backups_enabled};
                 if [ "$GITLAB_BACKUPS_ENABLED" != "true" ]; then

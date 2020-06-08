@@ -44,6 +44,7 @@ module "leader_hostname" {
     names = var.lead_names
     servers = var.leader_servers
     public_ips = var.lead_public_ips
+    private_ips = var.lead_private_ips
     alt_hostname = var.root_domain_name
 }
 

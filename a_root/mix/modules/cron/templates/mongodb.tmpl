@@ -3,7 +3,7 @@
 # Name: Backup '${DBNAME}' Mongo DB
 SHELL="/bin/bash"
 HOME="/root"
-0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupMongo.sh -b ${aws_bucket_name} -r ${aws_bucket_region} -d ${DBNAME} >> /dev/null 2>>$HOME/code/logs/errors.log
+0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupMongo.sh -b ${aws_bucket_name} -r ${aws_bucket_region} -d ${DBNAME} -h ${host} >> /dev/null 2>>$HOME/code/logs/errors.log
 
 # Name: Remove '${DBNAME}' Mongo Backups
 SHELL="/bin/bash"

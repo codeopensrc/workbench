@@ -97,6 +97,7 @@ resource "null_resource" "db" {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
             mongo_dbs = length(var.mongo_dbs) > 0 ? var.mongo_dbs : []
+            host = "vpc.my_private_ip"  # TODO: Add ability to specific host/hostnames/ip
         }) : ""
         destination = var.destinations["mongodb"]
     }

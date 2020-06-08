@@ -34,6 +34,7 @@ module "db_hostname" {
     names = var.db_names
     servers = var.db_servers
     public_ips = var.db_public_ips
+    private_ips = var.db_private_ips
     alt_hostname = var.root_domain_name
 }
 
