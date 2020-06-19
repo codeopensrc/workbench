@@ -8,8 +8,14 @@ variable "public_ips" { default = "" }
 variable "private_ips" { default = "" }
 variable "alt_hostname" { default = "" }
 
+variable "prev_module_output" {}
+
 resource "null_resource" "change_hostname" {
     count      = var.servers
+
+    triggers = {
+        wait_for_prev_module = "${join(",", var.prev_module_output)}"
+    }
 
     provisioner "file" {
         content = <<-EOF
@@ -34,6 +40,7 @@ resource "null_resource" "change_hostname" {
             "cat /etc/hosts",
             "chmod +x /tmp/change_hostname.sh",
             "/tmp/change_hostname.sh",
+            "cat /etc/hosts",
         ]
     }
 

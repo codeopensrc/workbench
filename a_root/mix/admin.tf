@@ -38,6 +38,7 @@ module "admin_hostname" {
     public_ips = var.admin_public_ips
     private_ips = var.admin_private_ips
     alt_hostname = "chef"
+    prev_module_output = module.admin_provisioners.output
 }
 
 module "admin_cron" {
@@ -150,17 +151,27 @@ resource "null_resource" "install_gitlab" {
 
     # NOTE: With route53 as DNS over cloudflare, letsencrypt for gitlab cant verify right away
     #  as the dns change doesn't propagate as fast as cloudflare, wait a min or so before re-running.
+
+    # Ruby helper cmd: Reset Password
+    # gitlab-rails console -e production
+    # user = User.where(id: 1).first
+    # user.password = 'secret_pass'
+    # user.password_confirmation = 'secret_pass'
+    # user.save!
+
+    ###! Mattermost defaults
+    ###! /var/opt/gitlab/mattermost   mattermost dir
+    ###! /var/opt/gitlab/mattermost/config.json   for server settings
+    ###! /var/opt/gitlab/mattermost/*plugins      for plugins
+    ###! /var/opt/gitlab/mattermost/data          for server data
     provisioner "remote-exec" {
         inline = [
             <<-EOF
-                sudo apt-get update;
-                sudo apt-get install -y ca-certificates curl openssh-server;
-                echo postfix postfix/mailname string chef.${var.root_domain_name} | sudo debconf-set-selections
-                echo postfix postfix/main_mailer_type string 'Internet Site' | sudo debconf-set-selections
-                sudo apt-get install --assume-yes postfix;
-                curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash;
-                sudo EXTERNAL_URL='http://gitlab.${var.root_domain_name}' apt-get install gitlab-ce=${var.gitlab_version};
-                sed -i "s|http://gitlab|https://gitlab|" /etc/gitlab/gitlab.rb
+                sed -i "s|myhostname = [0-9a-zA-Z.-]*|myhostname = chef.${var.root_domain_name}|" /etc/postfix/main.cf
+                sudo service postfix restart
+                sudo systemctl start gitlab-runsvdir.service
+                sudo gitlab-ctl restart
+                sed -i "s|external_url 'http://[0-9a-zA-Z.-]*'|external_url 'https://gitlab.${var.root_domain_name}'|" /etc/gitlab/gitlab.rb
                 sed -i "s|https://registry.example.com|https://registry.${var.root_domain_name}|" /etc/gitlab/gitlab.rb
                 sed -i "s|# registry_external_url|registry_external_url|" /etc/gitlab/gitlab.rb
                 sed -i "s|# letsencrypt\['enable'\] = nil|letsencrypt\['enable'\] = true|" /etc/gitlab/gitlab.rb
@@ -169,8 +180,15 @@ resource "null_resource" "install_gitlab" {
                 sed -i "s|# letsencrypt\['auto_renew_hour'\]|letsencrypt\['auto_renew_hour'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|# letsencrypt\['auto_renew_minute'\] = nil|letsencrypt\['auto_renew_minute'\] = 30|" /etc/gitlab/gitlab.rb
                 sed -i "s|# letsencrypt\['auto_renew_day_of_month'\]|letsencrypt\['auto_renew_day_of_month'\]|" /etc/gitlab/gitlab.rb
+
                 sleep 5;
                 sudo gitlab-ctl reconfigure
+
+                sed -i "s|# mattermost_external_url 'https://[0-9a-zA-Z.-]*'|mattermost_external_url 'https://${var.mattermost_subdomain}.${var.root_domain_name}'|" /etc/gitlab/gitlab.rb;
+                echo "alias mattermost-cli=\"cd /opt/gitlab/embedded/service/mattermost && sudo /opt/gitlab/embedded/bin/chpst -e /opt/gitlab/etc/mattermost/env -P -U mattermost:mattermost -u mattermost:mattermost /opt/gitlab/embedded/bin/mattermost --config=/var/opt/gitlab/mattermost/config.json $1\"" >> ~/.bashrc
+
+                sleep 5;
+                sudo gitlab-ctl reconfigure;
             EOF
         ]
 
@@ -199,30 +217,20 @@ resource "null_resource" "restore_gitlab" {
         null_resource.install_gitlab,
     ]
 
-    provisioner "file" {
-        content = file("${path.module}/template_files/importGitlab.sh")
-        destination = "/root/code/scripts/importGitlab.sh"
-    }
-
-    provisioner "file" {
-        content = file("${path.module}/template_files/backupGitlab.sh")
-        destination = "/root/code/scripts/backupGitlab.sh"
-    }
-
     # NOTE: Sleep is for internal api, takes a second after a restore
     # Otherwise git clones and docker pulls won't work in the next step
     provisioner "remote-exec" {
         inline = [
             <<-EOF
-                chmod +x /root/code/scripts/importGitlab.sh;
+                chmod +x /root/code/scripts/misc/importGitlab.sh;
 
-                ${var.import_gitlab ? "bash /root/code/scripts/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name};" : ""}
-                ${var.import_gitlab ? "sleep 90" : ""}
-
-                GITLAB_BACKUPS_ENABLED=${var.gitlab_backups_enabled};
-                if [ "$GITLAB_BACKUPS_ENABLED" != "true" ]; then
-                    sed -i 's/BACKUPS_ENABLED=true/BACKUPS_ENABLED=false/g' /root/code/scripts/backupGitlab.sh;
+                IMPORT_GITLAB=${var.import_gitlab}
+                if [ "$IMPORT_GITLAB" = "true" ]; then
+                    bash /root/code/scripts/misc/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name};
+                    echo "Waiting 90"
+                    sleep 90
                 fi
+
                 exit 0;
             EOF
         ]
@@ -234,6 +242,125 @@ resource "null_resource" "restore_gitlab" {
     }
 }
 
+resource "null_resource" "gitlab_plugins" {
+    count = var.admin_servers
+    depends_on = [
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab,
+    ]
+
+    provisioner "remote-exec" {
+        inline = [
+            <<-EOF
+                PLUGIN1_NAME="WekanPlugin";
+                PLUGIN2_NAME="MattermostPlugin";
+                TERRA_UUID=${uuid()}
+                echo $TERRA_UUID;
+
+
+                echo "Waiting 90s for gitlab api for oauth plugins"
+                sleep 90;
+
+                sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!";
+
+                PLUGIN1_ID=$(curl --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications" | jq ".[] | select(.application_name | contains (\"$PLUGIN1_NAME\")) | .id");
+                curl --request DELETE --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications/$PLUGIN1_ID";
+
+                sleep 5;
+                OAUTH=$(curl --request POST --header "PRIVATE-TOKEN: $TERRA_UUID" \
+                    --data "name=$PLUGIN1_NAME&redirect_uri=https://${var.wekan_subdomain}.${var.root_domain_name}/_oauth/oidc&scopes=openid%20profile%20email" \
+                    "https://gitlab.${var.root_domain_name}/api/v4/applications");
+
+                APP_ID=$(echo $OAUTH | jq -r ".application_id");
+                APP_SECRET=$(echo $OAUTH | jq -r ".secret");
+
+                consul kv put wekan/app_id $APP_ID
+                consul kv put wekan/secret $APP_SECRET
+
+
+
+                FOUND_CORRECT_ID2=$(curl --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications" | jq ".[] | select(.application_name | contains (\"$PLUGIN2_NAME\")) | select(.callback_url | contains (\"${var.root_domain_name}\")) | .id");
+
+                if [ -z "$FOUND_CORRECT_ID2" ]; then
+                    PLUGIN2_ID=$(curl --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications" | jq ".[] | select(.application_name | contains (\"$PLUGIN2_NAME\")) | .id");
+                    curl --request DELETE --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications/$PLUGIN2_ID";
+
+                    OAUTH2=$(curl --request POST --header "PRIVATE-TOKEN: $TERRA_UUID" \
+                        --data "name=$PLUGIN2_NAME&redirect_uri=https://${var.mattermost_subdomain}.${var.root_domain_name}/plugins/com.github.manland.mattermost-plugin-gitlab/oauth/complete&scopes=api%20read_user" \
+                        "https://gitlab.${var.root_domain_name}/api/v4/applications");
+
+                    APP_ID2=$(echo $OAUTH2 | jq -r ".application_id");
+                    APP_SECRET2=$(echo $OAUTH2 | jq -r ".secret");
+
+                    sed -i "s|\"gitlaburl\": \"https://[0-9a-zA-Z.-]*\"|\"gitlaburl\": \"https://gitlab.${var.root_domain_name}\"|" /var/opt/gitlab/mattermost/config.json
+                    sed -i "s|\"gitlaboauthclientid\": \"[0-9a-zA-Z.-]*\"|\"gitlaboauthclientid\": \"$APP_ID2\"|" /var/opt/gitlab/mattermost/config.json
+                    sed -i "s|\"gitlaboauthclientsecret\": \"[0-9a-zA-Z.-]*\"|\"gitlaboauthclientsecret\": \"$APP_SECRET2\"|" /var/opt/gitlab/mattermost/config.json
+
+                    sudo gitlab-ctl restart mattermost;
+                fi
+
+                sleep 3;
+                sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
+
+            EOF
+        ]
+    }
+
+    connection {
+        host = element(var.admin_public_ips, 0)
+        type = "ssh"
+    }
+}
+
+# NOTE: Used to re-authenticate mattermost with gitlab
+resource "null_resource" "reauthorize_mattermost" {
+    count = 0
+    depends_on = [
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab,
+    ]
+
+    provisioner "remote-exec" {
+        ###! Below is necessary for re-authenticating mattermost with gitlab (if initial auth doesnt work)
+        ###! Problem is the $'' style syntax used to preserve \n doesnt like terraform variable expression
+        inline = [
+            <<-EOF
+
+                PLUGIN_NAME="Gitlab Mattermost";
+                TERRA_UUID=${uuid()}
+                echo $TERRA_UUID;
+
+                sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!"
+
+                OAUTH=$(curl --request POST --header "PRIVATE-TOKEN: $TERRA_UUID" \
+                    --data $'name=$PLUGIN_NAME&redirect_uri=https://${var.mattermost_subdomain}.${var.root_domain_name}/signup/gitlab/complete\nhttps://${var.mattermost_subdomain}.${var.root_domain_name}/login/gitlab/complete&scopes=' \
+                    "https://gitlab.${var.root_domain_name}/api/v4/applications");
+
+                APP_ID=$(echo $OAUTH | jq ".application_id");
+                APP_SECRET=$(echo $OAUTH | jq ".secret");
+
+                sed -i "s|# mattermost\['enable'\] = false|mattermost\['enable'\] = true|" /etc/gitlab/gitlab.rb;
+                sed -i "s|# mattermost\['gitlab_enable'\] = false|mattermost\['gitlab_enable'\] = true|" /etc/gitlab/gitlab.rb;
+                sed -i "s|# mattermost\['gitlab_id'\] = \"12345656\"|mattermost\['gitlab_id'\] = $APP_ID|" /etc/gitlab/gitlab.rb;
+                sed -i "s|# mattermost\['gitlab_secret'\] = \"123456789\"|mattermost\['gitlab_secret'\] = $APP_SECRET|" /etc/gitlab/gitlab.rb;
+                sed -i "s|# mattermost\['gitlab_scope'\] = \"\"|mattermost\['gitlab_scope'\] = \"\"|" /etc/gitlab/gitlab.rb;
+                sed -i "s|# mattermost\['gitlab_auth_endpoint'\] = \"http://gitlab.example.com/oauth/authorize\"|mattermost\['gitlab_auth_endpoint'\] = \"https://gitlab.${var.root_domain_name}/oauth/authorize\"|" /etc/gitlab/gitlab.rb
+                sed -i "s|# mattermost\['gitlab_token_endpoint'\] = \"http://gitlab.example.com/oauth/token\"|mattermost\['gitlab_token_endpoint'\] = \"https://gitlab.${var.root_domain_name}/oauth/token\"|" /etc/gitlab/gitlab.rb
+                sed -i "s|# mattermost\['gitlab_user_api_endpoint'\] = \"http://gitlab.example.com/api/v4/user\"|mattermost\['gitlab_user_api_endpoint'\] = \"https://gitlab.${var.root_domain_name}/api/v4/user\"|" /etc/gitlab/gitlab.rb
+
+                sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!"
+
+            EOF
+        ]
+    }
+
+    connection {
+        host = element(var.admin_public_ips, 0)
+        type = "ssh"
+    }
+}
 
 resource "null_resource" "docker_ready" {
     count = var.admin_servers
@@ -317,6 +444,7 @@ resource "null_resource" "setup_letsencrypt" {
                     docker stack rm $PROXY_STACK_NAME
                     sed -i 's/LISTEN_ON_SSL:\s\+"true"/LISTEN_ON_SSL:      "false"/g' $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml
                     docker stack deploy --compose-file $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml $PROXY_STACK_NAME --with-registry-auth
+                    sleep 10;  # Give proxy service a second. Next step uses it and needs to be up.
                 fi
             fi
         EOF
@@ -340,7 +468,7 @@ resource "null_resource" "setup_letsencrypt" {
     }
 
     provisioner "file" {
-        content = templatefile("${path.module}/template_files/letsencrypt_vars.tmpl", {
+        content = templatefile("${path.module}/modules/letsencrypt/letsencrypt_vars.tmpl", {
             app_definitions = var.app_definitions,
             fqdn = var.root_domain_name,
             email = var.chef_email,
@@ -350,7 +478,7 @@ resource "null_resource" "setup_letsencrypt" {
     }
 
     provisioner "file" {
-        content = file("${path.module}/template_files/letsencrypt.tmpl")
+        content = file("${path.module}/modules/letsencrypt/letsencrypt.tmpl")
         destination = "/root/code/scripts/letsencrypt.sh"
     }
 

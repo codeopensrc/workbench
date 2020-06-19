@@ -4,10 +4,11 @@
 REDIS_VERSION="5.0.9"
 BIND_IP="0\.0\.0\.0"
 
-while getopts "v:" flag; do
+while getopts "v:e" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         v) REDIS_VERSION=$OPTARG;;
+        e) ENABLE=true;;
     esac
 done
 
@@ -32,5 +33,11 @@ cd /var/lib/redis/redis-$REDIS_VERSION/utils;
 
 
 EOI
-sudo update-rc.d redis_6379 defaults;
-sudo service redis_6379 start;
+
+if [ "$ENABLE" = true ]; then
+    sudo update-rc.d redis_6379 defaults;
+    sudo service redis_6379 start;
+else
+    sudo service redis_6379 stop
+    sudo systemctl disable redis_6379
+fi

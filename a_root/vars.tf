@@ -31,6 +31,9 @@ variable "do_legacy_size" { default = "" }
 
 
 # aws
+variable "aws_region" {}
+variable "aws_access_key" {}
+variable "aws_secret_key" {}
 variable "aws_key_name" {}
 variable "aws_ami" { default = "" }
 variable "aws_ecr_region" { default = "" }
@@ -48,7 +51,9 @@ variable "aws_pg_instance_type" { default = "" }
 variable "aws_redis_instance_type" { default = "" }
 variable "aws_legacy_instance_type" { default = "" }
 
-
+variable "packer_default_amis" { default = "" }
+variable "use_packer_image" { default = "" }
+variable "build_packer_image" { default = "" }
 variable "dns_provider" { default = "" }
 
 # Cloudflare/dns variables _should_ be optional to modify DNS settings on cloudflare
@@ -74,6 +79,9 @@ variable "dbs_to_import" {
         dbname=string, import=string, fn=string }))
 }
 
+variable "mattermost_subdomain" { default = "" }
+variable "wekan_subdomain" { default = "" }
+
 variable "db_dns" { type = map(object({ url=string, dns_id=string, zone_id=string })) }
 variable "site_dns" { type = list(object({ url=string, dns_id=string, zone_id=string })) }
 variable "admin_dns" { type = list(object({ url=string, dns_id=string, zone_id=string })) }
@@ -84,6 +92,8 @@ variable "leader_arecord_aliases" { type = list }
 
 variable "join_machine_id" { default = "" }
 variable "serverkey" {}
+variable "minio_access" {}
+variable "minio_secret" {}
 variable "pg_password" {}
 variable "dev_pg_password" {}
 variable "docker_machine_ip" {}
@@ -96,6 +106,7 @@ variable "docker_compose_version" {}
 variable "docker_engine_install_url" {}
 variable "consul_version" {}
 variable "gitlab_version" {}
+variable "redis_version" {}
 
 variable "deploy_key_location" {}
 

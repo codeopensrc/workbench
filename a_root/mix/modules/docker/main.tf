@@ -129,11 +129,32 @@ resource "null_resource" "start_containers" {
 
                     %{ for APP in var.app_definitions }
 
-                        CHECK_SERVICE=${APP["green_service"]};
+                        GREEN_SERVICE=${APP["green_service"]};
+                        CLEAN_SERVICE_NAME=$(echo $GREEN_SERVICE | grep -Eo "[a-z_]+");
                         REPO_NAME=${APP["repo_name"]};
                         SERVICE_NAME=${APP["service_name"]};
 
-                        APP_UP=$(docker service ps $CHECK_SERVICE)
+                        if [ "$REPO_NAME" = "wekan" ]; then
+                            echo "Waiting 90s for gitlab api for oauth plugins";
+                            sleep 90;
+
+                            MONGO_IP=$(curl -sS "http://localhost:8500/v1/catalog/service/mongo" | jq -r ".[].Address")
+                            sed -i "s|mongodb://mongo_url:27017|mongodb://$MONGO_IP:27017|" /root/repos/$REPO_NAME/docker-compose.yml;
+
+                            FQDN=$(hostname -f);
+                            sed -i "s|http://wekan.example.com|https://wekan.$FQDN|" /root/repos/$REPO_NAME/docker-compose.yml;
+                            sed -i "s|https://gitlab.example.com|https://gitlab.$FQDN|" /root/repos/$REPO_NAME/docker-compose.yml;
+
+                            APP_ID=$(consul kv get wekan/app_id);
+                            SECRET=$(consul kv get wekan/secret);
+                            sed -i "s|OAUTH2_CLIENT_ID=.*|OAUTH2_CLIENT_ID=$APP_ID|g" /root/repos/$REPO_NAME/docker-compose.yml;
+                            sed -i "s|OAUTH2_SECRET=.*|OAUTH2_SECRET=$SECRET|g" /root/repos/$REPO_NAME/docker-compose.yml;
+
+                            sed -i "s|OAUTH2_ENABLED=false|OAUTH2_ENABLED=true|" /root/repos/$REPO_NAME/docker-compose.yml;
+                        fi
+
+
+                        APP_UP=$(docker service ps $CLEAN_SERVICE_NAME);
                         [ -z "$APP_UP" ] && (cd /root/repos/$REPO_NAME && docker stack deploy --compose-file docker-compose.yml $SERVICE_NAME --with-registry-auth)
 
                     %{ endfor }

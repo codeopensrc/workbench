@@ -9,10 +9,5 @@ while getopts "f:r:s:" flag; do
     esac
 done
 
-# NOTE: This is toggled off when being cloned in dev environments in terraform
-RUN_SERVICE=true
-
-if [[ "$RUN_SERVICE" != true ]]; then exit; fi
-
 cd $FOLDER_LOCATION/$REPO_NAME
 /usr/local/bin/docker-compose -f docker-compose.yml run -d $DOCKER_SERVICE

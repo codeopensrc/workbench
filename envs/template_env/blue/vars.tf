@@ -41,16 +41,19 @@ variable "docker_compose_version" { default = "1.19.0" }
 variable "docker_engine_install_url" { default = "https://get.docker.com" }
 
 variable "consul_version" { default = "1.0.6" }
+variable "redis_version" { default = "5.0.9" }
 
 ########## CLOUD MACHINES ##########
 ####################################
 
 # TODO: Azure and Google Cloud providers
-# Options will be digital_ocean, aws, azure, google_cloud
+# Options will be digital_ocean, aws, azure, google_cloud etc.
 
 #### DISCLAIMER: THIS DOES NOT CREATE A FIREWALL ON DIGITAL OCEAN AT THIS TIME
 #### Switched AWS module over to aws_security groups while a digital ocean/UFW implementation has
 ####   not yet been re-implemented
+#### Also does not have a packer builder to build a digital ocean image at this time (simple just not done atm).
+#### For now this now only supports "aws" until a builder created for digital ocean in a_root/mix/modules/packer/packer.json
 variable "active_env_provider" { default = "aws" }
 
 variable "admin" { default = 1 }
@@ -81,7 +84,15 @@ variable "do_redis_size" { default = "s-2vcpu-4gb" }
 
 ########## AWS ##########
 variable "aws_region_alias" { default = "awseast" }
-variable "aws_ami" { default = "" } #Ohio -us-east-2
+variable "build_packer_image" { default = true }
+variable "use_packer_image" { default = true }
+variable "aws_ami" { default = "" } # NOTE: If `use_packer_image` set to false, MUST provide ami
+
+variable "packer_default_amis" {
+    default = {
+        "us-east-2" = "ami-0d03add87774b12c5"
+    }
+}
 
 variable "aws_admin_instance_type" { default = "t2.large" }
 variable "aws_leader_instance_type" { default = "t2.medium" }
@@ -95,6 +106,9 @@ variable "aws_redis_instance_type" { default = "t2.micro" }
 
 ############ DNS ############
 #############################
+# Used for gitlab oauth plugins
+variable "mattermost_subdomain" { default = "" }
+variable "wekan_subdomain" { default = "" }
 
 # A record
 variable "admin_arecord_aliases" {

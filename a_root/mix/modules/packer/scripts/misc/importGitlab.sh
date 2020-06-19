@@ -160,8 +160,64 @@ for i in {0..15}; do
 done
 
 
-# aws s3 cp s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME.gz ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME.gz --region $REGION;
-# break
+
+for i in {0..15}; do
+    DATE=$(date --date="$i days ago" +"%Y-%m-%d");
+    YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
+
+    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_data_${DATE}.tar.gz"
+    LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_data_${DATE}.tar.gz"
+
+    echo "Checking $REMOTE_FILE";
+    aws s3 ls $REMOTE_FILE --region $REGION;
+    if [[ $? == 0 ]]; then
+
+        echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
+        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+
+        TODAY=$(date +"%F")
+        MATTERMOST_DIR=/var/opt/gitlab/mattermost
+
+        (cd $MATTERMOST_DIR/ && tar -czvf $MATTERMOST_DIR/mattermost_data_$TODAY.tar.gz *)
+        tar -xzvf $LOCAL_FILE -C $MATTERMOST_DIR
+
+
+        break
+    fi
+done
+
+
+for i in {0..15}; do
+    DATE=$(date --date="$i days ago" +"%Y-%m-%d");
+    YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
+
+    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_dbdump_${DATE}.sql.gz"
+    LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_dbdump_${DATE}.sql.gz"
+
+    echo "Checking $REMOTE_FILE";
+    aws s3 ls $REMOTE_FILE --region $REGION;
+    if [[ $? == 0 ]]; then
+
+        echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
+        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+
+        ###! Going to give gitlab postgres db a second to restore
+        echo "Wait 10"
+        sleep 10;
+
+        sudo gitlab-ctl stop mattermost
+        sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/dropdb -h /var/opt/gitlab/postgresql mattermost_production
+        sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/createdb -h /var/opt/gitlab/postgresql mattermost_production
+        gunzip -c $LOCAL_FILE | sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/psql -h /var/opt/gitlab/postgresql -d mattermost_production
+        sudo gitlab-ctl start mattermost
+
+        break
+    fi
+done
+
+
+
+
 
 
 # If some project/repo urls aren't working correctly

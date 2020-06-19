@@ -10,11 +10,6 @@ done
 
 TODAY=$(date +"%Y-%m-%d")
 
-# NOTE: This is toggled off when being cloned in dev environments in terraform
-SEND_JSONS=true
-
-if [[ "$SEND_JSONS" != true ]]; then exit; fi
-
 cd $HOME/code
 
 #Bundle JSONS

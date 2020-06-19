@@ -11,11 +11,6 @@ done
 
 TODAY=$(date +"%Y-%m-%d")
 
-# NOTE: This is toggled off when being cloned in dev environments in terraform
-SEND_LOGS=true
-
-if [[ "$SEND_LOGS" != true ]]; then exit; fi
-
 for CONTAINER in `docker ps -a -q -f "label=com.consul.service=$CONSUL_SERVICE"`; do
     /usr/bin/docker logs $CONTAINER -t >> $HOME/code/logs/"$LOGS_PREFIX"_"$TODAY".log
 done

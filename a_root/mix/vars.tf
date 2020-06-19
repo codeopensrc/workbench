@@ -27,6 +27,9 @@ variable "cloudflare_email" { default = "" }
 variable "cloudflare_auth_key" { default = "" }
 variable "cloudflare_zone_id" { default = "" }
 
+variable "mattermost_subdomain" {}
+variable "wekan_subdomain" {}
+
 variable "change_db_dns" {}
 variable "change_site_dns" {}
 variable "change_admin_dns" {}
@@ -48,6 +51,8 @@ variable "admin_dns" { type = list(object({ url=string, dns_id=string, zone_id=s
 
 variable "join_machine_id" { default = "" }
 variable "serverkey" {}
+variable "minio_access" {}
+variable "minio_secret" {}
 variable "pg_password" {}
 variable "dev_pg_password" {}
 

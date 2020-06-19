@@ -36,6 +36,7 @@ module "db_hostname" {
     public_ips = var.db_public_ips
     private_ips = var.db_private_ips
     alt_hostname = var.root_domain_name
+    prev_module_output = module.db_provisioners.output
 }
 
 module "db_cron" {
@@ -66,6 +67,7 @@ module "db_cron" {
 
     # DB specific
     num_dbs = length(var.dbs_to_import)
+    db_backups_enabled = var.db_backups_enabled
     redis_dbs = length(local.redis_dbs) > 0 ? local.redis_dbs : []
     mongo_dbs = length(local.mongo_dbs) > 0 ? local.mongo_dbs : []
     pg_dbs = length(local.pg_dbs) > 0 ? local.pg_dbs : []
@@ -81,8 +83,6 @@ module "db_provision_files" {
     public_ips = var.db_public_ips
 
     private_ips = var.db_private_ips
-    import_dbs = var.import_dbs
-    db_backups_enabled = var.db_backups_enabled
 
     known_hosts = var.known_hosts
     active_env_provider = var.active_env_provider
@@ -104,17 +104,16 @@ resource "null_resource" "install_dbs" {
     provisioner "remote-exec" {
         # TODO: Setup to bind to private net/vpc instead of relying soley on the security group/firewall for all dbs
         inline = [
-            "chmod +x /root/code/scripts/install_redis.sh",
-            "chmod +x /root/code/scripts/install_mongo.sh",
-            "chmod +x /root/code/scripts/install_pg.sh",
-            (length(local.redis_dbs) > 0
-                ? "bash /root/code/scripts/install_redis.sh -v 5.0.9;"
-                : "echo 0;"),
+            "chmod +x /root/code/scripts/install/install_redis.sh",
+            "chmod +x /root/code/scripts/install/install_mongo.sh",
+            "chmod +x /root/code/scripts/install/install_pg.sh",
+            (length(local.redis_dbs) > 0 ? "sudo service redis_6379 start;" : ""),
+            (length(local.redis_dbs) > 0 ? "sudo systemctl enable redis_6379" : ""),
             (length(local.mongo_dbs) > 0
-                ? "bash /root/code/scripts/install_mongo.sh -v 4.2.7 -i ${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)};"
+                ? "bash /root/code/scripts/install/install_mongo.sh -v 4.2.7 -i ${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)};"
                 : "echo 0;"),
             (length(local.pg_dbs) > 0
-                ? "bash /root/code/scripts/install_pg.sh -v 9.5;"
+                ? "bash /root/code/scripts/install/install_pg.sh -v 9.5;"
                 : "echo 0;"),
             "exit 0;"
         ]
@@ -145,17 +144,17 @@ resource "null_resource" "import_dbs" {
             HOST=${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)}
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
-                bash /root/code/scripts/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME -h $HOST;
+                bash /root/code/scripts/db/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME -h $HOST;
                 cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
-                bash /root/code/scripts/import_pg_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                bash /root/code/scripts/db/import_pg_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
                 cp /etc/consul.d/templates/pg.json /etc/consul.d/conf.d/pg.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
-                bash /root/code/scripts/import_redis_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                bash /root/code/scripts/db/import_redis_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
                 cp /etc/consul.d/templates/redis.json /etc/consul.d/conf.d/redis.json
             fi
         EOF
@@ -188,10 +187,32 @@ resource "null_resource" "db_ready" {
         null_resource.import_dbs,
     ]
 
+    provisioner "file" {
+        content = <<-EOF
+            check_consul() {
+                SET_BOOTSTRAPPED=$(consul kv get init/db_bootstrapped);
+
+                if [ "$SET_BOOTSTRAPPED" = "true" ]; then
+                    echo "Set DB bootstrapped";
+                    exit 0;
+                else
+                    echo "Waiting 10 for consul";
+                    sleep 10;
+                    consul reload;
+                    consul kv put init/db_bootstrapped true
+                    check_consul
+                fi
+            }
+
+            check_consul
+        EOF
+        destination = "/tmp/set_db_bootstrapped.sh"
+    }
+
     provisioner "remote-exec" {
         inline = [
-            "consul reload",
-            "consul kv put init/db_bootstrapped true;"
+            "chmod +x /tmp/set_db_bootstrapped.sh",
+            "bash /tmp/set_db_bootstrapped.sh",
         ]
     }
 

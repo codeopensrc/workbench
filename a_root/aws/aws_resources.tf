@@ -2,8 +2,7 @@ resource "aws_instance" "admin" {
     count = var.active_env_provider == "aws" ? var.admin_servers : 0
     depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
-    ami = var.aws_ami
-    # ami = data.aws_ami.ubuntu.id
+    ami = var.use_packer_image || var.aws_ami == "" ? var.packer_image_id : var.aws_ami
     instance_type = var.aws_admin_instance_type
     tags = { Name = "${var.server_name_prefix}-${var.region}-admin-${substr(uuid(), 0, 4)}" }
     lifecycle {
@@ -11,7 +10,7 @@ resource "aws_instance" "admin" {
     }
 
     root_block_device {
-        volume_size = 30
+        volume_size = 40
     }
 
     subnet_id              = aws_subnet.public_subnet.id
@@ -45,7 +44,7 @@ resource "aws_instance" "db" {
     count = var.active_env_provider == "aws" ? var.db_servers : 0
     depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
-    ami = var.aws_ami
+    ami = var.use_packer_image || var.aws_ami == "" ? var.packer_image_id : var.aws_ami
     instance_type = var.aws_db_instance_type
     tags = { Name = "${var.server_name_prefix}-${var.region}-db-${substr(uuid(), 0, 4)}" }
     lifecycle {
@@ -89,8 +88,7 @@ resource "aws_instance" "lead" {
     count = var.active_env_provider == "aws" ? var.leader_servers : 0
     depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
-    ami = var.aws_ami
-    # ami = data.aws_ami.ubuntu.id
+    ami = var.use_packer_image || var.aws_ami == "" ? var.packer_image_id : var.aws_ami
     instance_type = var.aws_leader_instance_type
     tags = { Name = "${var.server_name_prefix}-${var.region}-lead-${substr(uuid(), 0, 4)}" }
     lifecycle {

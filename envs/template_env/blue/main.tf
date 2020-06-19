@@ -15,6 +15,12 @@ module "root" {
 
     active_env_provider = var.active_env_provider
     dns_provider        = var.dns_provider
+    use_packer_image    = var.use_packer_image
+    build_packer_image  = var.build_packer_image
+    aws_region          = var.aws_region
+    aws_access_key = var.aws_access_key
+    aws_secret_key = var.aws_secret_key
+    packer_default_amis = var.packer_default_amis
 
     # Address this
     # Address this
@@ -74,6 +80,9 @@ module "root" {
     cloudflare_auth_key = var.cloudflare_auth_key
     cloudflare_zone_id  = var.cloudflare_zone_id
 
+    mattermost_subdomain  = var.mattermost_subdomain
+    wekan_subdomain  = var.wekan_subdomain
+
     change_db_dns    = var.change_db_dns
     change_site_dns  = var.change_site_dns
     change_admin_dns = var.change_admin_dns
@@ -94,6 +103,8 @@ module "root" {
 
     join_machine_id  = var.join_machine_id
     serverkey        = var.serverkey
+    minio_access        = var.minio_access
+    minio_secret        = var.minio_secret
 
     deploy_key_location = var.deploy_key_location
 
@@ -108,6 +119,7 @@ module "root" {
     app_definitions = var.app_definitions
     misc_repos      = var.misc_repos
 
+    redis_version = var.redis_version
     docker_compose_version = var.docker_compose_version
     docker_engine_install_url  = var.docker_engine_install_url
     consul_version         = var.consul_version

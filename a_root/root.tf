@@ -1,3 +1,20 @@
+module "packer" {
+    ###! NOTE: This is not the location this or modules will end up.
+    source             = "./mix/modules/packer"
+
+    active_env_provider = var.active_env_provider
+    aws_access_key = var.aws_access_key
+    aws_secret_key = var.aws_secret_key
+    aws_region = var.aws_region
+    packer_default_amis = var.packer_default_amis
+
+    consul_version = var.consul_version
+    docker_compose_version = var.docker_compose_version
+    gitlab_version = var.gitlab_version
+    redis_version = var.redis_version
+
+    build_packer_image = var.build_packer_image
+}
 
 module "digital_ocean" {
     source             = "./digital_ocean"
@@ -75,6 +92,9 @@ module "aws" {
 
     app_ips = var.app_ips
     station_ips = var.station_ips
+
+    use_packer_image = var.use_packer_image
+    packer_image_id = module.packer.image_id
 }
 
 module "mix" {
@@ -138,6 +158,9 @@ module "mix" {
     cloudflare_auth_key = var.cloudflare_auth_key
     cloudflare_zone_id  = var.cloudflare_zone_id
 
+    mattermost_subdomain = var.mattermost_subdomain
+    wekan_subdomain = var.wekan_subdomain
+
     change_db_dns    = var.change_db_dns
     change_site_dns  = var.change_site_dns
     change_admin_dns = var.change_admin_dns
@@ -155,6 +178,8 @@ module "mix" {
     admin_dns = var.admin_dns
 
     join_machine_id  = var.join_machine_id
+    minio_access        = var.minio_access
+    minio_secret        = var.minio_secret
     serverkey        = var.serverkey
     pg_password      = var.pg_password
     dev_pg_password  = var.dev_pg_password

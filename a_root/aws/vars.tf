@@ -8,6 +8,8 @@ variable "region" { default = "" }
 
 variable "aws_key_name" {}
 variable "aws_ami" { default = "" }
+variable "use_packer_image" { default = "" }
+variable "packer_image_id" { default = "" }
 
 variable "admin_servers" {}
 variable "leader_servers" {}

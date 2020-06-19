@@ -21,7 +21,7 @@ MONGO_MAJOR_MINOR=${MONGO_VERSION%%.[0-9]}
 if [ "$BACKUP" = true ]; then
     # backup all of mongo before
     # TODO: Check that mongo is up before attempting to dump
-    bash /root/code/scripts/dumpmongo.sh
+    bash /root/code/scripts/db/dumpmongo.sh
 
     # Chose one based on version
     # TODO: Auto detect which is supported

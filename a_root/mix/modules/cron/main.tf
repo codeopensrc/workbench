@@ -18,6 +18,7 @@ variable "redis_dbs" { default = [] }
 variable "mongo_dbs" { default = [] }
 variable "pg_dbs" { default = [] }
 variable "pg_fn" { default = "" }
+variable "db_backups_enabled" { default = false }
 
 #Leader
 variable "run_service" { default = false }
@@ -86,6 +87,7 @@ resource "null_resource" "db" {
         content = fileexists("${path.module}/templates/${var.templates["redisdb"]}") ? templatefile("${path.module}/templates/${var.templates["redisdb"]}", {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
+            db_backups_enabled = var.db_backups_enabled
             redis_dbs = length(var.redis_dbs) > 0 ? var.redis_dbs : []
         }) : ""
         destination = var.destinations["redisdb"]
@@ -96,6 +98,7 @@ resource "null_resource" "db" {
         content = fileexists("${path.module}/templates/${var.templates["mongodb"]}") ? templatefile("${path.module}/templates/${var.templates["mongodb"]}", {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
+            db_backups_enabled = var.db_backups_enabled
             mongo_dbs = length(var.mongo_dbs) > 0 ? var.mongo_dbs : []
             host = "vpc.my_private_ip"  # TODO: Add ability to specific host/hostnames/ip
         }) : ""
@@ -107,6 +110,7 @@ resource "null_resource" "db" {
         content = fileexists("${path.module}/templates/${var.templates["pgdb"]}") ? templatefile("${path.module}/templates/${var.templates["pgdb"]}", {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
+            db_backups_enabled = var.db_backups_enabled
             pg_dbs = length(var.pg_dbs) > 0 ? var.pg_dbs : []
             pg_fn = length(var.pg_fn) > 0 ? var.pg_fn : "" # TODO: hack
         }) : ""

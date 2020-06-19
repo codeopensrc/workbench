@@ -31,6 +31,8 @@ variable "docker_machine_ip" { default = "" }
 #   from a server/app/serivce to another
 # TBH not sure its used anymore
 variable "serverkey" { default = ""}
+variable "minio_access" { default = "" }
+variable "minio_secret" { default = "" }
 
 # TODO: Change to contact email and an admin-like subdomain
 variable "chef_email" { default = "your@email.com" }

@@ -2,7 +2,12 @@
 ### Things needed
 Software on Linux workstation:  
 terraform  
+packer
 docker-machine  
+
+TODO: REMOVE sleep and any other linux specific local-exec commands. Only the expected `docker-machine`,
+`terraform` and `packer` cli tools should be expected on workstation for this repo (maybe more or less)
+
 
 Misc:  
 AWS account  

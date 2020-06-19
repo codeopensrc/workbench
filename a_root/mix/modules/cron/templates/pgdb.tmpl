@@ -3,12 +3,12 @@
 # Name: Backup '${DBNAME}' PG DB
 SHELL="/bin/bash"
 HOME="/root"
-0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupPG.sh -b ${aws_bucket_name} -r ${aws_bucket_region} -d ${DBNAME} ->> /dev/null 2>>$HOME/code/logs/errors.log
+${db_backups_enabled ? "" : "#"}0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupPG.sh -b ${aws_bucket_name} -r ${aws_bucket_region} -d ${DBNAME} >> /dev/null 2>>$HOME/code/logs/errors.log
 
 # Name: Remove '${DBNAME}' PG Backups
 SHELL="/bin/bash"
 HOME="/root"
-0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d ${DBNAME} >> /dev/null 2>>$HOME/code/logs/errors.log
+${db_backups_enabled ? "" : "#"}0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d ${DBNAME} >> /dev/null 2>>$HOME/code/logs/errors.log
 
 %{ endfor }
 
@@ -16,4 +16,4 @@ HOME="/root"
 # Name: Run PSQL function
 SHELL="/bin/bash"
 HOME="/root"
-${length(pg_dbs) > 0 ? "" : "#"}0 3 * * 5 bash $HOME/code/scripts/db/runPgFunction.sh -d ${length(pg_dbs) > 0 ? pg_dbs[0] : ""} -f "${pg_fn}" >> /dev/null 2>>$HOME/code/logs/errors.log
+${length(pg_dbs) > 0 && pg_fn != "" ? "" : "#"}0 3 * * 5 bash $HOME/code/scripts/db/runPgFunction.sh -d ${length(pg_dbs) > 0 ? pg_dbs[0] : ""} -f "${pg_fn}" >> /dev/null 2>>$HOME/code/logs/errors.log

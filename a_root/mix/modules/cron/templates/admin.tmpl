@@ -8,4 +8,4 @@ HOME="/root"
 MAILTO="root"
 SHELL="/bin/bash"
 HOME="/root"
-${gitlab_backups_enabled ? "" : "#"}0 2 * * 0 bash /root/code/scripts/backupGitlab.sh -r ${aws_bucket_region} -b ${aws_bucket_name}
+${gitlab_backups_enabled ? "" : "#"}0 2 * * 0 bash /root/code/scripts/misc/backupGitlab.sh -r ${aws_bucket_region} -b ${aws_bucket_name}

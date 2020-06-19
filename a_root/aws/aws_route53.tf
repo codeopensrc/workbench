@@ -30,7 +30,9 @@ resource "aws_route53_record" "default_a_admin" {
     ttl             = "300"
     type            = "A"
     records = [
-        element(concat(aws_instance.admin[*].public_ip, [""]), 0)
+        element(concat(aws_instance.admin[*].public_ip, [""]), 0) != ""
+            ? element(concat(aws_instance.admin[*].public_ip, [""]), 0)
+            : "127.0.0.1"
     ]
 }
 
@@ -42,7 +44,9 @@ resource "aws_route53_record" "default_a_db" {
     ttl             = "300"
     type            = "A"
     records = [
-        element(concat(aws_instance.db[*].public_ip, [""]), 0)
+        element(concat(aws_instance.db[*].public_ip, [""]), 0) != ""
+            ? element(concat(aws_instance.db[*].public_ip, [""]), 0)
+            : "127.0.0.1"
     ]
 }
 
@@ -54,7 +58,9 @@ resource "aws_route53_record" "default_a_leader" {
     ttl             = "300"
     type            = "A"
     records = [
-        element(concat(aws_instance.lead[*].public_ip, [""]), 0)
+        element(concat(aws_instance.lead[*].public_ip, [""]), 0) != ""
+            ? element(concat(aws_instance.lead[*].public_ip, [""]), 0)
+            : "127.0.0.1"
     ]
 }
 
@@ -66,6 +72,8 @@ resource "aws_route53_record" "default_a_leader_root" {
     ttl             = "300"
     type            = "A"
     records = [
-        element(concat(aws_instance.lead[*].public_ip, [""]), 0)
+        element(concat(aws_instance.lead[*].public_ip, [""]), 0) != ""
+            ? element(concat(aws_instance.lead[*].public_ip, [""]), 0)
+            : "127.0.0.1"
     ]
 }

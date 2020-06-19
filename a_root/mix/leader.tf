@@ -46,6 +46,7 @@ module "leader_hostname" {
     public_ips = var.lead_public_ips
     private_ips = var.lead_private_ips
     alt_hostname = var.root_domain_name
+    prev_module_output = module.leader_provisioners.output
 }
 
 module "leader_cron" {
@@ -87,10 +88,6 @@ module "leader_provision_files" {
     servers = var.leader_servers
     public_ips = var.lead_public_ips
 
-    run_service_enabled = var.run_service_enabled
-    send_jsons_enabled = var.send_jsons_enabled
-    send_logs_enabled = var.send_logs_enabled
-
     known_hosts = var.known_hosts
     deploy_key_location = var.deploy_key_location
     root_domain_name = var.root_domain_name
@@ -105,7 +102,7 @@ module "docker" {
     app_definitions = var.app_definitions
     aws_ecr_region   = var.aws_ecr_region
 
-    registry_ready = null_resource.restore_gitlab[0].id
+    registry_ready = element(concat(null_resource.restore_gitlab[*].id, [""]), 0)
     prev_module_output = module.leader_provision_files.output
 }
 
@@ -129,6 +126,15 @@ resource "null_resource" "install_runner" {
                 SERVICE_REPO_URL=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_url" ) : "" }
                 SERVICE_REPO_NAME=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : "" }
                 git clone $SERVICE_REPO_URL /home/gitlab-runner/$SERVICE_REPO_NAME
+
+                docker run -d -p 9000:9000 --name minio1 \
+                    -e "MINIO_ACCESS_KEY=${var.minio_access}" \
+                    -e "MINIO_SECRET_KEY=$[var.minio_secret}" \
+                    minio/minio server /data
+                sleep 10;
+                mc config host add local "http://127.0.0.1:9000" ${var.minio_access} $[var.minio_secret}
+                docker stop minio1
+                docker rm minio1
             fi
 
             mkdir -p /home/gitlab-runner/.aws
@@ -143,6 +149,7 @@ resource "null_resource" "install_runner" {
         inline = [
             "chmod +x /tmp/install_runner.sh",
             "/tmp/install_runner.sh",
+            "rm /tmp/install_runner.sh",
         ]
     }
 

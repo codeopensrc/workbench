@@ -159,25 +159,6 @@ resource "null_resource" "docker_web" {
     }
 }
 
-resource "null_resource" "docker_compose" {
-    count = var.installCompose ? var.servers : 0
-    depends_on = [
-        null_resource.docker_init,
-        null_resource.docker_leader,
-        null_resource.docker_web,
-    ]
-
-    provisioner "remote-exec" {
-        inline = [
-            "curl -L https://github.com/docker/compose/releases/download/${var.docker_compose_version}/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose",
-            "chmod +x /usr/local/bin/docker-compose"
-        ]
-        connection {
-            host = element(var.public_ips, count.index)
-            type = "ssh"
-        }
-    }
-}
 
 resource "null_resource" "update_aws" {
     count = var.servers
@@ -185,17 +166,7 @@ resource "null_resource" "update_aws" {
         null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.docker_web,
-        null_resource.docker_compose,
     ]
-
-    provisioner "remote-exec" {
-        inline = [
-            "curl -O https://bootstrap.pypa.io/get-pip.py",
-            "python3 get-pip.py",
-            "pip3 install awscli --upgrade",
-            "mkdir -p /root/.aws"
-        ]
-    }
 
     provisioner "file" {
         content = <<-EOF
@@ -212,35 +183,6 @@ resource "null_resource" "update_aws" {
     }
 }
 
-resource "null_resource" "consul_install" {
-    count = var.servers
-    depends_on = [
-        null_resource.docker_init,
-        null_resource.docker_leader,
-        null_resource.docker_web,
-        null_resource.docker_compose,
-        null_resource.update_aws
-    ]
-
-    # Install consul
-    provisioner "remote-exec" {
-        inline = [
-            "echo '\nClientAliveInterval 30' >> /etc/ssh/sshd_config",
-            "apt-get update",
-            "apt-get install unzip git -y",
-            "curl https://releases.hashicorp.com/consul/${var.consul_version}/consul_${var.consul_version}_linux_amd64.zip -o ~/consul.zip",
-            "unzip ~/consul.zip",
-            "rm -rf ~/*.zip",
-            "mv ~/consul /usr/local/bin",
-            "mkdir -p /etc/consul.d",
-        ]
-    }
-
-    connection {
-        host = element(var.public_ips, count.index)
-        type = "ssh"
-    }
-}
 
 resource "null_resource" "consul_file_admin" {
     count = var.role == "admin" ? var.servers : 0
@@ -248,9 +190,7 @@ resource "null_resource" "consul_file_admin" {
         null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.docker_web,
-        null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install
     ]
 
     provisioner "remote-exec" {
@@ -295,9 +235,7 @@ resource "null_resource" "consul_file_leader" {
         null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.docker_web,
-        null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install
     ]
 
     provisioner "file" {
@@ -341,9 +279,7 @@ resource "null_resource" "consul_file" {
         null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.docker_web,
-        null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install
     ]
 
     provisioner "file" {
@@ -384,9 +320,7 @@ resource "null_resource" "consul_service" {
         null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.docker_web,
-        null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install,
         null_resource.consul_file_leader,
         null_resource.consul_file,
         null_resource.consul_file_admin
@@ -456,9 +390,7 @@ output "output" {
         null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.docker_web,
-        null_resource.docker_compose,
         null_resource.update_aws,
-        null_resource.consul_install,
         null_resource.consul_file_leader,
         null_resource.consul_file,
         null_resource.consul_file_admin,

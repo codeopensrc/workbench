@@ -10,5 +10,5 @@ envs/template_env/*/.terraform
 personal.md
 
 scripts/ignore/*
-provisioners/template_files/ignore/*
-a_root/mix/modules/provision/ignore/*
+a_root/mix/modules/packer/ignore/*
+*WIP*
