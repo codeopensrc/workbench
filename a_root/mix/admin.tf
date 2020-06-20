@@ -32,12 +32,12 @@ module "admin_hostname" {
     server_name_prefix = var.server_name_prefix
     region = var.region
 
-    hostname = var.chef_server_url
+    hostname = var.gitlab_server_url
     names = var.admin_names
     servers = var.admin_servers
     public_ips = var.admin_public_ips
     private_ips = var.admin_private_ips
-    alt_hostname = "chef"
+    root_domain_name = var.root_domain_name
     prev_module_output = module.admin_provisioners.output
 }
 
@@ -167,7 +167,7 @@ resource "null_resource" "install_gitlab" {
     provisioner "remote-exec" {
         inline = [
             <<-EOF
-                sed -i "s|myhostname = [0-9a-zA-Z.-]*|myhostname = chef.${var.root_domain_name}|" /etc/postfix/main.cf
+                sed -i "s|myhostname = [0-9a-zA-Z.-]*|myhostname = ${var.gitlab_server_url}|" /etc/postfix/main.cf
                 sudo service postfix restart
                 sudo systemctl start gitlab-runsvdir.service
                 sudo gitlab-ctl restart

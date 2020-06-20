@@ -35,7 +35,7 @@ module "db_hostname" {
     servers = var.db_servers
     public_ips = var.db_public_ips
     private_ips = var.db_private_ips
-    alt_hostname = var.root_domain_name
+    root_domain_name = var.root_domain_name
     prev_module_output = module.db_provisioners.output
 }
 

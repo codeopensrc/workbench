@@ -204,7 +204,7 @@ module "mix" {
     consul_version         = var.consul_version
     gitlab_version         = var.gitlab_version
 
-    chef_server_url = var.chef_server_url
+    gitlab_server_url = var.gitlab_server_url
     chef_email      = var.chef_email
 
     root_domain_name = var.root_domain_name

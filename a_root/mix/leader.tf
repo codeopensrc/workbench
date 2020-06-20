@@ -45,7 +45,7 @@ module "leader_hostname" {
     servers = var.leader_servers
     public_ips = var.lead_public_ips
     private_ips = var.lead_private_ips
-    alt_hostname = var.root_domain_name
+    root_domain_name = var.root_domain_name
     prev_module_output = module.leader_provisioners.output
 }
 
@@ -125,7 +125,12 @@ resource "null_resource" "install_runner" {
             if [ "$HAS_SERVICE_REPO" = "true" ]; then
                 SERVICE_REPO_URL=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_url" ) : "" }
                 SERVICE_REPO_NAME=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : "" }
+                SERVICE_REPO_VER=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "stable_version" ) : "" }
+                DOCKER_IMAGE=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_registry_image" ) : "" }
+
                 git clone $SERVICE_REPO_URL /home/gitlab-runner/$SERVICE_REPO_NAME
+                ###! We should already be authed for this, kinda lazy/hacky atm. TODO: Turn this block into resource to run after install_runner
+                docker pull $DOCKER_IMAGE:$SERVICE_REPO_VER
 
                 docker run -d -p 9000:9000 --name minio1 \
                     -e "MINIO_ACCESS_KEY=${var.minio_access}" \

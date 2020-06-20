@@ -36,7 +36,7 @@ variable "minio_secret" { default = "" }
 
 # TODO: Change to contact email and an admin-like subdomain
 variable "chef_email" { default = "your@email.com" }
-variable "chef_server_url" { default = "chef.DOMAIN.COM" }
+variable "gitlab_server_url" { default = "gitlab.DOMAIN.COM" }
 
 # This is used for the fqdn
 variable "root_domain_name" { default = "DOMAIN.COM" }

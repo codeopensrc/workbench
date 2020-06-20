@@ -96,7 +96,7 @@ resource "aws_instance" "lead" {
     }
 
     root_block_device {
-        volume_size = 20
+        volume_size = 30
     }
 
     subnet_id              = aws_subnet.public_subnet.id

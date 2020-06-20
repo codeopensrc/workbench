@@ -27,7 +27,7 @@
 # module "change_hostname" {
 #     source = "./modules/change_hostname.tf"
 #
-#     hostname = var.chef_server_url
+#     hostname = var.gitlab_server_url
 #     server_name_prefix = var.server_name_prefix
 #     region = var.region
 #     names = var.admin_names

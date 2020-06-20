@@ -6,7 +6,7 @@ variable "names" { default = "" }
 variable "servers" { default = 0 }
 variable "public_ips" { default = "" }
 variable "private_ips" { default = "" }
-variable "alt_hostname" { default = "" }
+variable "root_domain_name" { default = "" }
 
 variable "prev_module_output" {}
 
@@ -18,15 +18,17 @@ resource "null_resource" "change_hostname" {
     }
 
     provisioner "file" {
+        # We want hostname to be the name of the machine for all except postfix/gitlab machine
+        # Until we learn more about mail server settings, we want the hostname of it to be gitlab.DOMAIN.COM
         content = <<-EOF
 
             PUB_IP=${element(var.public_ips, count.index)}
             PRIV_IP=${element(var.private_ips, count.index)}
+            OUR_NAME=${ length(regexall("admin", element(var.names, count.index))) > 0 ? var.hostname : element(var.names, count.index) }
 
-            sudo hostnamectl set-hostname ${var.hostname}
+            sudo hostnamectl set-hostname $OUR_NAME
             sed -i "s/.*${var.server_name_prefix}-${var.region}.*/127.0.1.1 ${var.hostname} ${element(var.names, count.index)}/" /etc/hosts
-            sed -i "$ a 127.0.1.1 ${var.hostname} ${element(var.names, count.index)}" /etc/hosts
-            sed -i "$ a $PUB_IP ${var.hostname} ${var.alt_hostname}" /etc/hosts
+            sed -i "$ a $PUB_IP ${var.root_domain_name} $OUR_NAME" /etc/hosts
 
             if [ "$PRIV_IP" != "$PUB_IP" ]; then
                 sed -i "$ a $PRIV_IP vpc.my_private_ip" /etc/hosts
