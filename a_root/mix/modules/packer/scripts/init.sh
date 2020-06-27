@@ -3,7 +3,7 @@ set -e
 
 CONSUL_VERSION="1.0.6"
 DOCKER_COMPOSE_VERSION="1.19.0"
-GITLAB_VERSION="13.0.0-ce.0"
+GITLAB_VERSION="13.0.6-ce.0"
 
 while getopts "c:d:g:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
@@ -35,6 +35,7 @@ mkdir -p /root/.tmux/plugins
 mkdir -p /root/.aws
 mkdir -p /etc/ssl/creds
 mkdir -p /etc/consul.d
+sudo sed -i "s|\\\u@\\\h|\\\u@\\\H|g" /root/.bashrc
 [ ! -f /root/.ssh/id_rsa ] && (cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')
 [ ! -d /root/.tmux/plugins/tpm ] && git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm
 cp /usr/share/zoneinfo/America/Los_Angeles /etc/localtime

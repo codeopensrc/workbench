@@ -51,8 +51,6 @@ variable "admin_dns" { type = list(object({ url=string, dns_id=string, zone_id=s
 
 variable "join_machine_id" { default = "" }
 variable "serverkey" {}
-variable "minio_access" {}
-variable "minio_secret" {}
 variable "pg_password" {}
 variable "dev_pg_password" {}
 

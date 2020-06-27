@@ -35,7 +35,7 @@ variable "dns_provider" { default = "aws_route53" }
 ########## SOFTWARE VERSIONS ##########
 #######################################
 
-variable "gitlab_version" { default = "13.0.5-ce.0" }
+variable "gitlab_version" { default = "13.0.7-ce.0" }
 
 variable "docker_compose_version" { default = "1.19.0" }
 variable "docker_engine_install_url" { default = "https://get.docker.com" }

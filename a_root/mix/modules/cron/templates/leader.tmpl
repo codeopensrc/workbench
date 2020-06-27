@@ -26,7 +26,7 @@ ${run_service ? "" : "#"}45 4 * * 2-5 /usr/bin/docker rm $(/usr/bin/docker ps -a
 MAILTO="root"
 SHELL="/bin/bash"
 HOME="/root"
-${run_service ? "" : "#"}50 4,12 * * 2-5 /usr/local/bin/mc rm --recursive --force local/tmp && /usr/local/bin/mc admin bucket quota local/tmp --hard 5GB
+#50 4,12 * * 2-5 /usr/local/bin/mc rm --recursive --force local/tmp && /usr/local/bin/mc admin bucket quota local/tmp --hard 5GB
 
 # Name: Check SSL
 MAILTO="root"

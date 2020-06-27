@@ -103,8 +103,6 @@ module "root" {
 
     join_machine_id  = var.join_machine_id
     serverkey        = var.serverkey
-    minio_access        = var.minio_access
-    minio_secret        = var.minio_secret
 
     deploy_key_location = var.deploy_key_location
 

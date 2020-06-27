@@ -92,8 +92,6 @@ variable "leader_arecord_aliases" { type = list }
 
 variable "join_machine_id" { default = "" }
 variable "serverkey" {}
-variable "minio_access" {}
-variable "minio_secret" {}
 variable "pg_password" {}
 variable "dev_pg_password" {}
 variable "docker_machine_ip" {}

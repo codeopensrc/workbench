@@ -131,15 +131,6 @@ resource "null_resource" "install_runner" {
                 git clone $SERVICE_REPO_URL /home/gitlab-runner/$SERVICE_REPO_NAME
                 ###! We should already be authed for this, kinda lazy/hacky atm. TODO: Turn this block into resource to run after install_runner
                 docker pull $DOCKER_IMAGE:$SERVICE_REPO_VER
-
-                docker run -d -p 9000:9000 --name minio1 \
-                    -e "MINIO_ACCESS_KEY=${var.minio_access}" \
-                    -e "MINIO_SECRET_KEY=$[var.minio_secret}" \
-                    minio/minio server /data
-                sleep 10;
-                mc config host add local "http://127.0.0.1:9000" ${var.minio_access} $[var.minio_secret}
-                docker stop minio1
-                docker rm minio1
             fi
 
             mkdir -p /home/gitlab-runner/.aws

@@ -178,8 +178,6 @@ module "mix" {
     admin_dns = var.admin_dns
 
     join_machine_id  = var.join_machine_id
-    minio_access        = var.minio_access
-    minio_secret        = var.minio_secret
     serverkey        = var.serverkey
     pg_password      = var.pg_password
     dev_pg_password  = var.dev_pg_password
