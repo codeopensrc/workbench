@@ -34,6 +34,16 @@ variable "dns_provider" { default = "aws_route53" }
 
 ########## SOFTWARE VERSIONS ##########
 #######################################
+### TODO: Better indicate these are vars for building the packer image
+### TODO: Combine with other packer options
+# variable "packer_config" {
+#     default = {
+#         gitlab_version = "13.0.6-ce.0"
+#         docker_compose_version = "1.19.0"
+#         consul_version = "1.0.6"
+#         redis_version = "5.0.9"
+#     }
+# }
 
 variable "gitlab_version" { default = "13.0.7-ce.0" }
 
@@ -56,53 +66,57 @@ variable "redis_version" { default = "5.0.9" }
 #### For now this now only supports "aws" until a builder created for digital ocean in a_root/mix/modules/packer/packer.json
 variable "active_env_provider" { default = "aws" }
 
-variable "admin" { default = 1 }
-variable "leader" { default = 1 }
-variable "db" { default = 1 }
-variable "web" { default = 0 }
-variable "dev" { default = 0 }
-variable "build" { default = 0 }
-variable "mongo" { default = 0 }
-variable "pg" { default = 0 }
-variable "redis" { default = 0 }
-variable "legacy" { default = 0 }
+# Currently supports 1 server with all 3 roles or 3 servers each with a single role
+# Believe it also supports 1 server as admin+lead and 1 server as db but untested
+# Also should theoretically support admin+db and 1 server as lead but again, untested
+# NOTE: Count attribute currently only supports 1 until we can scale more dynamically
+variable "servers" {
+    default = [
+        {
+            "count" = 1
+            "roles" = ["admin", "lead", "db"]
+            # "roles" = ["admin"]
+            "size" = "t3a.large"   ### "t3a.small"   "t3a.micro"
+            "aws_volume_size" = 50
+            "region" = "us-east-2"
+            "provider" = "aws"
+            "image" = ""
+        },
+        # {
+        #     "count" = 1
+        #     "roles" = ["lead"]
+        #     "size" = "t3a.small"
+        #     "aws_volume_size" = 50
+        #     "region" = "us-east-2"
+        #     "provider" = "aws"
+        #     "image" = ""
+        # },
+        # {
+        #     "count" = 1
+        #     "roles" = ["db"]
+        #     "size" = "t3a.micro"
+        #     "aws_volume_size" = 50
+        #     "region" = "us-east-2"
+        #     "provider" = "aws"
+        #     "image" = ""
+        # },
+    ]
+}
 
 ########## Digital Ocean ##########
 variable "do_region" { default = "nyc1" }
-
-variable "do_admin_size" { default = "s-2vcpu-8gb" }
-variable "do_leader_size" { default = "s-2vcpu-4gb" }
-variable "do_db_size" { default = "s-2vcpu-4gb" }
-variable "do_web_size" { default = "1gb" }
-variable "do_dev_size" { default = "1gb" }
-variable "do_legacy_size" { default = "1gb" }
-variable "do_build_size" { default = "s-2vcpu-4gb" }
-variable "do_mongo_size" { default = "s-2vcpu-4gb" }
-variable "do_pg_size" { default = "s-2vcpu-4gb" }
-variable "do_redis_size" { default = "s-2vcpu-4gb" }
 
 
 ########## AWS ##########
 variable "aws_region_alias" { default = "awseast" }
 variable "build_packer_image" { default = true }
 variable "use_packer_image" { default = true }
-variable "aws_ami" { default = "" } # NOTE: If `use_packer_image` set to false, MUST provide ami
 
 variable "packer_default_amis" {
     default = {
         "us-east-2" = "ami-0d03add87774b12c5"
     }
 }
-
-variable "aws_admin_instance_type" { default = "t2.large" }
-variable "aws_leader_instance_type" { default = "t2.medium" }
-variable "aws_db_instance_type" { default = "t2.medium" }
-variable "aws_web_instance_type" { default = "t2.micro" }
-variable "aws_build_instance_type" { default = "t2.micro" }
-variable "aws_mongo_instance_type" { default = "t2.micro" }
-variable "aws_pg_instance_type" { default = "t2.micro" }
-variable "aws_redis_instance_type" { default = "t2.micro" }
-
 
 ############ DNS ############
 #############################
@@ -119,6 +133,7 @@ variable "admin_arecord_aliases" {
         "gitlab",
         "registry",
     ]
+    # Add mattermost_subdomain to this list
 }
 
 variable "db_arecord_aliases" {
@@ -133,12 +148,12 @@ variable "db_arecord_aliases" {
 }
 
 variable "leader_arecord_aliases" {
-    default = [ "www" ]
+    default = [ ]
 }
 
 variable "misc_repos" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
-        repo_url=string, repo_name=string,
+        repo_url=string, repo_name=string, docker_registry_image=string,
         docker_service_name=string, consul_service_name=string, folder_location=string,
         logs_prefix=string, email_image=string
     }))
