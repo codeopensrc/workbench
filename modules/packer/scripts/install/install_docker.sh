@@ -37,6 +37,11 @@ apt-cache madison docker-ce
 # Trying to ramp up our vm provisioning/releases and keep up with gitlab and docker version releases
 # Any point they are a major version behind we should be intentionally upgrading
 # Otherwise it is VERY easy to fall behind and need to skip multiple releases which is no bueno
+# TODO: Due to "docker-machine create" hanging with get.docker.com as engine install url if docker install
+#  done previously and get.docker.com updates/uses a new version, we will need to be pinning docker versions for
+#  reliable and stable deployments due to potential mismatches (machine hang adds 30% deployment time minimum)
+
+# This will be more seamless when changing the version of an installed software package procs creating a new image
 apt-get install docker-ce docker-ce-cli containerd.io -y
 
 

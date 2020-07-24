@@ -591,6 +591,7 @@ module "docker" {
     aws_ecr_region   = var.aws_ecr_region
     admin_ips = var.admin_public_ips
 
+    # TODO: Indicate these are alt ports if admin+lead on same server
     http_port = "8085"
     https_port = "4433"
 
@@ -769,16 +770,13 @@ resource "null_resource" "docker_ready" {
     }
 }
 
-#### NOTE: Current problem is admin not allowing leader/db in though firewall, thus
-####        a consul cluster leader not being chosen before the proxy_main service is brought online
-#### NEW: null_resource.docker_ready is fixing this issue for now
 
-
-#### TODO: NEEDS TO BE STANDALONE
-# Needs to be run on a single node without external dependency
-# All calls to subdmain -> leader server. Leader needs containers + db. Files need to be stored on admin (for now)
-# Leader does ssl and somehow sync to admin. Or admin handles check, but does not require external leader/proxy
-#   but does not also interupt leader/proxy
+# Currently have a combination of proxies to get required result.
+#  *Leader docker proxy requires a docker.compose.yml change/restart once we get certs
+#  *Admin nginx proxy requires an nginx config change/hup once we get certs
+# Boils down to, the server/ip var.root_domain_name points to, needs a proxy for port 80/http initially
+# After getting certs, restart then supports https and http -> https
+# TODO: Better support potential downtime when replacing certs
 
 # TODO: Turn this into an ansible playbook
 resource "null_resource" "setup_letsencrypt" {
