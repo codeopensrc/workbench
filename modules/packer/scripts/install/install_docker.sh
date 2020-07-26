@@ -1,12 +1,23 @@
 #!/bin/sh
 set -e
 
-# DEFAULT_DOCKER_VER=18.02.0
-# DOCKER_VER=5:19.03.4~3-0~ubuntu-xenial
-#
-# if [ -z $DOCKER_VER ] || [ $DOCKER_VER = "" ] || [ $DOCKER_VER = %%%REPLACE_ME%%% ]; then
-#     DOCKER_VER=$DEFAULT_DOCKER_VER
-# fi
+DOCKER_VER=""
+DEFAULT_DOCKER_VER="19.03.12"
+
+while getopts "v:" flag; do
+    # These become set during 'getopts'  --- $OPTIND $OPTARG
+    case "$flag" in
+        v) DOCKER_VER=$OPTARG;;
+    esac
+done
+
+
+if [ -z $DOCKER_VER ] || [ $DOCKER_VER = "" ] || [ $DOCKER_VER = %%%REPLACE_ME%%% ]; then
+    DOCKER_VER=$DEFAULT_DOCKER_VER
+fi
+
+FORMATTED_VER="5:${DOCKER_VER}~3-0~ubuntu-`lsb_release -cs`"
+# 5:19.03.12~3-0~ubuntu-xenial
 
 # apt-get remove docker docker-engine docker.io containerd runc
 
@@ -42,7 +53,7 @@ apt-cache madison docker-ce
 #  reliable and stable deployments due to potential mismatches (machine hang adds 30% deployment time minimum)
 
 # This will be more seamless when changing the version of an installed software package procs creating a new image
-apt-get install docker-ce docker-ce-cli containerd.io -y
+apt-get install docker-ce=$FORMATTED_VER docker-ce-cli=$FORMATTED_VER containerd.io -y
 
 
 # Enable docker on boot
