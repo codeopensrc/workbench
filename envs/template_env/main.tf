@@ -5,7 +5,7 @@
 ###################################
 
 module "packer" {
-    source             = "../../../modules/packer"
+    source             = "../../modules/packer"
 
     active_env_provider = var.active_env_provider
     aws_access_key = var.aws_access_key
@@ -16,7 +16,7 @@ module "packer" {
 }
 
 module "digital_ocean" {
-    source             = "../../../modules/digital_ocean"
+    source             = "../../modules/digital_ocean"
     server_name_prefix = var.server_name_prefix
     active_env_provider = var.active_env_provider
     region = var.do_region
@@ -30,7 +30,7 @@ module "digital_ocean" {
 }
 
 module "aws" {
-    source             = "../../../modules/aws"
+    source             = "../../modules/aws"
     root_domain_name = var.root_domain_name
     dns_provider = var.dns_provider
     server_name_prefix = var.server_name_prefix
@@ -55,7 +55,7 @@ module "aws" {
 }
 
 module "mix" {
-    source             = "../../../modules/mix"
+    source             = "../../modules/mix"
     server_name_prefix = var.server_name_prefix
     active_env_provider = var.active_env_provider
     region           = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
