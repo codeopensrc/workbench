@@ -45,11 +45,11 @@ resource "aws_route53_record" "default_a_db" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = [
+    records = slice([
         for SERVER in aws_instance.main[*]:
         SERVER.public_ip
         if length(regexall("db", SERVER.tags.Roles)) > 0
-    ]
+    ], 0, 1)
 }
 
 resource "aws_route53_record" "default_a_leader" {
@@ -59,11 +59,22 @@ resource "aws_route53_record" "default_a_leader" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("lead", SERVER.tags.Roles)) > 0
-    ]
+    # If ip matches an admin, go with admin ip or lead ip.
+    # Atm choosing first lead ip due to docker proxy service listening port dependent on where it was originally launched
+    # Make sure this only points to leader ip after it's joined the swarm, if we cant guarantee, dont change
+    records = slice(local.lead_server_ips, 0, 1)
+
+    # Get first ip
+    # records = slice([
+    #     for SERVER in aws_instance.main[*]:
+    #     SERVER.public_ip
+    #     if length(regexall("lead", SERVER.tags.Roles)) > 0
+    # ], 0, 1)
+    # If we wanted the last ip
+    # records = slice(local.lead_server_ips,
+    #     (length(local.lead_server_ips) - 1 > 0 ? length(local.lead_server_ips) - 1 : 0),  #start index
+    #     (length(local.lead_server_ips) > 1 ? length(local.lead_server_ips) : 1)   #end index
+    # )
 }
 
 resource "aws_route53_record" "default_a_leader_root" {
@@ -73,9 +84,10 @@ resource "aws_route53_record" "default_a_leader_root" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("lead", SERVER.tags.Roles)) > 0
-    ]
+    records = slice(local.lead_server_ips, 0, 1)
+    # records = slice([
+    #     for SERVER in aws_instance.main[*]:
+    #     SERVER.public_ip
+    #     if length(regexall("lead", SERVER.tags.Roles)) > 0
+    # ], 0, 1)
 }

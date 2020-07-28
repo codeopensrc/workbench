@@ -1,3 +1,13 @@
+# TODO: Amazon limits number of security groups for each network interface to 5
+# To increase that limit (have not tested):
+# https://aws.amazon.com/premiumsupport/knowledge-center/increase-security-group-rule-limit/
+# Appears it needs a support case to increase the limit.
+# Under "Limit type": VPC
+# Choose region then "Limit": Number of security groups per Interface
+
+# As long as the groups are added at creation you can have 6+ but cannot ADD a 6th after instance created
+# Long term goal I guess is no more than 5 groups available
+
 resource "aws_security_group" "db_ports" {
     name = "${local.vpc_name}_db_sg"
     vpc_id = aws_vpc.terraform_vpc.id
@@ -53,6 +63,20 @@ resource "aws_security_group" "app_ports" {
         from_port   = 443
         to_port     = 443
         cidr_blocks = ["0.0.0.0/0"]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "http"
+        from_port   = 8085
+        to_port     = 8085
+        cidr_blocks = ["10.1.0.0/16"]
+        protocol    = "tcp"
+    }
+    ingress {
+        description = "https"
+        from_port   = 4433
+        to_port     = 4433
+        cidr_blocks = ["10.1.0.0/16"]
         protocol    = "tcp"
     }
 

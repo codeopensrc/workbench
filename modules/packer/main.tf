@@ -5,26 +5,53 @@ variable "aws_region" { default = "" }
 
 variable "active_env_provider" {}
 
-variable "consul_version" {}
-variable "docker_compose_version" {}
-variable "gitlab_version" {}
-variable "redis_version" {}
-
-variable "build_packer_image" { default = "" }
-variable "packer_default_amis" { default = {} }
+variable "packer_config" {}
 
 # TODO: Query our amis based on software versions
 # If no mactching AMIs with all our tags, create a new image
 # Otherwise just use that image
 
+data "aws_ami_ids" "latest" {
+    owners = ["self"]
+
+    filter {
+        name   = "tag:Type"
+        values = [ "build" ]
+    }
+    filter {
+        name   = "tag:consul_version"
+        values = [ var.packer_config.consul_version ]
+    }
+    filter {
+        name   = "tag:docker_version"
+        values = [ var.packer_config.docker_version ]
+    }
+    filter {
+        name   = "tag:docker_compose_version"
+        values = [ var.packer_config.docker_compose_version ]
+    }
+    filter {
+        name   = "tag:gitlab_version"
+        values = [ var.packer_config.gitlab_version ]
+    }
+    filter {
+        name   = "tag:redis_version"
+        values = [ var.packer_config.redis_version ]
+    }
+}
+
+
 resource "null_resource" "build" {
-    count = var.build_packer_image ? 1 : 0
+    ## If we can find ami, dont build, count is 0. If we cant find ami, then build one so count is 1
+    count = length(data.aws_ami_ids.latest.ids) >= 1 ? 0 : 1
+
 
     triggers = {
-        consul_version = var.consul_version
-        docker_compose_version = var.docker_compose_version
-        gitlab_version = var.gitlab_version
-        redis_version = var.redis_version
+        consul_version = var.packer_config.consul_version
+        docker_version = var.packer_config.docker_version
+        docker_compose_version = var.packer_config.docker_compose_version
+        gitlab_version = var.packer_config.gitlab_version
+        redis_version = var.packer_config.redis_version
     }
 
     # TODO: Will need builder specific variables
@@ -38,24 +65,26 @@ resource "null_resource" "build" {
             packer validate \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
-                --var 'consul_version=${var.consul_version}' \
-                --var 'docker_compose_version=${var.docker_compose_version}' \
-                --var 'gitlab_version=${var.gitlab_version}' \
-                --var 'redis_version=${var.redis_version}' \
+                --var 'consul_version=${var.packer_config.consul_version}' \
+                --var 'docker_version=${var.packer_config.docker_version}' \
+                --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
+                --var 'gitlab_version=${var.packer_config.gitlab_version}' \
+                --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'aws_region=${var.aws_region}' \
-                --var 'ami_source=${var.packer_default_amis[var.aws_region]}' \
+                --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \
                 $CUR_DIR/packer.json
 
 
             packer build -timestamp-ui \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
-                --var 'consul_version=${var.consul_version}' \
-                --var 'docker_compose_version=${var.docker_compose_version}' \
-                --var 'gitlab_version=${var.gitlab_version}' \
-                --var 'redis_version=${var.redis_version}' \
+                --var 'consul_version=${var.packer_config.consul_version}' \
+                --var 'docker_version=${var.packer_config.docker_version}' \
+                --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
+                --var 'gitlab_version=${var.packer_config.gitlab_version}' \
+                --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'aws_region=${var.aws_region}' \
-                --var 'ami_source=${var.packer_default_amis[var.aws_region]}' \
+                --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \
                 $CUR_DIR/packer.json
         EOF
     }
@@ -77,9 +106,28 @@ data "aws_ami" "latest" {
         name   = "tag:Type"
         values = [ "build" ]
     }
+    filter {
+        name   = "tag:consul_version"
+        values = [ var.packer_config.consul_version ]
+    }
+    filter {
+        name   = "tag:docker_version"
+        values = [ var.packer_config.docker_version ]
+    }
+    filter {
+        name   = "tag:docker_compose_version"
+        values = [ var.packer_config.docker_compose_version ]
+    }
+    filter {
+        name   = "tag:gitlab_version"
+        values = [ var.packer_config.gitlab_version ]
+    }
+    filter {
+        name   = "tag:redis_version"
+        values = [ var.packer_config.redis_version ]
+    }
 }
 
-# TODO: Output newly built or most recent, based on `use_packer_image`
 output "image_id" {
     value = var.active_env_provider == "aws" ? data.aws_ami.latest.id : ""
 }

@@ -18,7 +18,7 @@ module "provisioners" {
     admin_public_ips  = var.admin_public_ips
     admin_private_ips = var.admin_private_ips
 
-    lead_servers = local.lead_servers[0]
+    lead_servers = local.num_lead_servers
     lead_names       = var.lead_names
     lead_public_ips  = var.lead_public_ips
     lead_private_ips = var.lead_private_ips
@@ -34,7 +34,6 @@ module "provisioners" {
     aws_bot_secret_key = var.aws_bot_secret_key
 
     docker_engine_install_url  = var.docker_engine_install_url
-    consul_version         = var.consul_version
 
     # TODO: This might cause a problem when launching the 2nd admin server when swapping
     consul_wan_leader_ip = var.external_leaderIP
@@ -72,7 +71,7 @@ module "cron" {
 
     servers = length(var.servers)
 
-    lead_servers = local.lead_servers[0]
+    lead_servers = local.num_lead_servers
     db_servers = local.db_servers[0]
     admin_servers = local.admin_servers[0]
     admin_public_ips = var.admin_public_ips
@@ -440,10 +439,14 @@ module "admin_nginx" {
     app_definitions = var.app_definitions
 
     lead_public_ips = var.lead_public_ips
+    ## Technically just need to send proxy ip here instead of all private leader ips
+    lead_private_ips = var.lead_private_ips
+
     https_port = "4433"
     cert_port = "7080" ## Currently hardcoded in letsencrypt/letsencrypt.tmpl
 
-    prev_module_output = concat(null_resource.add_proxy_hosts.*.id, null_resource.install_gitlab.*.id, null_resource.restore_gitlab.*.id)
+    prev_module_output = concat(module.provisioners.output, module.provisioners.output, module.cron.output,
+        null_resource.add_proxy_hosts.*.id, null_resource.install_gitlab.*.id, null_resource.restore_gitlab.*.id)
 }
 
 
@@ -584,7 +587,7 @@ resource "null_resource" "db_ready" {
 module "docker" {
     source = "../docker"
 
-    servers = local.lead_servers[0]
+    servers = local.num_lead_servers
     public_ips = var.lead_public_ips
 
     app_definitions = var.app_definitions
@@ -602,7 +605,7 @@ module "docker" {
 
 
 resource "null_resource" "install_runner" {
-    count = local.lead_servers[0]
+    count = local.num_lead_servers
     depends_on = [ module.docker ]
 
     provisioner "file" {
@@ -780,7 +783,7 @@ resource "null_resource" "docker_ready" {
 
 # TODO: Turn this into an ansible playbook
 resource "null_resource" "setup_letsencrypt" {
-    count = local.lead_servers[0] > 0 ? 1 : 0
+    count = local.num_lead_servers > 0 ? 1 : 0
     depends_on = [
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -872,7 +875,7 @@ resource "null_resource" "setup_letsencrypt" {
 # TODO: Turn this into an ansible playbook
 # Restart service, re-fetching ssl keys
 resource "null_resource" "add_keys" {
-    count = local.lead_servers[0] > 0 ? 1 : 0
+    count = local.num_lead_servers > 0 ? 1 : 0
     depends_on = [
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,

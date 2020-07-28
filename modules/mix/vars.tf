@@ -40,10 +40,7 @@ variable "aws_bot_access_key" { default = "" }
 variable "aws_bot_secret_key" { default = "" }
 variable "pg_read_only_pw" { default = "" }
 
-variable "docker_compose_version" {}
 variable "docker_engine_install_url" {}
-variable "consul_version" {}
-variable "gitlab_version" {}
 
 variable "deploy_key_location" {}
 
@@ -97,6 +94,12 @@ locals {
         SERVER.count
         if contains(SERVER.roles, "lead")
     ]
+    # TODO: Still isnt reducing count but roughly works for now
+    num_lead_servers = length([
+        for SERVER in var.servers:
+        SERVER.count
+        if contains(SERVER.roles, "lead")
+    ])
     admin_servers = [
         for SERVER in var.servers:
         SERVER.count

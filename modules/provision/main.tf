@@ -21,12 +21,9 @@ variable "private_ips" {
 resource "null_resource" "access" {
     count = var.servers
 
-    triggers = {
-        wait_for_prev_module = "${join(",", var.prev_module_output)}"
-    }
-
     provisioner "remote-exec" {
         inline = [
+            "echo ${join(",", var.prev_module_output)}",
             "rm /root/.ssh/known_hosts",
             "rm /root/.ssh/config",
             "rm /root/.ssh/deploy.key",

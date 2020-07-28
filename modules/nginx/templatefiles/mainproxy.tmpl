@@ -8,7 +8,7 @@ server {
     }
 
     location / {
-        return 302 https://$host:${https_port}$request_uri;
+        return 302 https://$host:443$request_uri;
     }
 }
 

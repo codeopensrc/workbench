@@ -25,7 +25,6 @@ resource "null_resource" "pull_images" {
     count = var.servers
 
     triggers = {
-        wait_for_prev_module = "${join(",", var.prev_module_output)}"
         num_apps = length(keys(var.app_definitions))
         registry_ready = var.registry_ready
     }
@@ -40,6 +39,7 @@ resource "null_resource" "pull_images" {
         # Since deprecating chef we get to this stage far before gitlab is installed and restored
         inline = [
             <<-EOF
+                echo ${join(",", var.prev_module_output)}
 
                 %{ for APP in var.app_definitions }
 

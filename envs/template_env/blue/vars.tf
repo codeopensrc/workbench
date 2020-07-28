@@ -34,24 +34,18 @@ variable "dns_provider" { default = "aws_route53" }
 
 ########## SOFTWARE VERSIONS ##########
 #######################################
-### TODO: Better indicate these are vars for building the packer image
-### TODO: Combine with other packer options
-# variable "packer_config" {
-#     default = {
-#         gitlab_version = "13.0.6-ce.0"
-#         docker_compose_version = "1.19.0"
-#         consul_version = "1.0.6"
-#         redis_version = "5.0.9"
-#     }
-# }
-
-variable "gitlab_version" { default = "13.0.7-ce.0" }
-
-variable "docker_compose_version" { default = "1.19.0" }
-variable "docker_engine_install_url" { default = "https://get.docker.com" }
-
-variable "consul_version" { default = "1.0.6" }
-variable "redis_version" { default = "5.0.9" }
+variable "packer_config" {
+    default = {
+        gitlab_version = "13.0.6-ce.0"
+        docker_version = "19.03.12"
+        docker_compose_version = "1.19.0"
+        consul_version = "1.0.6"
+        redis_version = "5.0.9"
+        base_amis = {
+            "us-east-2" = "ami-0d03add87774b12c5"
+        }
+    }
+}
 
 ########## CLOUD MACHINES ##########
 ####################################
@@ -67,10 +61,12 @@ variable "redis_version" { default = "5.0.9" }
 variable "active_env_provider" { default = "aws" }
 
 # Currently supports 1 server with all 3 roles or 3 servers each with a single role
+# Supports admin+lead+db and 1 server as lead as well
 # Believe it also supports 1 server as admin+lead and 1 server as db but untested
-# Also should theoretically support admin+db and 1 server as lead but again, untested
 # NOTE: Count attribute currently only supports 1 until we can scale more dynamically
 variable "servers" {
+    ### NOTE: Do not add or remove roles from instances after they are launched for now
+    ###  as each instance's roles are tagged at boot and updating tags will cause unpredictable issues at this time
     default = [
         {
             "count" = 1
@@ -82,6 +78,7 @@ variable "servers" {
             "provider" = "aws"
             "image" = ""
         },
+        # When downsizing from 2 to 1 leader, uncomment modules/aws/aws_resources destroy time provsioner for changeip.sh
         # {
         #     "count" = 1
         #     "roles" = ["lead"]
@@ -109,14 +106,7 @@ variable "do_region" { default = "nyc1" }
 
 ########## AWS ##########
 variable "aws_region_alias" { default = "awseast" }
-variable "build_packer_image" { default = true }
-variable "use_packer_image" { default = true }
 
-variable "packer_default_amis" {
-    default = {
-        "us-east-2" = "ami-0d03add87774b12c5"
-    }
-}
 
 ############ DNS ############
 #############################

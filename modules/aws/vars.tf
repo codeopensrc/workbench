@@ -7,7 +7,6 @@ variable "server_name_prefix" {}
 variable "region" { default = "" }
 
 variable "aws_key_name" {}
-variable "use_packer_image" { default = "" }
 variable "packer_image_id" { default = "" }
 
 variable "servers" { default = [] }
@@ -35,4 +34,10 @@ locals {
         for app in var.servers:
         element(app.roles, 0)
     ]
+
+    lead_server_ips = tolist([
+        for SERVER in aws_instance.main[*]:
+        SERVER.public_ip
+        if length(regexall("lead", SERVER.tags.Roles)) > 0
+    ])
 }

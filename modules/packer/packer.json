@@ -5,6 +5,7 @@
         "aws_region": "",
         "ami_source": "",
         "consul_version": "",
+        "docker_version": "",
         "docker_compose_version": "",
         "gitlab_version": "",
         "redis_version": "",
@@ -25,6 +26,7 @@
                 "Base_AMI_Name": "{{ .SourceAMIName }}",
                 "Type": "build",
                 "consul_version": "{{user `consul_version`}}",
+                "docker_version": "{{user `docker_version`}}",
                 "docker_compose_version": "{{user `docker_compose_version`}}",
                 "gitlab_version": "{{user `gitlab_version`}}",
                 "redis_version": "{{user `redis_version`}}"
@@ -54,7 +56,7 @@
                 "chmod +x /tmp/scripts/install/install_redis.sh",
                 "chmod +x /tmp/scripts/move.sh",
                 "sudo bash /tmp/scripts/init.sh -c {{user `consul_version`}} -d {{user `docker_compose_version`}} -g {{user `gitlab_version`}}",
-                "sudo bash /tmp/scripts/install/install_docker.sh",
+                "sudo bash /tmp/scripts/install/install_docker.sh -v {{user `docker_version`}}",
                 "sudo bash /tmp/scripts/install/install_redis.sh -v {{user `redis_version`}}",
                 "sudo bash /tmp/scripts/move.sh"
             ]

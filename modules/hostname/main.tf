@@ -13,14 +13,11 @@ variable "prev_module_output" {}
 resource "null_resource" "change_hostname" {
     count      = var.servers
 
-    triggers = {
-        wait_for_prev_module = "${join(",", var.prev_module_output)}"
-    }
-
     provisioner "file" {
         # We want hostname to be the name of the machine for all except postfix/gitlab machine
         # Until we learn more about mail server settings, we want the hostname of it to be gitlab.DOMAIN.COM
         content = <<-EOF
+            echo ${join(",", var.prev_module_output)}
 
             PUB_IP=${element(var.public_ips, count.index)}
             PRIV_IP=${element(var.private_ips, count.index)}

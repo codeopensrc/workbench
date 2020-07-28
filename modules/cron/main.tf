@@ -42,12 +42,11 @@ variable "prev_module_output" {}
 resource "null_resource" "admin" {
     count = var.admin_servers
 
-    triggers = {
-        wait_for_prev_module = "${join(",", var.prev_module_output)}"
-    }
-
     provisioner "remote-exec" {
-        inline = [ "mkdir -p /root/code/cron" ]
+        inline = [
+            "mkdir -p /root/code/cron",
+            "echo ${join(",", var.prev_module_output)}"
+        ]
     }
 
     provisioner "file" {
@@ -74,11 +73,13 @@ resource "null_resource" "db" {
 
     triggers = {
         num_dbs = var.num_dbs
-        wait_for_prev_module = "${join(",", var.prev_module_output)}"
     }
 
     provisioner "remote-exec" {
-        inline = [ "mkdir -p /root/code/cron" ]
+        inline = [
+            "mkdir -p /root/code/cron",
+            "echo ${join(",", var.prev_module_output)}"
+        ]
     }
 
     provisioner "file" {
@@ -127,12 +128,11 @@ resource "null_resource" "db" {
 resource "null_resource" "leader" {
     count = var.lead_servers
 
-    triggers = {
-        wait_for_prev_module = "${join(",", var.prev_module_output)}"
-    }
-
     provisioner "remote-exec" {
-        inline = [ "mkdir -p /root/code/cron" ]
+        inline = [
+            "mkdir -p /root/code/cron",
+            "echo ${join(",", var.prev_module_output)}"
+        ]
     }
 
     provisioner "file" {
@@ -165,6 +165,11 @@ resource "null_resource" "leader" {
 
 resource "null_resource" "cron_exec" {
     count      = var.servers
+
+    triggers = {
+        # TODO: Only trigger update on certain servers
+        crontab_upd = join(",", concat(null_resource.admin.*.id, null_resource.db.*.id, null_resource.leader.*.id))
+    }
 
     depends_on = [
         null_resource.admin,

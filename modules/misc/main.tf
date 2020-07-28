@@ -35,7 +35,6 @@ variable "consul_wan_leader_ip" { default = "" }
 
 variable "join_machine_id" { default = "" }
 
-variable "consul_version" { default = "" }
 variable "docker_engine_install_url" { default = "" }
 # TODO: Implement base docker engine url with or without docker_engine_version built in
 # variable "docker_engine_install_url" { default = "https://docs.DOMAIN/download/docker-" }
@@ -117,6 +116,7 @@ resource "null_resource" "docker_leader" {
                     echo "JOIN_LEADER IN $SLEEP_FOR"
                     sleep $SLEEP_FOR
                     JOIN_CMD=$(docker-machine ssh $FIND_MACHINE_NAME "docker swarm join-token manager | grep -- --token;")
+                    # JOIN_CMD=$(docker-machine ssh $FIND_MACHINE_NAME "docker swarm join-token worker | grep -- --token;")
                     docker-machine ssh $CUR_MACHINE_NAME "set -e; $JOIN_CMD"
                     JOINED_SWARM=true
                 fi
@@ -132,6 +132,7 @@ resource "null_resource" "docker_leader" {
                     echo "JOIN_LEADER IN $SLEEP_FOR"
                     sleep $SLEEP_FOR
                     JOIN_CMD=$(docker-machine ssh $PREV_MACHINE_NAME "docker swarm join-token manager | grep -- --token;")
+                    # JOIN_CMD=$(docker-machine ssh $PREV_MACHINE_NAME "docker swarm join-token worker | grep -- --token;");
                     docker-machine ssh $CUR_MACHINE_NAME "set -e; $JOIN_CMD"
                     JOINED_SWARM=true
                 fi
@@ -269,8 +270,8 @@ resource "null_resource" "consul_file_leader" {
                 "node_name": "${tolist(setsubtract(var.lead_names, var.admin_names))[count.index]}",
                 "server": true,
                 "translate_wan_addrs": true,
-                "advertise_addr_wan": "${element(var.consul_lead_adv_addresses, count.index)}",
-                "advertise_addr": "${element(var.consul_lead_adv_addresses, count.index)}",
+                "advertise_addr_wan": "${tolist(setsubtract(var.consul_lead_adv_addresses, var.consul_admin_adv_addresses))[count.index]}",
+                "advertise_addr": "${tolist(setsubtract(var.consul_lead_adv_addresses, var.consul_admin_adv_addresses))[count.index]}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_script_checks": true,
                 "autopilot": {
@@ -281,6 +282,8 @@ resource "null_resource" "consul_file_leader" {
                 }
             }
         EOF
+        # "advertise_addr_wan": "${element(var.consul_lead_adv_addresses, count.index)}",
+        # "advertise_addr": "${element(var.consul_lead_adv_addresses, count.index)}",
         destination = "/etc/consul.d/consul.json"
         connection {
             host = tolist(setsubtract(var.lead_public_ips, var.admin_public_ips))[count.index]

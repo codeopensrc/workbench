@@ -11,14 +11,8 @@ module "packer" {
     aws_access_key = var.aws_access_key
     aws_secret_key = var.aws_secret_key
     aws_region = var.aws_region
-    packer_default_amis = var.packer_default_amis
 
-    consul_version = var.consul_version
-    docker_compose_version = var.docker_compose_version
-    gitlab_version = var.gitlab_version
-    redis_version = var.redis_version
-
-    build_packer_image = var.build_packer_image
+    packer_config = var.packer_config
 }
 
 module "digital_ocean" {
@@ -57,7 +51,6 @@ module "aws" {
     app_ips = var.app_ips
     station_ips = var.station_ips
 
-    use_packer_image = var.use_packer_image
     packer_image_id = module.packer.image_id
 }
 
@@ -123,10 +116,9 @@ module "mix" {
     app_definitions = var.app_definitions
     misc_repos = var.misc_repos
 
-    docker_compose_version = var.docker_compose_version
-    docker_engine_install_url  = var.docker_engine_install_url
-    consul_version         = var.consul_version
-    gitlab_version         = var.gitlab_version
+    # Temp
+    docker_engine_install_url  = format("https://raw.githubusercontent.com/rancher/install-docker/master/%s.sh", var.packer_config.docker_version)
+    # docker_engine_install_url  = "https://gitlab.codeopensrc.com/os/workbench/-/raw/master/modules/packer/scripts/install/install_docker.sh"
 
     gitlab_server_url = var.gitlab_server_url
     chef_email      = var.chef_email
