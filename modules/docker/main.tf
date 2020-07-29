@@ -141,6 +141,7 @@ resource "null_resource" "start_containers" {
                         SERVICE_NAME=${APP["service_name"]};
 
                         if [ "$REPO_NAME" = "wekan" ]; then
+                            # TODO: Start using gitlab healthchecks instead of waiting
                             echo "Waiting 90s for gitlab api for oauth plugins";
                             sleep 90;
 

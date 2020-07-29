@@ -22,9 +22,10 @@ resource "null_resource" "change_hostname" {
             PUB_IP=${element(var.public_ips, count.index)}
             PRIV_IP=${element(var.private_ips, count.index)}
             OUR_NAME=${ length(regexall("admin", element(var.names, count.index))) > 0 ? var.hostname : element(var.names, count.index) }
+            OUR_HOSTNAME=${ length(regexall("admin", element(var.names, count.index))) > 0 ? var.hostname : var.root_domain_name }
 
             sudo hostnamectl set-hostname $OUR_NAME
-            sed -i "s/.*${var.server_name_prefix}-${var.region}.*/127.0.1.1 ${var.hostname} ${element(var.names, count.index)}/" /etc/hosts
+            sed -i "s/.*${var.server_name_prefix}-${var.region}.*/127.0.1.1 $OUR_HOSTNAME ${element(var.names, count.index)}/" /etc/hosts
             sed -i "$ a $PUB_IP ${var.root_domain_name} $OUR_NAME" /etc/hosts
 
             if [ "$PRIV_IP" != "$PUB_IP" ]; then
