@@ -26,11 +26,6 @@ variable "prev_module_output" {}
 resource "null_resource" "proxy_config" {
     count = var.servers
 
-    # If having create before destroy causes this resource to run before the destroy
-    # time provisioners of an instance going down.. we have a better solution to scaling down
-    # As long as this doesnt cause dependency issues..
-    # create_before_destroy = true
-
     triggers = {
         num_apps = length(keys(var.app_definitions))
         num_ips = length(var.lead_private_ips)
@@ -99,7 +94,13 @@ resource "null_resource" "proxy_config" {
 
     provisioner "remote-exec" {
         ## TODO: Because of this convenience for config on app change, it has to be run after gitlab is installed
-        inline = [ "gitlab-ctl reconfigure" ]
+
+        # Check for ssl certs and uncomment if we have them
+        inline = [
+            "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
+            "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
+            "gitlab-ctl reconfigure"
+        ]
     }
 
     connection {

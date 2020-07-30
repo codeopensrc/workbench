@@ -40,6 +40,7 @@ module "aws" {
     aws_key_name = var.aws_key_name
 
     servers = var.servers
+    downsize = var.downsize
 
     docker_machine_ip = var.docker_machine_ip
 

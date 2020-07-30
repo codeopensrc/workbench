@@ -10,6 +10,7 @@ variable "aws_key_name" {}
 variable "packer_image_id" { default = "" }
 
 variable "servers" { default = [] }
+variable "downsize" { default = false }
 
 variable "docker_machine_ip" { default = "" }
 

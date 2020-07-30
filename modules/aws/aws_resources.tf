@@ -40,7 +40,6 @@ resource "aws_instance" "main" {
         }
     }
 
-    # Review moving to a create_before_destroy provisioner in admin_nginx
     provisioner "file" {
         content = <<-EOF
 
@@ -59,8 +58,6 @@ resource "aws_instance" "main" {
             user     = "root"
         }
     }
-
-    # Review moving to a create_before_destroy provisioner in admin_nginx
     provisioner "file" {
         content = <<-EOF
 
@@ -72,7 +69,7 @@ resource "aws_instance" "main" {
             fi
 
         EOF
-        destination = "/tmp/changeip.sh"
+        destination = "/tmp/changeip-${self.tags.Name}.sh"
         connection {
             host     = aws_instance.main[0].public_ip
             type     = "ssh"
@@ -100,61 +97,6 @@ resource "aws_instance" "main" {
         }
     }
 
-    ### NOTE: remote-exec destroy-time provisioners are fragile on "terraform destroy"
-    ###       as they fail to connect sometimes
-    provisioner "remote-exec" {
-        when = destroy
-        inline = [
-            "chmod +x /tmp/dockerconstraint.sh",
-            "/tmp/dockerconstraint.sh",
-        ]
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
-        }
-    }
-
-
-    #### Need to figure out how to achieve changing admin nginx by connecting to
-    ####  it only at destroy time of this resource without causing a warning
-    #### Needs to happen after we've ensured we put all proxies on admin
-    #### all proxies admin -> change nginx route ip -> safe to leave swarm
-    #### all proxies admin -> change nginx route ip  need to make sure these both happen before we destroy the node
-    #### Once docker app proxying happens on nginx instead of docker proxy app, this will be revisted
-    #### Add some type of trigger that would only affect this so it only shows up when downsizing
-
-    #### Uncomment this only when downsizing leader servers
-
-    ### NOTE: remote-exec destroy-time provisioners are fragile on "terraform destroy"
-    ###       as they fail to connect sometimes
-    # provisioner "remote-exec" {
-    #     when = destroy
-    #     inline = [
-    #         "chmod +x /tmp/changeip.sh",
-    #         "/tmp/changeip.sh",
-    #     ]
-    #     connection {
-    #         host     = aws_instance.main[0].public_ip
-    #         type     = "ssh"
-    #         user     = "root"
-    #     }
-    # }
-
-    ### NOTE: remote-exec destroy-time provisioners are fragile on "terraform destroy"
-    ###       as they fail to connect sometimes
-    provisioner "remote-exec" {
-        when = destroy
-        inline = [
-            "chmod +x /tmp/remove.sh",
-            "/tmp/remove.sh",
-        ]
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
-        }
-    }
 
     provisioner "local-exec" {
         when = destroy
@@ -163,6 +105,55 @@ resource "aws_instance" "main" {
             exit 0;
         EOF
         on_failure = continue
+    }
+}
+
+
+
+###! Run this resource when downsizing from 2 leader servers to 1 in its own apply
+resource "null_resource" "cleanup" {
+    count = var.active_env_provider == "aws" ? 1 : 0
+
+    triggers = {
+        should_downsize = var.downsize
+    }
+
+    #### all proxies admin   -> change nginx route ip -> safe to leave swarm
+    #### dockerconstraint.sh -> changeip-NAME.sh      -> remove.sh
+    #### Once docker app proxying happens on nginx instead of docker proxy app, this will be revisted
+
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/dockerconstraint.sh",
+            var.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
+        ]
+        connection {
+            host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
+            type     = "ssh"
+            user     = "root"
+        }
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/changeip-${element(aws_instance.main[*].tags.Name, length(aws_instance.main[*].tags.Name) - 1)}.sh",
+            var.downsize ? "/tmp/changeip-${element(aws_instance.main[*].tags.Name, length(aws_instance.main[*].tags.Name) - 1)}.sh" : "echo 0",
+        ]
+        connection {
+            host     = element(aws_instance.main[*].public_ip, 0)
+            type     = "ssh"
+            user     = "root"
+        }
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/remove.sh",
+            var.downsize ? "/tmp/remove.sh" : "echo 0",
+        ]
+        connection {
+            host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
+            type     = "ssh"
+            user     = "root"
+        }
     }
 }
 

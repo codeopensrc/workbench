@@ -64,6 +64,7 @@ variable "active_env_provider" { default = "aws" }
 # Supports admin+lead+db and 1 server as lead as well
 # Believe it also supports 1 server as admin+lead and 1 server as db but untested
 # NOTE: Count attribute currently only supports 1 until we can scale more dynamically
+variable "downsize" { default = false }
 variable "servers" {
     ### NOTE: Do not add or remove roles from instances after they are launched for now
     ###  as each instance's roles are tagged at boot and updating tags will cause unpredictable issues at this time
@@ -78,7 +79,8 @@ variable "servers" {
             "provider" = "aws"
             "image" = ""
         },
-        # When downsizing from 2 to 1 leader, uncomment modules/aws/aws_resources destroy time provsioner for changeip.sh
+        ###! When downsizing from 2 to 1 leader, set downsize = true above, terraform apply. This adjusts app routing.
+        ###! Then comment/remove 2nd server and terraform apply again to remove it
         # {
         #     "count" = 1
         #     "roles" = ["lead"]
