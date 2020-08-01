@@ -126,6 +126,22 @@ resource "aws_security_group" "app_ports" {
         protocol    = "tcp"
     }
 
+    # STUN
+    dynamic "ingress" {
+        for_each = {
+            for key, value in var.stun_protos:
+            key => value
+            if var.stun_port != ""
+        }
+        content {
+            description = "Stun: ${ingress.value}"
+            from_port   = var.stun_port
+            to_port     = var.stun_port
+            cidr_blocks = ["0.0.0.0/0"]
+            protocol    = ingress.value
+        }
+    }
+
     lifecycle {
         create_before_destroy = true
     }

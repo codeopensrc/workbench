@@ -11,6 +11,8 @@ variable "packer_image_id" { default = "" }
 
 variable "servers" { default = [] }
 variable "downsize" { default = false }
+variable "stun_port" { default = "" }
+variable "stun_protos" { default = ["tcp", "udp"] }
 
 variable "docker_machine_ip" { default = "" }
 

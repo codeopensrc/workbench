@@ -42,6 +42,7 @@ module "aws" {
     servers = var.servers
     downsize = var.downsize
 
+    stun_port = var.stun_port
     docker_machine_ip = var.docker_machine_ip
 
     admin_arecord_aliases = var.admin_arecord_aliases

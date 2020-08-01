@@ -12,6 +12,18 @@ locals {
     ]
 }
 
+resource "aws_route53_record" "default_stun" {
+    count           = var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0
+    name            = "_stun._udp.${var.root_domain_name}"
+    zone_id         = data.aws_route53_zone.default.zone_id
+    allow_overwrite = true
+    type            = "SRV"
+    ttl             = "300"
+    # Format:
+    #     [priority] [weight] [port] [server host name]
+    records = [ "0 0 ${var.stun_port} stun.${var.root_domain_name}" ]
+}
+
 resource "aws_route53_record" "default_cname" {
     count           = var.dns_provider == "aws_route53" ? length(compact(flatten(local.cname_aliases))) : 0
     name            = compact(flatten(local.cname_aliases))[count.index]

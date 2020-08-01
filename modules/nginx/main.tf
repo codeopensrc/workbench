@@ -77,6 +77,9 @@ resource "null_resource" "proxy_config" {
 
     # TODO: Somehow need to proc changing the nginx proxy before destroying the proxy_ip node
     # NOTE: For now we do it at destroy time of the instance but its a "good enough" method and not great
+
+    # TODO: Multiple files or all nginx configs in a single file
+
     provisioner "file" {
         content = templatefile("${path.module}/templatefiles/mainproxy.tmpl", {
             root_domain_name = var.root_domain_name
