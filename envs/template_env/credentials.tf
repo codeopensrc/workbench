@@ -49,3 +49,19 @@ variable "gitlab_runner_tokens" {
         service = "token_value"
     }
 }
+
+###! To use s3 backend for remote state, backup any current .tfstate file.
+###! Adjust and uncomment below
+###! After re-running `terrafom init` all contents of .tfstate will move to and be stored in s3 after reinitialization
+###! To create a local `terraform.tfstate` backup of the remote version: `terraform state pull > terraform.tfstate`
+###! Values cannot be interpolated in the configuration below
+###! https://www.terraform.io/docs/backends/config.html#first-time-configuration
+# terraform {
+#     backend "s3" {
+#         bucket = "aws_bucket_name"
+#         key    = "remote_states/template_env"
+#         region = "aws_bucket_region"
+#         access_key = "aws_access_key" ## (Optional)
+#         secret_key = "aws_secret_key" ## (Optional)
+#     }
+# }

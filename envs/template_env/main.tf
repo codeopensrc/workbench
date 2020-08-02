@@ -3,6 +3,9 @@
 ###################################
 #### Only apps.tf, credentials.tf, and vars.tf should be modified
 ###################################
+terraform {
+  required_version = ">= 0.12"
+}
 
 module "packer" {
     source             = "../../modules/packer"
