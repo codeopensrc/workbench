@@ -101,6 +101,24 @@ variable "app_definitions" {
             "create_subdomain"      = "true"        ## Affects route53, consul, letsencrypt
             "subdomain_name"        = "monitor"     ## Affects route53, consul, letsencrypt
         }
+        # stun = {
+        #     "pull"                  = "true"
+        #     "stable_version"        = "d2d06a6"
+        #     "use_stable"            = "false"
+        #     "repo_url"              = "https://gitlab.codeopensrc.com/os/stunserver.git"
+        #     "repo_name"             = "stunserver"
+        #     "docker_registry"       = ""
+        #     "docker_registry_image" = "registry.codeopensrc.com/os/stunserver"
+        #     "docker_registry_url"   = ""
+        #     "docker_registry_user"  = ""
+        #     "docker_registry_pw"    = ""
+        #     "service_name"          = "stun"         ## Docker/Consul service name
+        #     "green_service"         = "stun_main"    ## Docker/Consul service name
+        #     "blue_service"          = "stun_dev"     ## Docker/Consul service name
+        #     "default_active"        = "green"
+        #     "create_subdomain"      = "false"    ## Affects route53, consul, letsencrypt
+        #     "subdomain_name"        = "stun"     ## Affects route53, consul, letsencrypt
+        # }
         # template = {
         #     "pull"                  = "true"
         #     "stable_version"        = "0.0.1"

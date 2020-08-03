@@ -12,9 +12,9 @@ locals {
     ]
 }
 
-resource "aws_route53_record" "default_stun" {
+resource "aws_route53_record" "default_stun_srv_udp" {
     count           = var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0
-    name            = "_stun._udp.${var.root_domain_name}"
+    name            = "_stun_udp.${var.root_domain_name}"
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
     type            = "SRV"
@@ -22,6 +22,27 @@ resource "aws_route53_record" "default_stun" {
     # Format:
     #     [priority] [weight] [port] [server host name]
     records = [ "0 0 ${var.stun_port} stun.${var.root_domain_name}" ]
+}
+resource "aws_route53_record" "default_stun_srv_tcp" {
+    count           = var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0
+    name            = "_stun_tcp.${var.root_domain_name}"
+    zone_id         = data.aws_route53_zone.default.zone_id
+    allow_overwrite = true
+    type            = "SRV"
+    ttl             = "300"
+    # Format:
+    #     [priority] [weight] [port] [server host name]
+    records = [ "0 0 ${var.stun_port} stun.${var.root_domain_name}" ]
+}
+
+resource "aws_route53_record" "default_stun_a" {
+    count           = var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0
+    name            = "stun.${var.root_domain_name}"
+    zone_id         = data.aws_route53_zone.default.zone_id
+    allow_overwrite = true
+    type            = "A"
+    ttl             = "300"
+    records = slice(local.lead_server_ips, 0, 1)
 }
 
 resource "aws_route53_record" "default_cname" {
