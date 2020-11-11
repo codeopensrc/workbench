@@ -228,6 +228,12 @@ resource "null_resource" "install_gitlab" {
     ###! /var/opt/gitlab/mattermost/config.json   for server settings
     ###! /var/opt/gitlab/mattermost/*plugins      for plugins
     ###! /var/opt/gitlab/mattermost/data          for server data
+
+    # Enable project level access tokens
+    # https://docs.gitlab.com/ee/user/project/settings/project_access_tokens.html
+    # gitlab-rails console
+    # Feature.enable(:resource_access_token)
+
     provisioner "remote-exec" {
         inline = [
             <<-EOF

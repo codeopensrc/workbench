@@ -37,6 +37,7 @@ resource "aws_instance" "main" {
             host     = self.public_ip
             type     = "ssh"
             user     = "ubuntu"
+            private_key = file(var.local_ssh_key_file)
         }
     }
 
@@ -56,6 +57,7 @@ resource "aws_instance" "main" {
             host     = self.public_ip
             type     = "ssh"
             user     = "root"
+            private_key = file(var.local_ssh_key_file)
         }
     }
     provisioner "file" {
@@ -74,6 +76,7 @@ resource "aws_instance" "main" {
             host     = aws_instance.main[0].public_ip
             type     = "ssh"
             user     = "root"
+            private_key = file(var.local_ssh_key_file)
         }
     }
     provisioner "file" {
@@ -94,6 +97,7 @@ resource "aws_instance" "main" {
             host     = self.public_ip
             type     = "ssh"
             user     = "root"
+            private_key = file(var.local_ssh_key_file)
         }
     }
 
@@ -131,6 +135,7 @@ resource "null_resource" "cleanup" {
             host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
             type     = "ssh"
             user     = "root"
+            private_key = file(var.local_ssh_key_file)
         }
     }
     provisioner "remote-exec" {
@@ -142,6 +147,7 @@ resource "null_resource" "cleanup" {
             host     = element(aws_instance.main[*].public_ip, 0)
             type     = "ssh"
             user     = "root"
+            private_key = file(var.local_ssh_key_file)
         }
     }
     provisioner "remote-exec" {
@@ -153,6 +159,7 @@ resource "null_resource" "cleanup" {
             host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
             type     = "ssh"
             user     = "root"
+            private_key = file(var.local_ssh_key_file)
         }
     }
 }

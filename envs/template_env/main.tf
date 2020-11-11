@@ -6,6 +6,17 @@
 terraform {
   required_version = ">= 0.12"
 }
+# terraform {
+#     required_providers {
+#         aws = {
+#             source = "hashicorp/aws"
+#         }
+#         digitalocean = {
+#             source = "digitalocean/digitalocean"
+#         }
+#     }
+#   required_version = ">= 0.13"
+# }
 
 module "packer" {
     source             = "../../modules/packer"
@@ -41,6 +52,7 @@ module "aws" {
     region = var.aws_region_alias
 
     aws_key_name = var.aws_key_name
+    local_ssh_key_file = var.local_ssh_key_file
 
     servers = var.servers
     downsize = var.downsize

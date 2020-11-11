@@ -114,7 +114,7 @@ resource "null_resource" "proxy_config" {
 
 output "output" {
     depends_on = [
-        proxy_config,
+        null_resource.proxy_config,
     ]
     value = null_resource.proxy_config.*.id
 }

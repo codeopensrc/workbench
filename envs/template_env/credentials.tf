@@ -5,6 +5,8 @@ variable "do_token" { default = "" }
 
 ### Template
 variable "aws_key_name" { default = "id_rsa" }
+variable "local_ssh_key_file" { default = "~/.ssh/id_rsa" } #Local ssh key file location of aws_key_name
+#NOTE: .pub of this private key file must be in modules/packer/ignore/authorized_keys file. See modules/packer/packer.json
 
 # TODO: Configure multiple bucket name access (dev/stage. db/static/images etc)
 variable "aws_bucket_name" { default = ""}

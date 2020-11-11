@@ -54,6 +54,7 @@ resource "null_resource" "access" {
         destination = "/root/.ssh/known_hosts"
     }
 
+    # TODO: Determine best way to use identity files and remote repo locations
     provisioner "file" {
         content = file("${var.deploy_key_location}")
         destination = "/root/.ssh/deploy.key"
