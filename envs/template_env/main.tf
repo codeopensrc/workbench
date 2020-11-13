@@ -18,6 +18,11 @@ terraform {
 #   required_version = ">= 0.13"
 # }
 
+# `terraform output` for name and ip address of instances in state for env
+output "aws_instances" {
+    value = module.aws.instances
+}
+
 module "packer" {
     source             = "../../modules/packer"
 
@@ -25,6 +30,7 @@ module "packer" {
     aws_access_key = var.aws_access_key
     aws_secret_key = var.aws_secret_key
     aws_region = var.aws_region
+    aws_key_name = var.aws_key_name
 
     packer_config = var.packer_config
 }
@@ -113,7 +119,6 @@ module "mix" {
 
     dbs_to_import       = var.dbs_to_import
 
-    join_machine_id  = var.join_machine_id
     serverkey        = var.serverkey
     pg_password      = var.pg_password
     dev_pg_password  = var.dev_pg_password
@@ -134,7 +139,7 @@ module "mix" {
     misc_repos = var.misc_repos
 
     # Temp
-    docker_engine_install_url  = format("https://raw.githubusercontent.com/rancher/install-docker/master/%s.sh", var.packer_config.docker_version)
+    # docker_engine_install_url  = format("https://raw.githubusercontent.com/rancher/install-docker/master/%s.sh", var.packer_config.docker_version)
     # docker_engine_install_url  = "https://gitlab.codeopensrc.com/os/workbench/-/raw/master/modules/packer/scripts/install/install_docker.sh"
 
     gitlab_server_url = var.gitlab_server_url

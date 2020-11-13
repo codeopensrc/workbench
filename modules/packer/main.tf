@@ -2,6 +2,7 @@
 variable "aws_access_key" { default = "" }
 variable "aws_secret_key" { default = "" }
 variable "aws_region" { default = "" }
+variable "aws_key_name" { default = "" }
 
 variable "active_env_provider" {}
 
@@ -38,6 +39,10 @@ data "aws_ami_ids" "latest" {
         name   = "tag:redis_version"
         values = [ var.packer_config.redis_version ]
     }
+    filter {
+        name   = "tag:aws_key_name"
+        values = [ var.aws_key_name ]
+    }
 }
 
 
@@ -52,6 +57,7 @@ resource "null_resource" "build" {
         docker_compose_version = var.packer_config.docker_compose_version
         gitlab_version = var.packer_config.gitlab_version
         redis_version = var.packer_config.redis_version
+        aws_key_name = var.aws_key_name
     }
 
     # TODO: Will need builder specific variables
@@ -70,6 +76,7 @@ resource "null_resource" "build" {
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
                 --var 'gitlab_version=${var.packer_config.gitlab_version}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
+                --var 'aws_key_name=${var.aws_key_name}' \
                 --var 'aws_region=${var.aws_region}' \
                 --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \
                 $CUR_DIR/packer.json
@@ -83,6 +90,7 @@ resource "null_resource" "build" {
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
                 --var 'gitlab_version=${var.packer_config.gitlab_version}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
+                --var 'aws_key_name=${var.aws_key_name}' \
                 --var 'aws_region=${var.aws_region}' \
                 --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \
                 $CUR_DIR/packer.json
@@ -125,6 +133,10 @@ data "aws_ami" "latest" {
     filter {
         name   = "tag:redis_version"
         values = [ var.packer_config.redis_version ]
+    }
+    filter {
+        name   = "tag:aws_key_name"
+        values = [ var.aws_key_name ]
     }
 }
 

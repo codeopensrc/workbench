@@ -33,8 +33,6 @@ module "provisioners" {
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
 
-    docker_engine_install_url  = var.docker_engine_install_url
-
     # TODO: This might cause a problem when launching the 2nd admin server when swapping
     consul_wan_leader_ip = var.external_leaderIP
     consul_lan_leader_ip = local.consul_lan_leader_ip
@@ -42,8 +40,6 @@ module "provisioners" {
     consul_lead_adv_addresses = local.consul_lead_adv_addresses
     consul_db_adv_addresses = local.consul_db_adv_addresses
     datacenter_has_admin = length(var.admin_public_ips) > 0
-
-    join_machine_id = var.join_machine_id
 }
 
 module "hostname" {

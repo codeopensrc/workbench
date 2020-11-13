@@ -28,66 +28,14 @@ variable "consul_db_adv_addresses" {}
 variable "is_only_leader_count" { default = 0 }
 variable "is_only_db_count" { default = 0 }
 
-variable "docker_leader_name" { default = "" }
-
 variable "consul_lan_leader_ip" { default = "" }
 variable "consul_wan_leader_ip" { default = "" }
 
-variable "join_machine_id" { default = "" }
-
-variable "docker_engine_install_url" { default = "" }
-# TODO: Implement base docker engine url with or without docker_engine_version built in
-# variable "docker_engine_install_url" { default = "https://docs.DOMAIN/download/docker-" }
-
-# UPD: 11/5/19 - Using DOMAIN as the engine install url was causing issues resolving the domain
+# Using DOMAIN as an install url can cause issues resolving the domain
 #   as the newly booted servers sometimes dont resolve to certain domains/ip addresses.
-# resource "null_resource" "docker_machine" {
-resource "null_resource" "docker_init" {
-    count = length(var.servers)
 
-    # https://github.com/docker/machine/issues/3039
-    # docker-machine provision
-
-    provisioner "local-exec" {
-        command = "docker-machine rm ${element(distinct(concat(var.admin_names, var.lead_names, var.db_names)), count.index)} -y; exit 0"
-    }
-
-    # docker-machine create needs a timeout then run provision. It appears if an older
-    # version is already installed and using get.docker.com as the engine install, it
-    # fails to create but provisioning works fine.
-    # This essentially forces the underlying image to already have the latest docker installed
-    # or to provide a custom engine install url location with a docker install script
-
-    # More info
-    # https://github.com/docker/machine/issues/3522
-    # Unattended-Upgrade::InstallOnShutdown "true";
-
-    # Possible install urls/methods
-    # "https://get.docker.com"    Dockers default engine install url
-    # "https://releases.rancher.com/install-docker/${var.docker_engine_version}"
-    # https://raw.githubusercontent.com/rancher/install-docker/master/${var.docker_engine_version}.sh
-    # curl -sSL https://get.docker.com/ | CHANNEL=stable sh
-    # curl -fsSL get.docker.com | VERSION=17.12.0-ce sh
-    provisioner "local-exec" {
-        command = <<-EOF
-
-            IP=${element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)}
-            NAME=${element(distinct(concat(var.admin_names, var.lead_names, var.db_names)), count.index)}
-
-            docker-machine create --driver generic --generic-ip-address=$IP \
-            --generic-ssh-key ~/.ssh/id_rsa --engine-install-url "${var.docker_engine_install_url}" \
-            $NAME
-
-            docker-machine provision $NAME
-        EOF
-    }
-}
-
-
-# resource "null_resource" "docker_swarm" {
 resource "null_resource" "docker_leader" {
     count = var.lead_servers
-    depends_on = [null_resource.docker_init]
 
     # Create a docker swarm
     provisioner "local-exec" {
@@ -99,56 +47,35 @@ resource "null_resource" "docker_leader" {
         command = <<-EOF
             # Not the most ideal solution, but it will cover 70-95% of use cases until
             #   we setup a consul KV store for docker swarm versions and their tokens
-            CUR_MACHINE_NAME=${element(var.lead_names, count.index)}
-            FIND_MACHINE_NAME=${replace(element(var.lead_names, count.index), substr(element(var.lead_names, count.index), -4, -1), var.join_machine_id)}
-            PREV_MACHINE_NAME=${element(var.lead_names, count.index == 0 ? 0 : count.index - 1)}
+            CUR_MACHINE_IP=${element(distinct(concat(var.admin_public_ips, var.lead_public_ips)), count.index)}
+            PREV_MACHINE_IP=${element(distinct(concat(var.admin_public_ips, var.lead_public_ips)), count.index == 0 ? 0 : count.index - 1)}
 
-            CUR_SWARM_VER=$(docker-machine ssh $CUR_MACHINE_NAME "docker -v;")
+            ssh-keyscan -H $CUR_MACHINE_IP >> ~/.ssh/known_hosts
+            CUR_SWARM_VER=$(ssh root@$CUR_MACHINE_IP "docker -v;")
+            PREV_SWARM_VER=$(ssh root@$PREV_MACHINE_IP "docker -v;")
             JOINED_SWARM=false
 
-            # First try the specified num machine
-            if [ ! -z ${var.join_machine_id} ]; then
-                FIND_SWARM_VER=$(docker-machine ssh $FIND_MACHINE_NAME "docker -v;")
-
-                if [ "$CUR_SWARM_VER" = "$FIND_SWARM_VER" ] && [  "$CUR_MACHINE_NAME" != "$FIND_MACHINE_NAME" ]; then
-                    # Works for lower numbers, need something better than index * fixed amount
-                    SLEEP_FOR=$((5 + $((${count.index} * 6)) ))
-                    echo "JOIN_LEADER IN $SLEEP_FOR"
-                    sleep $SLEEP_FOR
-                    JOIN_CMD=$(docker-machine ssh $FIND_MACHINE_NAME "docker swarm join-token manager | grep -- --token;")
-                    # JOIN_CMD=$(docker-machine ssh $FIND_MACHINE_NAME "docker swarm join-token worker | grep -- --token;")
-                    docker-machine ssh $CUR_MACHINE_NAME "set -e; $JOIN_CMD"
-                    JOINED_SWARM=true
-                fi
-            fi
-
-            # If we didnt provide a number or they were the same machine or different versions, try
-            #   the one at index - 1
-            if [ ! -z "$PREV_MACHINE_NAME" ] && [ "$JOINED_SWARM" = "false" ]; then
-                PREV_SWARM_VER=$(docker-machine ssh $PREV_MACHINE_NAME "docker -v;")
-
-                if [ "$CUR_SWARM_VER" = "$PREV_SWARM_VER" ] && [ "$CUR_MACHINE_NAME" != "$PREV_MACHINE_NAME" ]; then
-                    SLEEP_FOR=$((5 + $((${count.index} * 6)) ))
-                    echo "JOIN_LEADER IN $SLEEP_FOR"
-                    sleep $SLEEP_FOR
-                    JOIN_CMD=$(docker-machine ssh $PREV_MACHINE_NAME "docker swarm join-token manager | grep -- --token;")
-                    # JOIN_CMD=$(docker-machine ssh $PREV_MACHINE_NAME "docker swarm join-token worker | grep -- --token;");
-                    docker-machine ssh $CUR_MACHINE_NAME "set -e; $JOIN_CMD"
-                    JOINED_SWARM=true
-                fi
+            if [ "$CUR_SWARM_VER" = "$PREV_SWARM_VER" ] && [ "$CUR_MACHINE_IP" != "$PREV_MACHINE_IP" ]; then
+                SLEEP_FOR=$((5 + $((${count.index} * 6)) ))
+                echo "JOIN_LEADER IN $SLEEP_FOR"
+                sleep $SLEEP_FOR
+                JOIN_CMD=$(ssh root@$PREV_MACHINE_IP "docker swarm join-token manager | grep -- --token;")
+                # JOIN_CMD=$(ssh root@$PREV_MACHINE_IP "docker swarm join-token worker | grep -- --token;");
+                ssh root@$CUR_MACHINE_IP "set -e; $JOIN_CMD"
+                JOINED_SWARM=true
             fi
 
             # Pretty much we're the newest kid on the block with a different docker version
             if [ "$JOINED_SWARM" = "false" ] || [ ${length(var.lead_names)} -eq 1 ]; then
                 echo "START NEW SWARM"
                 # TODO: Check if we're already part of a (or our own) swarm
-                docker-machine ssh $CUR_MACHINE_NAME 'docker swarm init --advertise-addr ${element(var.lead_public_ips, count.index)}:2377' || exit 0
+                ssh root@$CUR_MACHINE_IP 'docker swarm init --advertise-addr ${element(var.lead_public_ips, count.index)}:2377' || exit 0
             fi
 
-            DOWN_MACHINES=$(docker-machine ssh $CUR_MACHINE_NAME "docker node ls | grep 'Down' | cut -d ' ' -f1;")
+            DOWN_MACHINES=$(ssh root@$CUR_MACHINE_IP "docker node ls | grep 'Down' | cut -d ' ' -f1;")
             # We might have to loop here if there are 2+ down machines, not sure what happens
-            docker-machine ssh $CUR_MACHINE_NAME "docker node rm --force $DOWN_MACHINES || exit 0;"
-            docker-machine ssh $CUR_MACHINE_NAME "docker node update --label-add dc=${var.region} --label-add name=${element(var.lead_names, count.index)} ${element(var.lead_names, count.index)}"
+            ssh root@$CUR_MACHINE_IP "docker node rm --force $DOWN_MACHINES || exit 0;"
+            ssh root@$CUR_MACHINE_IP "docker node update --label-add dc=${var.region} --label-add name=${element(var.lead_names, count.index)} ${element(var.lead_names, count.index)}"
 
             exit 0
         EOF
@@ -182,7 +109,6 @@ resource "null_resource" "docker_leader" {
 resource "null_resource" "update_aws" {
     count = length(var.servers)
     depends_on = [
-        null_resource.docker_init,
         null_resource.docker_leader,
     ]
 
@@ -205,7 +131,6 @@ resource "null_resource" "update_aws" {
 resource "null_resource" "consul_file_admin" {
     count = var.admin_servers
     depends_on = [
-        null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.update_aws,
     ]
@@ -250,7 +175,6 @@ resource "null_resource" "consul_file_leader" {
     # Any leader ips that are not also an admin ip
     count = var.is_only_leader_count
     depends_on = [
-        null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.update_aws,
     ]
@@ -296,7 +220,6 @@ resource "null_resource" "consul_file" {
     # Any db ips that are not also leader ips or admin ips
     count = var.is_only_db_count
     depends_on = [
-        null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.update_aws,
     ]
@@ -336,7 +259,6 @@ resource "null_resource" "consul_file" {
 resource "null_resource" "consul_service" {
     count = length(var.servers)
     depends_on = [
-        null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.update_aws,
         null_resource.consul_file_leader,
@@ -405,7 +327,6 @@ resource "null_resource" "consul_service" {
 
 output "output" {
     depends_on = [
-        null_resource.docker_init,
         null_resource.docker_leader,
         null_resource.update_aws,
         null_resource.consul_file_leader,

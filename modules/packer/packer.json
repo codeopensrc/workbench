@@ -9,6 +9,7 @@
         "docker_compose_version": "",
         "gitlab_version": "",
         "redis_version": "",
+        "aws_key_name": "",
         "packer_dir": "{{env `CUR_DIR`}}"
     },
     "builders": [
@@ -29,7 +30,8 @@
                 "docker_version": "{{user `docker_version`}}",
                 "docker_compose_version": "{{user `docker_compose_version`}}",
                 "gitlab_version": "{{user `gitlab_version`}}",
-                "redis_version": "{{user `redis_version`}}"
+                "redis_version": "{{user `redis_version`}}",
+                "aws_key_name": "{{user `aws_key_name`}}"
             }
         }
     ],

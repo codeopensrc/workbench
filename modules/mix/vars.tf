@@ -31,7 +31,6 @@ variable "dbs_to_import" {
         dbname=string, import=string, fn=string }))
 }
 
-variable "join_machine_id" { default = "" }
 variable "serverkey" {}
 variable "pg_password" {}
 variable "dev_pg_password" {}
@@ -39,8 +38,6 @@ variable "dev_pg_password" {}
 variable "aws_bot_access_key" { default = "" }
 variable "aws_bot_secret_key" { default = "" }
 variable "pg_read_only_pw" { default = "" }
-
-variable "docker_engine_install_url" {}
 
 variable "deploy_key_location" {}
 

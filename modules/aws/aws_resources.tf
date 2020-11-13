@@ -105,7 +105,7 @@ resource "aws_instance" "main" {
     provisioner "local-exec" {
         when = destroy
         command = <<-EOF
-            docker-machine rm ${self.tags.Name} -y;
+            ssh-keygen -R ${self.public_ip}
             exit 0;
         EOF
         on_failure = continue

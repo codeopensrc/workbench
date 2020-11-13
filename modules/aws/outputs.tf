@@ -1,4 +1,11 @@
 
+output "instances" {
+    value = {
+        for SERVER in aws_instance.main[*]:
+        (SERVER.tags.Name) => "ssh root@${SERVER.public_ip}"
+    }
+}
+
 output "admin_private_ip_addresses" {
     value = [
         for SERVER in aws_instance.main[*]:

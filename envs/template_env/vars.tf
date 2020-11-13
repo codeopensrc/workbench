@@ -16,10 +16,6 @@ provider "aws" {
 
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
-
-# Have new nodes join a swarm with a node that has a specific ID if docker versions match
-# It should remain an empty string in version control
-variable "join_machine_id" { default = "" }
 variable "stun_port" { default = "" }
 
 variable "import_gitlab" { default = false }
