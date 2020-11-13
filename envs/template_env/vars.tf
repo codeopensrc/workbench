@@ -78,7 +78,7 @@ variable "servers" {
             "aws_volume_size" = 50
             "region" = "us-east-2"
             "provider" = "aws"
-            "image" = ""
+            "image" = "" ### After creation, image id must be present
         },
         # {
         #     "count" = 1

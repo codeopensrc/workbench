@@ -4,6 +4,23 @@
 ###  Another can have 1 server as admin and leader with seperate db server
 ###  Another can have 1 server with all roles and scale out aditional servers as leader servers
 ###  Simplicity/Flexibility/Adaptability
+
+# Temporarily disable for initial install - can lock dkpg file if enabled
+resource "null_resource" "disable_autoupgrade" {
+    count = length(var.servers)
+    provisioner "remote-exec" {
+        inline = [
+            "sed -i \"s|1|0|\" /etc/apt/apt.conf.d/20auto-upgrades",
+            "cat /etc/apt/apt.conf.d/20auto-upgrades"
+        ]
+    }
+    connection {
+        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
+        type = "ssh"
+    }
+}
+
+
 module "provisioners" {
     source      = "../misc"
 
@@ -302,11 +319,19 @@ resource "null_resource" "restore_gitlab" {
                 exit 0;
             EOF
         ]
+
+        connection {
+            host = element(var.admin_public_ips, 0)
+            type = "ssh"
+        }
     }
 
-    connection {
-        host = element(var.admin_public_ips, 0)
-        type = "ssh"
+    # Change known_hosts to new imported ssh keys from gitlab restore
+    provisioner "local-exec" {
+        command = <<-EOF
+            ssh-keygen -f ~/.ssh/known_hosts -R ${element(var.admin_public_ips, 0)}
+            ssh-keyscan -H ${element(var.admin_public_ips, 0)} >> ~/.ssh/known_hosts
+        EOF
     }
 }
 
@@ -931,6 +956,23 @@ resource "null_resource" "add_keys" {
 
     connection {
         host = element(var.lead_public_ips, 0)
+        type = "ssh"
+    }
+}
+
+# Re-enable after everything installed
+resource "null_resource" "enable_autoupgrade" {
+    count = length(var.servers)
+    depends_on = [ null_resource.add_keys ]
+
+    provisioner "remote-exec" {
+        inline = [
+            "sed -i \"s|0|1|\" /etc/apt/apt.conf.d/20auto-upgrades",
+            "cat /etc/apt/apt.conf.d/20auto-upgrades"
+        ]
+    }
+    connection {
+        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
         type = "ssh"
     }
 }
