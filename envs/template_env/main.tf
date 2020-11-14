@@ -4,19 +4,16 @@
 #### Only apps.tf, credentials.tf, and vars.tf should be modified
 ###################################
 terraform {
-  required_version = ">= 0.12"
+    required_providers {
+        aws = {
+            source = "hashicorp/aws"
+        }
+        digitalocean = {
+            source = "digitalocean/digitalocean"
+        }
+    }
+    required_version = ">= 0.13"
 }
-# terraform {
-#     required_providers {
-#         aws = {
-#             source = "hashicorp/aws"
-#         }
-#         digitalocean = {
-#             source = "digitalocean/digitalocean"
-#         }
-#     }
-#   required_version = ">= 0.13"
-# }
 
 # `terraform output` for name and ip address of instances in state for env
 output "aws_instances" {
@@ -131,6 +128,7 @@ module "mix" {
 
     gitlab_backups_enabled = var.gitlab_backups_enabled
     import_gitlab = var.import_gitlab
+    import_gitlab_version = var.import_gitlab_version
     gitlab_runner_tokens = var.gitlab_runner_tokens
     num_gitlab_runners = var.num_gitlab_runners
 

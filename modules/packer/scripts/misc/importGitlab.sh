@@ -5,12 +5,15 @@
 ##### If cloning into a dev environment REMOVE repository mirroring
 #####
 
-while getopts "b:r:f" flag; do
+OPT_VERSION=""
+
+while getopts "b:r:v:f" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         b) BUCKET_NAME=$OPTARG;;
         f) FILE_NAME=$OPTARG;;
         r) REGION=$OPTARG;;
+        v) OPT_VERSION=${OPTARG}_;;
     esac
 done
 
@@ -86,7 +89,7 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/dump_gitlab_backup_${DATE}.tar"
+    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/dump_gitlab_backup_${OPT_VERSION}${DATE}.tar"
     LOCAL_FILE="/var/opt/gitlab/backups/dump_gitlab_backup_${DATE}.tar"
 
     echo "Checking $REMOTE_FILE";
@@ -133,7 +136,7 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/gitlab-secrets_${DATE}.json"
+    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/gitlab-secrets_${OPT_VERSION}${DATE}.json"
     LOCAL_FILE="/etc/gitlab/gitlab-secrets_${DATE}.json"
 
     echo "Checking $REMOTE_FILE";

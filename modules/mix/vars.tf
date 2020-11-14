@@ -43,6 +43,7 @@ variable "deploy_key_location" {}
 
 variable "gitlab_backups_enabled" { default = "" }
 variable "import_gitlab" { default = "" }
+variable "import_gitlab_version" { default = "" }
 variable "gitlab_runner_tokens" { type = map(string) }
 variable "num_gitlab_runners" { default = 0 }
 

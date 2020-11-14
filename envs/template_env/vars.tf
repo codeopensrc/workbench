@@ -19,6 +19,7 @@ provider "aws" {
 variable "stun_port" { default = "" }
 
 variable "import_gitlab" { default = false }
+variable "import_gitlab_version" { default = "" }
 variable "num_gitlab_runners" { default = 0 }
 
 variable "gitlab_backups_enabled" { default = false }
@@ -33,7 +34,7 @@ variable "dns_provider" { default = "aws_route53" }
 #######################################
 variable "packer_config" {
     default = {
-        gitlab_version = "13.0.6-ce.0"
+        gitlab_version = "13.5.4-ce.0"
         docker_version = "19.03.12"
         docker_compose_version = "1.19.0"
         consul_version = "1.0.6"

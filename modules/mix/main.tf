@@ -310,8 +310,10 @@ resource "null_resource" "restore_gitlab" {
                 chmod +x /root/code/scripts/misc/importGitlab.sh;
 
                 IMPORT_GITLAB=${var.import_gitlab}
+                if [ ! -z "${var.import_gitlab_version}" ]; then IMPORT_GITLAB_VERSION="-v ${var.import_gitlab_version}"; fi
+
                 if [ "$IMPORT_GITLAB" = "true" ]; then
-                    bash /root/code/scripts/misc/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name};
+                    bash /root/code/scripts/misc/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name} $IMPORT_GITLAB_VERSION;
                     echo "=== Wait 90s for restore ==="
                     sleep 90
                 fi

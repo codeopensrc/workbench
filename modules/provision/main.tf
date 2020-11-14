@@ -56,7 +56,7 @@ resource "null_resource" "access" {
 
     # TODO: Determine best way to use identity files and remote repo locations
     provisioner "file" {
-        content = file("${var.deploy_key_location}")
+        content = file(var.deploy_key_location)
         destination = "/root/.ssh/deploy.key"
     }
     provisioner "remote-exec" {
