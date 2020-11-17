@@ -94,6 +94,7 @@ module "cron" {
     templates = {
         admin = "admin.tmpl"
         leader = "leader.tmpl"
+        app = "app.tmpl"
         redisdb = "redisdb.tmpl"
         mongodb = "mongodb.tmpl"
         pgdb = "pgdb.tmpl"
@@ -101,6 +102,7 @@ module "cron" {
     destinations = {
         admin = "/root/code/cron/admin.cron"
         leader = "/root/code/cron/leader.cron"
+        app = "/root/code/cron/app.cron"
         redisdb = "/root/code/cron/redisdb.cron"
         mongodb = "/root/code/cron/mongodb.cron"
         pgdb = "/root/code/cron/pgdb.cron"
@@ -118,6 +120,7 @@ module "cron" {
     run_service = var.run_service_enabled
     send_logs = var.send_logs_enabled
     send_jsons = var.send_jsons_enabled
+    app_definitions = var.app_definitions
 
     # Temp Leader specific
     docker_service_name = local.docker_service_name

@@ -1,0 +1,12 @@
+%{for APP in app_definitions}
+#### ===== APP ====
+
+# Name: Backup ${APP.repo_name}
+MAILTO="root"
+SHELL="/bin/bash"
+HOME="/root"
+0 0,12 * * * bash $HOME/repos/${APP.repo_name}/${APP.backupfile} -b ${aws_bucket_name} -r ${aws_bucket_region}
+
+#### =========
+
+%{endfor}

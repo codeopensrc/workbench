@@ -221,6 +221,13 @@ resource "aws_security_group" "default_ports" {
         cidr_blocks = ["${var.docker_machine_ip}/32"]
         protocol    = "tcp"
     }
+    ingress {
+        description = "All User UDP"
+        from_port   = 0
+        to_port     = 65535
+        cidr_blocks = ["${var.docker_machine_ip}/32"]
+        protocol    = "udp"
+    }
 
     # Consul communication between vpc
     ingress {

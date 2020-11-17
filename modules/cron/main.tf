@@ -28,6 +28,14 @@ variable "db_backups_enabled" { default = false }
 variable "run_service" { default = false }
 variable "send_logs" { default = false }
 variable "send_jsons" { default = false }
+variable "app_definitions" {
+    type = map(object({ pull=string, stable_version=string, use_stable=string,
+        repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
+        docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
+        green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string,
+        backup=string, backupfile=string
+    }))
+}
 # TempLeader
 variable "docker_service_name" { default = "" }
 variable "consul_service_name" { default = "" }
@@ -154,6 +162,19 @@ resource "null_resource" "leader" {
 
         }) : ""
         destination = var.destinations["leader"]
+    }
+
+    provisioner "file" {
+        content = fileexists("${path.module}/templates/${var.templates["app"]}") ? templatefile("${path.module}/templates/${var.templates["app"]}", {
+            app_definitions = [
+                for APP in var.app_definitions:
+                {backupfile = APP.backupfile, repo_name = APP.repo_name}
+                if APP.backup == "true"
+            ]
+            aws_bucket_name = var.aws_bucket_name
+            aws_bucket_region = var.aws_bucket_region
+        }) : ""
+        destination = var.destinations["app"]
     }
 
     connection {

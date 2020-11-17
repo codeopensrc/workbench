@@ -136,10 +136,6 @@ module "mix" {
     app_definitions = var.app_definitions
     misc_repos = var.misc_repos
 
-    # Temp
-    # docker_engine_install_url  = format("https://raw.githubusercontent.com/rancher/install-docker/master/%s.sh", var.packer_config.docker_version)
-    # docker_engine_install_url  = "https://gitlab.codeopensrc.com/os/workbench/-/raw/master/modules/packer/scripts/install/install_docker.sh"
-
     gitlab_server_url = var.gitlab_server_url
     chef_email      = var.chef_email
 
