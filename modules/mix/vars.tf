@@ -1,4 +1,6 @@
-
+terraform {
+  required_version = ">= 0.12"
+}
 variable "server_name_prefix" {}
 variable "active_env_provider" {}
 variable "root_domain_name" {}
@@ -12,10 +14,6 @@ variable "servers" { default = [] }
 # Cloudflare/dns variables _should_ be optional to modify DNS settings on cloudflare
 # At this time, they are required until properly refactored
 # UPD: Cloudflare should no longer be needed but some dns variables still need to be populated until refactor
-
-variable "cloudflare_email" { default = "" }
-variable "cloudflare_auth_key" { default = "" }
-variable "cloudflare_zone_id" { default = "" }
 
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}

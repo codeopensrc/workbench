@@ -21,10 +21,6 @@ variable "pg_password" { default = "" }
 variable "pg_read_only_pw" { default = "" }
 variable "dev_pg_password" { default = "" }
 
-variable "cloudflare_email" { default = "" }
-variable "cloudflare_auth_key" { default = "" }
-variable "cloudflare_zone_id" { default = "" }
-
 # When making security groups, allow all port access to 1 ip of terraform user (until we revisit this)
 # This is the workstation ip that will connect to this cluster
 variable "docker_machine_ip" { default = "" }

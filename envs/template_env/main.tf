@@ -101,10 +101,6 @@ module "mix" {
 
     db_ids = compact(concat(module.aws.db_ids, module.digital_ocean.db_ids))
 
-    cloudflare_email    = var.cloudflare_email
-    cloudflare_auth_key = var.cloudflare_auth_key
-    cloudflare_zone_id  = var.cloudflare_zone_id
-
     mattermost_subdomain = var.mattermost_subdomain
     wekan_subdomain = var.wekan_subdomain
 
