@@ -150,11 +150,11 @@ locals {
     service_repo_name     = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : ""
 
     # Simple logic for now. One datacenter/provider per env. Eventually something like AWS east coast and DO west coast connected would be cool
-    consul_lan_leader_ip = var.active_env_provider == "aws" ? element(concat(var.admin_private_ips, [""]), 0) : element(concat(var.admin_public_ips, [""]), 0)
+    consul_lan_leader_ip = element(concat(var.admin_private_ips, [""]), 0)
 
-    consul_admin_adv_addresses = var.active_env_provider == "aws" ? var.admin_private_ips : var.admin_public_ips
-    consul_lead_adv_addresses = var.active_env_provider == "aws" ? var.lead_private_ips : var.lead_public_ips
-    consul_db_adv_addresses = var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips
+    consul_admin_adv_addresses = var.admin_private_ips
+    consul_lead_adv_addresses = var.lead_private_ips
+    consul_db_adv_addresses = var.db_private_ips
 }
 
 ## for_each example

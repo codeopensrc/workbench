@@ -51,3 +51,10 @@
 #
 #OR
 #sudo service nginx reload
+
+## RELOAD FOR GITLAB
+# sudo gitlab-ctl restart nginx
+
+
+# To enable rtmp FOR VANILLA NGINX, NOT nginx via gitlab
+# sudo apt install libnginx-mod-rtmp

@@ -9,6 +9,7 @@
         "digitalocean_image_os": "",
         "digitalocean_region": "",
         "digitalocean_image_size": "",
+        "digitalocean_image_name": "",
         "consul_version": "",
         "docker_version": "",
         "docker_compose_version": "",
@@ -19,31 +20,19 @@
     },
     "builders": [
         {
-            "type": "amazon-ebs",
-            "access_key": "{{user `aws_access_key`}}",
-            "secret_key": "{{user `aws_secret_key`}}",
-            "region": "{{user `aws_region`}}",
-            "instance_type": "{{user `aws_instance_type`}}",
-            "source_ami": "{{user `ami_source`}}",
-            "ssh_username": "ubuntu",
-            "ami_name": "packer-ami_{{timestamp}}",
-            "tags": {
-                "OS_Version": "Ubuntu",
-                "Base_AMI_Name": "{{ .SourceAMIName }}",
-                "Type": "build",
-                "consul_version": "{{user `consul_version`}}",
-                "docker_version": "{{user `docker_version`}}",
-                "docker_compose_version": "{{user `docker_compose_version`}}",
-                "gitlab_version": "{{user `gitlab_version`}}",
-                "redis_version": "{{user `redis_version`}}",
-                "aws_key_name": "{{user `aws_key_name`}}"
-            }
+          "type": "digitalocean",
+          "api_token": "{{user `do_token`}}",
+          "image": "{{user `digitalocean_image_os`}}",
+          "region": "{{user `digitalocean_region`}}",
+          "size": "{{user `digitalocean_image_size`}}",
+          "ssh_username": "root",
+          "snapshot_name": "{{user `digitalocean_image_name`}}"
         }
     ],
     "provisioners": [
         {
             "type": "shell",
-            "inline": [ "mkdir -p /tmp/scripts"]
+            "inline": [ "mkdir -p /tmp/scripts", "mkdir -p /home/ubuntu/.ssh" ]
         },
         {
             "type": "file",
@@ -54,6 +43,11 @@
             "type": "file",
             "source": "{{user `packer_dir`}}/ignore/authorized_keys",
             "destination": "/home/ubuntu/.ssh/authorized_keys"
+        },
+        {
+            "type": "file",
+            "source": "{{user `packer_dir`}}/ignore/authorized_keys",
+            "destination": "/root/.ssh/authorized_keys"
         },
         {
             "type": "shell",

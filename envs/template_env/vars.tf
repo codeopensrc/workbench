@@ -36,11 +36,14 @@ variable "packer_config" {
     default = {
         gitlab_version = "13.5.4-ce.0"
         docker_version = "19.03.12"
-        docker_compose_version = "1.19.0"
+        docker_compose_version = "1.27.4"
         consul_version = "1.0.6"
         redis_version = "5.0.9"
         base_amis = {
             "us-east-2" = "ami-0d03add87774b12c5"
+        }
+        digitalocean_image_os = {
+            "main" = "ubuntu-16-04-x64"
         }
     }
 }
@@ -73,31 +76,34 @@ variable "servers" {
     default = [
         {
             "count" = 1
+            "image" = ""
             "roles" = ["admin", "lead", "db"]
             # "roles" = ["admin"]
-            "size" = "t3a.large"   ### "t3a.small"   "t3a.micro"
-            "aws_volume_size" = 50
+            "aws_volume_size" = 80
+            "size" = "t3a.large"   ### "t3.large" "t3a.small"   "t3a.micro"
             "region" = "us-east-2"
-            "provider" = "aws"
-            "image" = "" ### image id to pin ami
+            # "size" = "s-4vcpu-8gb" ### "s-2vcpu-4gb"
+            # "region" = "nyc3"
         },
         # {
         #     "count" = 1
-        #     "roles" = ["lead"]
-        #     "size" = "t3a.small"
-        #     "aws_volume_size" = 50
-        #     "region" = "us-east-2"
-        #     "provider" = "aws"
         #     "image" = ""
+        #     "roles" = ["lead"]
+        #     "aws_volume_size" = 50
+        #     "size" = "t3a.small"  ### "t3.large" "t3a.small"   "t3a.micro"
+        #     "region" = "us-east-2"
+        #     # "size" = "s-2vcpu-4gb"
+        #     # "region" = "nyc3"
         # },
         # {
         #     "count" = 1
-        #     "roles" = ["db"]
-        #     "size" = "t3a.micro"
-        #     "aws_volume_size" = 50
-        #     "region" = "us-east-2"
-        #     "provider" = "aws"
         #     "image" = ""
+        #     "roles" = ["db"]
+        #     "aws_volume_size" = 50
+        #     "size" = "t3a.micro"  ### "t3.large" "t3a.small"   "t3a.micro"
+        #     "region" = "us-east-2"
+        #     # "size" = "s-2vcpu-4gb"
+        #     # "region" = "nyc3"
         # },
     ]
 }
@@ -113,7 +119,7 @@ variable "aws_region_alias" { default = "awseast" }
 ############ DNS ############
 #############################
 # Used for gitlab oauth plugins
-variable "mattermost_subdomain" { default = "" }
+variable "mattermost_subdomain" { default = "chat" }
 variable "wekan_subdomain" { default = "" }
 
 # A record
@@ -124,8 +130,8 @@ variable "admin_arecord_aliases" {
         "consul",
         "gitlab",
         "registry",
+        "chat",
     ]
-    # Add mattermost_subdomain to this list
 }
 
 variable "db_arecord_aliases" {

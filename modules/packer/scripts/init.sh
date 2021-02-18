@@ -61,7 +61,7 @@ chmod +x /usr/local/bin/docker-compose
 
 
 # aws
-curl -O https://bootstrap.pypa.io/get-pip.py
+curl -O https://bootstrap.pypa.io/3.4/get-pip.py
 python3 get-pip.py
 pip3 install awscli --upgrade
 
@@ -102,9 +102,17 @@ mv /tmp/consul /usr/local/bin
 echo postfix postfix/mailname string example.com | sudo debconf-set-selections
 echo postfix postfix/main_mailer_type string 'Internet Site' | sudo debconf-set-selections
 sudo apt-get install --assume-yes postfix;
+
+###! WIP
+###! sudo apt-get install --assume-yes mailutils;
+###! change to:
+###! mydestination = $myhostname, localhost.$mydomain, $mydomain
+###! maybe   change:  inet_interfaces = all    to:  inet_interfaces = loopback-only
+###! in /etc/postfix/main.cf
+
 curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash;
 sudo apt-get install gitlab-ce="$GITLAB_VERSION";
 
 # Disable gitlab (enable for 1 instance only)
 sudo gitlab-ctl stop
-sudo systemctl disable gitlab-runsvdir.service
+sudo systemctl disable gitlab-runsvdir.service || echo 0

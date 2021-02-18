@@ -9,6 +9,7 @@ envs/template_env/*/.terraform
 
 personal.md
 
+docs/ignore
 scripts/ignore/*
 a_root/mix/modules/packer/ignore/*
 modules/packer/ignore/*

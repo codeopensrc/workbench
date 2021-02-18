@@ -47,8 +47,8 @@ resource "null_resource" "docker_leader" {
         command = <<-EOF
             # Not the most ideal solution, but it will cover 70-95% of use cases until
             #   we setup a consul KV store for docker swarm versions and their tokens
-            CUR_MACHINE_IP=${element(distinct(concat(var.admin_public_ips, var.lead_public_ips)), count.index)}
-            PREV_MACHINE_IP=${element(distinct(concat(var.admin_public_ips, var.lead_public_ips)), count.index == 0 ? 0 : count.index - 1)}
+            CUR_MACHINE_IP=${element(distinct(concat(var.lead_public_ips)), count.index)}
+            PREV_MACHINE_IP=${element(distinct(concat(var.lead_public_ips)), count.index == 0 ? 0 : count.index - 1)}
 
             ssh-keyscan -H $CUR_MACHINE_IP >> ~/.ssh/known_hosts
             CUR_SWARM_VER=$(ssh root@$CUR_MACHINE_IP "docker -v;")
@@ -60,7 +60,6 @@ resource "null_resource" "docker_leader" {
                 echo "JOIN_LEADER IN $SLEEP_FOR"
                 sleep $SLEEP_FOR
                 JOIN_CMD=$(ssh root@$PREV_MACHINE_IP "docker swarm join-token manager | grep -- --token;")
-                # JOIN_CMD=$(ssh root@$PREV_MACHINE_IP "docker swarm join-token worker | grep -- --token;");
                 ssh root@$CUR_MACHINE_IP "set -e; $JOIN_CMD"
                 JOINED_SWARM=true
             fi

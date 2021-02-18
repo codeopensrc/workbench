@@ -84,6 +84,8 @@ variable "app_definitions" {
             "default_active"        = "green"
             "create_subdomain"      = "false"    ## Affects route53, consul, letsencrypt
             "subdomain_name"        = "proxy"     ## Affects route53, consul, letsencrypt
+            "backup"                = "false"
+            "backupfile"            = ""
         }
         monitor = {
             "pull"                  = "true"
@@ -102,6 +104,8 @@ variable "app_definitions" {
             "default_active"        = "green"
             "create_subdomain"      = "true"        ## Affects route53, consul, letsencrypt
             "subdomain_name"        = "monitor"     ## Affects route53, consul, letsencrypt
+            "backup"                = "false"
+            "backupfile"            = ""
         }
         # stun = {
         #     "pull"                  = "true"
@@ -120,6 +124,8 @@ variable "app_definitions" {
         #     "default_active"        = "green"
         #     "create_subdomain"      = "false"    ## Affects route53, consul, letsencrypt
         #     "subdomain_name"        = "stun"     ## Affects route53, consul, letsencrypt
+        #     "backup"                = "false"
+        #     "backupfile"            = ""
         # }
         # template = {
         #     "pull"                  = "true"
@@ -138,6 +144,8 @@ variable "app_definitions" {
         #     "default_active"        = "green"
         #     "create_subdomain"      = "true"    ## Affects dns and letsencrypt
         #     "subdomain_name"        = "www"     ## Affects dns and letsencrypt
+        #     "backup"                = "false"
+        #     "backupfile"            = ""
         # }
     }
 }

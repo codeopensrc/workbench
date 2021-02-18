@@ -95,6 +95,14 @@ resource "null_resource" "proxy_config" {
         destination = "/etc/nginx/conf.d/proxy.conf"
     }
 
+    # provisioner "file" {
+    #     content = templatefile("${path.module}/templatefiles/btcpay.tmpl", {
+    #         root_domain_name = var.root_domain_name
+    #         cert_port = var.cert_port
+    #     })
+    #     destination = "/etc/nginx/conf.d/btcpay.conf"
+    # }
+
     provisioner "remote-exec" {
         ## TODO: Because of this convenience for config on app change, it has to be run after gitlab is installed
 

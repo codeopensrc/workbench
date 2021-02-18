@@ -1,36 +1,77 @@
+variable "root_domain_name" {}
+variable "local_ssh_key_file" {}
 
+variable "dns_provider" {}
 variable "active_env_provider" {}
 variable "server_name_prefix" {}
 variable "region" { default = "" }
 
 variable "do_ssh_fingerprint" {}
+variable "packer_image_id" { default = "" }
 
 variable "servers" { default = [] }
+variable "downsize" { default = false }
+variable "stun_port" { default = "" }
+variable "stun_protos" { default = ["tcp", "udp"] }
 
-variable "admin_servers" { default = 0 }
-variable "leader_servers" { default = 0 }
-variable "db_servers" { default = 0 }
-variable "build_servers" { default = 0 }
-variable "web_servers" { default = 0 }
-variable "dev_servers" { default = 0 }
-variable "legacy_servers" { default = 0 }
-variable "mongo_servers" { default = 0 }
-variable "pg_servers" { default = 0 }
-variable "redis_servers" { default = 0 }
+variable "docker_machine_ip" { default = "" }
 
-variable "do_admin_size" { default = "s-2vcpu-8gb" }
-variable "do_leader_size" { default = "s-2vcpu-4gb" }
-variable "do_db_size" { default = "s-2vcpu-4gb" }
-variable "do_web_size" { default = "1gb" }
-variable "do_dev_size" { default = "1gb" }
-variable "do_legacy_size" { default = "1gb" }
-variable "do_build_size" { default = "s-2vcpu-4gb" }
-variable "do_mongo_size" { default = "s-2vcpu-4gb" }
-variable "do_pg_size" { default = "s-2vcpu-4gb" }
-variable "do_redis_size" { default = "s-2vcpu-4gb" }
+variable "admin_arecord_aliases" { type = list }
+variable "db_arecord_aliases" { type = list }
+variable "leader_arecord_aliases" { type = list }
+
+variable "app_definitions" {
+    type = map(object({ pull=string, stable_version=string, use_stable=string,
+        repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
+        docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
+        green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string }))
+}
 
 variable "app_ips" { default = [] }
 variable "station_ips" { default = [] }
+
+variable "digitalocean_image_os" { default = "" }
+
+
+locals {
+    ## Loop through servers and change name if it does not contain admin
+    ## TODO: Better handling how the role based name is added to machine name
+
+    all_server_ids = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.id
+        if length(join(",", SERVER.tags)) > 0
+    ])
+
+    server_names = [
+        for app in var.servers:
+        element(app.roles, 0)
+    ]
+
+    lead_server_ips = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.ipv4_address
+        if length(regexall("lead", join(",", SERVER.tags))) > 0
+    ])
+
+    admin_server_ids = [
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.id
+        if length(regexall("admin", join(",", SERVER.tags))) > 0
+    ]
+
+    lead_server_ids = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.id
+        if length(regexall("lead", join(",", SERVER.tags))) > 0
+    ])
+
+    db_server_ids = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.id
+        if length(regexall("db", join(",", SERVER.tags))) > 0
+    ])
+}
 
 # ipv4_address
 terraform {

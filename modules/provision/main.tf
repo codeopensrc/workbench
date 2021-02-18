@@ -107,14 +107,14 @@ resource "null_resource" "consul_checks" {
         # TODO: Configurable user/pass per DB for a readonly user check
         content = templatefile("${path.module}/templatefiles/checks/consul_pg.json", {
             read_only_pw = var.pg_read_only_pw
-            ip_address = element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)
+            ip_address = element(var.db_private_ips, count.index)
         })
         destination = "/etc/consul.d/templates/pg.json"
     }
 
     provisioner "file" {
         content = templatefile("${path.module}/templatefiles/checks/consul_mongo.json", {
-            ip_address = element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)
+            ip_address = element(var.db_private_ips, count.index)
         })
         destination = "/etc/consul.d/templates/mongo.json"
     }

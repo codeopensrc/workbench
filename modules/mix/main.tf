@@ -250,6 +250,10 @@ resource "null_resource" "install_gitlab" {
     # gitlab-rails console
     # Feature.enable(:resource_access_token)
 
+    ###! Test sending email from gitlab
+    ###! sudo gitlab-rails console -e production
+    ###! Notify.test_email('youremail@example.com', 'Hello World', 'This is a test message').deliver_now
+
     provisioner "remote-exec" {
         inline = [
             <<-EOF
@@ -347,6 +351,9 @@ resource "null_resource" "gitlab_plugins" {
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
     ]
+
+    ###! TODO: Conditionally deal with plugins if the subdomains are present etc.
+    ###! ex: wekan not templated app atm or user does not want mattermost
 
     provisioner "remote-exec" {
         inline = [
@@ -490,6 +497,7 @@ resource "null_resource" "install_dbs" {
         module.hostname,
         module.cron,
         module.provision_files,
+        null_resource.install_gitlab,
     ]
 
     provisioner "remote-exec" {
@@ -501,7 +509,7 @@ resource "null_resource" "install_dbs" {
             (length(local.redis_dbs) > 0 ? "sudo service redis_6379 start;" : ""),
             (length(local.redis_dbs) > 0 ? "sudo systemctl enable redis_6379" : ""),
             (length(local.mongo_dbs) > 0
-                ? "bash /root/code/scripts/install/install_mongo.sh -v 4.2.7 -i ${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)};"
+                ? "bash /root/code/scripts/install/install_mongo.sh -v 4.2.7 -i ${element(var.db_private_ips, count.index)};"
                 : "echo 0;"),
             (length(local.pg_dbs) > 0
                 ? "bash /root/code/scripts/install/install_pg.sh -v 9.5;"
@@ -522,6 +530,7 @@ resource "null_resource" "import_dbs" {
         module.hostname,
         module.cron,
         module.provision_files,
+        null_resource.install_gitlab,
         null_resource.install_dbs
     ]
 
@@ -532,7 +541,7 @@ resource "null_resource" "import_dbs" {
             AWS_BUCKET_NAME=${var.dbs_to_import[count.index]["aws_bucket"]};
             AWS_BUCKET_REGION=${var.dbs_to_import[count.index]["aws_region"]};
             DB_NAME=${var.dbs_to_import[count.index]["dbname"]};
-            HOST=${element(var.active_env_provider == "aws" ? var.db_private_ips : var.db_public_ips, count.index)}
+            HOST=${element(var.db_private_ips, count.index)}
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
                 bash /root/code/scripts/db/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME -h $HOST;
@@ -574,6 +583,7 @@ resource "null_resource" "db_ready" {
         module.hostname,
         module.cron,
         module.provision_files,
+        null_resource.install_gitlab,
         null_resource.install_dbs,
         null_resource.import_dbs,
     ]

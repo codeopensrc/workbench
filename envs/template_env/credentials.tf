@@ -59,7 +59,7 @@ variable "gitlab_runner_tokens" {
 #         bucket = "aws_bucket_name"
 #         key    = "remote_states/template_env"
 #         region = "aws_bucket_region"
-#         access_key = "aws_access_key" ## (Optional)
-#         secret_key = "aws_secret_key" ## (Optional)
+#         access_key = "aws_access_key" ## (Optional) AWS access key.
+#         secret_key = "aws_secret_key" ## (Optional) AWS secret access key.
 #     }
 # }

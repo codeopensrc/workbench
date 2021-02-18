@@ -9,6 +9,7 @@
         "digitalocean_image_os": "",
         "digitalocean_region": "",
         "digitalocean_image_size": "",
+        "digitalocean_image_name": "",
         "consul_version": "",
         "docker_version": "",
         "docker_compose_version": "",
