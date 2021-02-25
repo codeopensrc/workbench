@@ -69,14 +69,14 @@ resource "aws_security_group" "app_ports" {
         description = "http"
         from_port   = 8085
         to_port     = 8085
-        cidr_blocks = ["10.1.0.0/16"]
+        cidr_blocks = [var.cidr_block]
         protocol    = "tcp"
     }
     ingress {
         description = "https"
         from_port   = 4433
         to_port     = 4433
-        cidr_blocks = ["10.1.0.0/16"]
+        cidr_blocks = [var.cidr_block]
         protocol    = "tcp"
     }
 
@@ -123,6 +123,14 @@ resource "aws_security_group" "app_ports" {
         from_port   = 2376
         to_port     = 2376
         cidr_blocks = ["${var.docker_machine_ip}/32"]
+        protocol    = "tcp"
+    }
+
+    ingress {
+        description = "btcpay"
+        from_port   = 6080
+        to_port     = 6080
+        cidr_blocks = [var.cidr_block]
         protocol    = "tcp"
     }
 

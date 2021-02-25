@@ -65,7 +65,7 @@ module "hostname" {
     server_name_prefix = var.server_name_prefix
     region = var.region
 
-    hostname = var.gitlab_server_url
+    hostname = "${var.gitlab_subdomain}.${var.root_domain_name}"
     servers = length(var.servers)
 
     names       = distinct(concat(var.admin_names, var.lead_names, var.db_names))
@@ -257,7 +257,7 @@ resource "null_resource" "install_gitlab" {
     provisioner "remote-exec" {
         inline = [
             <<-EOF
-                sed -i "s|myhostname = [0-9a-zA-Z.-]*|myhostname = ${var.gitlab_server_url}|" /etc/postfix/main.cf
+                sed -i "s|myhostname = [0-9a-zA-Z.-]*|myhostname = ${var.gitlab_subdomain}.${var.root_domain_name}|" /etc/postfix/main.cf
                 sudo service postfix restart
                 sudo systemctl start gitlab-runsvdir.service
                 sudo gitlab-ctl restart
@@ -265,7 +265,7 @@ resource "null_resource" "install_gitlab" {
                 sed -i "s|https://registry.example.com|https://registry.${var.root_domain_name}|" /etc/gitlab/gitlab.rb
                 sed -i "s|# registry_external_url|registry_external_url|" /etc/gitlab/gitlab.rb
                 sed -i "s|# letsencrypt\['enable'\] = nil|letsencrypt\['enable'\] = true|" /etc/gitlab/gitlab.rb
-                sed -i "s|# letsencrypt\['contact_emails'\] = \[\]|letsencrypt\['contact_emails'\] = \['${var.chef_email}'\]|" /etc/gitlab/gitlab.rb
+                sed -i "s|# letsencrypt\['contact_emails'\] = \[\]|letsencrypt\['contact_emails'\] = \['${var.contact_email}'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|# letsencrypt\['auto_renew'\]|letsencrypt\['auto_renew'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|# letsencrypt\['auto_renew_hour'\]|letsencrypt\['auto_renew_hour'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|# letsencrypt\['auto_renew_minute'\] = nil|letsencrypt\['auto_renew_minute'\] = 30|" /etc/gitlab/gitlab.rb
@@ -353,7 +353,7 @@ resource "null_resource" "gitlab_plugins" {
     ]
 
     ###! TODO: Conditionally deal with plugins if the subdomains are present etc.
-    ###! ex: wekan not templated app atm or user does not want mattermost
+    ###! ex: User does not want mattermost or wekan
 
     provisioner "remote-exec" {
         inline = [
@@ -883,7 +883,7 @@ resource "null_resource" "setup_letsencrypt" {
         content = templatefile("${path.module}/../letsencrypt/letsencrypt_vars.tmpl", {
             app_definitions = var.app_definitions,
             fqdn = var.root_domain_name,
-            email = var.chef_email,
+            email = var.contact_email,
             dry_run = false
         })
         destination = "/root/code/scripts/letsencrypt_vars.sh"

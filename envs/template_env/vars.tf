@@ -1,11 +1,17 @@
+########## Digital Ocean ##########
+variable "do_region" { default = "nyc3" }
+
+########## AWS ##########
+variable "aws_region_alias" { default = "awseast" }
+variable "aws_region" { default = "us-east-2" }
+variable "aws_ecr_region" { default = "us-east-2" }
+
 ########## PROVIDER CREDENTIALS ##########
 ##########################################
 provider "digitalocean" {
     token = var.do_token
 }
 
-variable "aws_region" { default = "us-east-2" }
-variable "aws_ecr_region" { default = "us-east-2" }
 provider "aws" {
     region = var.aws_region
 
@@ -53,13 +59,8 @@ variable "packer_config" {
 
 # TODO: Azure and Google Cloud providers
 # Options will be digital_ocean, aws, azure, google_cloud etc.
-
-#### DISCLAIMER: THIS DOES NOT CREATE A FIREWALL ON DIGITAL OCEAN AT THIS TIME
-#### Switched AWS module over to aws_security groups while a digital ocean/UFW implementation has
-####   not yet been re-implemented
-#### Also does not have a packer builder to build a digital ocean image at this time (simple just not done atm).
-#### For now this now only supports "aws" until a builder created for digital ocean in a_root/mix/modules/packer/packer.json
-variable "active_env_provider" { default = "aws" }
+# NOTE: Still uses aws route53 & s3 atm
+variable "active_env_provider" { default = "digital_ocean" } # "digital_ocean" or "aws"
 
 # Currently supports 1 server with all 3 roles or 3 servers each with a single role
 # Supports admin+lead+db and 1 server as lead as well
@@ -71,66 +72,57 @@ variable "active_env_provider" { default = "aws" }
 variable "downsize" { default = false }
 
 variable "servers" {
-    ### NOTE: Do not add or remove roles from instances after they are launched for now
-    ###  as each instance's roles are tagged at boot and updating tags will cause unpredictable issues at this time
+    ### NOTE: Do not add or remove roles from instances after they are launched
     default = [
         {
             "count" = 1
             "image" = ""
             "roles" = ["admin", "lead", "db"]
             # "roles" = ["admin"]
-            "aws_volume_size" = 80
-            "size" = "t3a.large"   ### "t3.large" "t3a.small"   "t3a.micro"
-            "region" = "us-east-2"
-            # "size" = "s-4vcpu-8gb" ### "s-2vcpu-4gb"
-            # "region" = "nyc3"
+            "size" = {
+                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][3]
+                "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][1]
+            }
+            "aws_volume_size" = 60
         },
         # {
         #     "count" = 1
         #     "image" = ""
         #     "roles" = ["lead"]
-        #     "aws_volume_size" = 50
-        #     "size" = "t3a.small"  ### "t3.large" "t3a.small"   "t3a.micro"
-        #     "region" = "us-east-2"
-        #     # "size" = "s-2vcpu-4gb"
-        #     # "region" = "nyc3"
+        #     "size" = {
+        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][1]
+        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #     }
+        #     "aws_volume_size" = 40
         # },
         # {
         #     "count" = 1
         #     "image" = ""
         #     "roles" = ["db"]
-        #     "aws_volume_size" = 50
-        #     "size" = "t3a.micro"  ### "t3.large" "t3a.small"   "t3a.micro"
-        #     "region" = "us-east-2"
-        #     # "size" = "s-2vcpu-4gb"
-        #     # "region" = "nyc3"
+        #     "size" = {
+        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][1]
+        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #     }
+        #     "aws_volume_size" = 40
         # },
     ]
 }
-
-########## Digital Ocean ##########
-variable "do_region" { default = "nyc1" }
-
-
-########## AWS ##########
-variable "aws_region_alias" { default = "awseast" }
-
 
 ############ DNS ############
 #############################
 # Used for gitlab oauth plugins
 variable "mattermost_subdomain" { default = "chat" }
-variable "wekan_subdomain" { default = "" }
+variable "wekan_subdomain" { default = "wekan" }
 
 # A record
 variable "admin_arecord_aliases" {
     default = [
         "cert",
-        "chef",
         "consul",
         "gitlab",
         "registry",
         "chat",
+        "btcpay"
     ]
 }
 

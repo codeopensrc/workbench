@@ -51,8 +51,9 @@ variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
-        green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string,
-        backup=string, backupfile=string
+        green_service=string, blue_service=string, default_active=string,
+        create_dns_record=string, create_dev_dns=string, create_ssl_cert=string, subdomain_name=string,
+        backup=string, backupfile=string, custom_init=string, custom_vars=string
     }))
 }
 variable "misc_repos" {
@@ -63,8 +64,8 @@ variable "misc_repos" {
     }))
 }
 
-variable "gitlab_server_url" { default = "" }
-variable "chef_email" { default = "" }
+variable "gitlab_subdomain" { default = "" }
+variable "contact_email" { default = "" }
 
 
 variable "admin_private_ips" { type = list(string) }

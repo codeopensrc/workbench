@@ -14,8 +14,13 @@ data "aws_route53_zone" "default" {
 locals {
     cname_aliases = [
         for app in var.app_definitions:
-        [app.subdomain_name, format("${app.subdomain_name}.db"), format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
-        if app.create_subdomain == "true"
+        [app.subdomain_name, format("${app.subdomain_name}.db")]
+        if app.create_dns_record == "true"
+    ]
+    cname_dev_aliases = [
+        for app in var.app_definitions:
+        [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
+        if app.create_dev_dns == "true"
     ]
 }
 
@@ -55,6 +60,16 @@ resource "aws_route53_record" "default_stun_a" {
 resource "aws_route53_record" "default_cname" {
     count           = var.active_env_provider == "digital_ocean" && var.dns_provider == "aws_route53" ? length(compact(flatten(local.cname_aliases))) : 0
     name            = compact(flatten(local.cname_aliases))[count.index]
+    zone_id         = data.aws_route53_zone.default.zone_id
+    allow_overwrite = true
+    type            = "CNAME"
+    ttl             = "300"
+    records = [ var.root_domain_name ]
+}
+
+resource "aws_route53_record" "default_cname_dev" {
+    count           = var.active_env_provider == "digital_ocean" && var.dns_provider == "aws_route53" ? length(compact(flatten(local.cname_dev_aliases))) : 0
+    name            = compact(flatten(local.cname_dev_aliases))[count.index]
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
     type            = "CNAME"

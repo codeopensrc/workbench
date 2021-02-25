@@ -14,7 +14,7 @@ LETSENCRYPT_DIR=/etc/letsencrypt/live/$DOMAIN
 
 if [[ ! -d $LETSENCRYPT_DIR ]] || [[ $RUN_FROM_CRON ]]; then
 
-    docker run --name nginx \
+    docker run --name le_nginx \
         -v $WEBROOT:/usr/share/nginx/html:ro \
         -p 7080:80 \
         --rm \
@@ -22,7 +22,7 @@ if [[ ! -d $LETSENCRYPT_DIR ]] || [[ $RUN_FROM_CRON ]]; then
 
     "${RENEW[@]}"
 
-    docker stop nginx
+    docker stop le_nginx
 fi
 
 

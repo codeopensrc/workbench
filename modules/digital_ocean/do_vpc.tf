@@ -124,6 +124,12 @@ resource "digitalocean_firewall" "app" {
         source_addresses = ["${var.docker_machine_ip}/32"]
     }
 
+    # "btcpay"
+    inbound_rule {
+        protocol    = "tcp"
+        port_range   = 6080
+        source_addresses = [var.cidr_block]
+    }
 
     # STUN
     dynamic "inbound_rule" {

@@ -4,7 +4,7 @@ resource "digitalocean_droplet" "main" {
     name     = "${var.server_name_prefix}-${var.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
     image    = var.servers[count.index].image == "" ? var.packer_image_id : var.servers[count.index].image
     region   = var.region
-    size     = var.servers[count.index].size
+    size     = var.servers[count.index].size["digital_ocean"]
     ssh_keys = [var.do_ssh_fingerprint]
     tags = flatten([
         "${var.server_name_prefix}-${var.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}",

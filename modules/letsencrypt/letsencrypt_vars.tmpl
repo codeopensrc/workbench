@@ -7,10 +7,15 @@ DRY_RUN=${dry_run}
 RENEW=(sudo certbot certonly --webroot --expand --non-interactive --agree-tos --email ${email} -w $WEBROOT -d $DOMAIN)
 
 %{ for APP in app_definitions }
-CREATE_SUBDOMAIN=${APP["create_subdomain"]};
-if [ "$CREATE_SUBDOMAIN" = "true" ]; then
+CREATE_SSL=${APP["create_ssl_cert"]};
+CREATE_DEV=${APP["create_dev_dns"]};
+
+if [ "$CREATE_SSL" = "true" ]; then
     RENEW+=(-d ${APP["subdomain_name"]}.${fqdn})
-    RENEW+=(-d ${APP["subdomain_name"]}.dev.${fqdn})
+
+    if [ "$CREATE_DEV" = "true" ]; then
+        RENEW+=(-d ${APP["subdomain_name"]}.dev.${fqdn})
+    fi
 fi
 %{ endfor }
 

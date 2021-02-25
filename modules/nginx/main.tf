@@ -16,7 +16,9 @@ variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
-        green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string }))
+        green_service=string, blue_service=string, default_active=string,
+        create_dns_record=string, create_dev_dns=string, create_ssl_cert=string, subdomain_name=string
+    }))
 }
 
 variable "prev_module_output" {}
@@ -89,19 +91,21 @@ resource "null_resource" "proxy_config" {
             subdomains = [
                 for HOST in var.app_definitions:
                 format("%s.%s", HOST.subdomain_name, var.root_domain_name)
-                if HOST.create_subdomain == "true"
+                if HOST.create_dns_record == "true" && HOST.create_ssl_cert == "true"
             ]
         })
         destination = "/etc/nginx/conf.d/proxy.conf"
     }
 
-    # provisioner "file" {
-    #     content = templatefile("${path.module}/templatefiles/btcpay.tmpl", {
-    #         root_domain_name = var.root_domain_name
-    #         cert_port = var.cert_port
-    #     })
-    #     destination = "/etc/nginx/conf.d/btcpay.conf"
-    # }
+    # TODO: better solution to custom nginx conf files
+    provisioner "file" {
+        content = templatefile("${path.module}/templatefiles/btcpay.tmpl", {
+            root_domain_name = var.root_domain_name
+            proxy_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
+            cert_port = var.cert_port
+        })
+        destination = "/etc/nginx/conf.d/btcpay.conf"
+    }
 
     provisioner "remote-exec" {
         ## TODO: Because of this convenience for config on app change, it has to be run after gitlab is installed

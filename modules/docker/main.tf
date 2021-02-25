@@ -15,7 +15,9 @@ variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
-        green_service=string, blue_service=string, default_active=string, create_subdomain=string, subdomain_name=string }))
+        green_service=string, blue_service=string, default_active=string, subdomain_name=string
+        custom_init=string, custom_vars=string
+    }))
 }
 
 variable "prev_module_output" {}
@@ -35,8 +37,7 @@ resource "null_resource" "pull_images" {
         # TODO: Need to use correct Docker Registry credentials per Docker Image to log in to that registry
         # TODO: make sure we're also using the correct login region
 
-        # TODO: Make sure images/gitlab are there before doing this stage.
-        # Since deprecating chef we get to this stage far before gitlab is installed and restored
+        # TODO: Seperate out docker credentials from git credentials. docker pull vs git clone
         inline = [
             <<-EOF
                 echo ${join(",", var.prev_module_output)}
@@ -71,7 +72,7 @@ resource "null_resource" "pull_images" {
                         fi
 
                         git clone $REPO_URL /root/repos/$REPO_NAME
-                        docker pull $DOCKER_IMAGE:latest;
+                        [ -n "$DOCKER_IMAGE" ] && docker pull $DOCKER_IMAGE:latest
                         (cd /root/repos/$REPO_NAME && git checkout master);
 
                         if [ -n "$STABLE_VER" ]; then
@@ -139,6 +140,8 @@ resource "null_resource" "start_containers" {
                         CLEAN_SERVICE_NAME=$(echo $GREEN_SERVICE | grep -Eo "[a-z_]+");
                         REPO_NAME=${APP["repo_name"]};
                         SERVICE_NAME=${APP["service_name"]};
+                        CUSTOM_INIT=${APP["custom_init"]}
+                        CUSTOM_VARS="${APP["custom_vars"]}"
 
                         if [ "$REPO_NAME" = "wekan" ]; then
                             # TODO: Start using gitlab healthchecks instead of waiting
@@ -170,7 +173,14 @@ resource "null_resource" "start_containers" {
                         fi
 
                         APP_UP=$(docker service ps $CLEAN_SERVICE_NAME);
-                        [ -z "$APP_UP" ] && (cd /root/repos/$REPO_NAME && docker stack deploy --compose-file docker-compose.yml $SERVICE_NAME --with-registry-auth)
+                        if [ -z "$APP_UP" ] && [ "$SERVICE_NAME" != "custom" ]; then
+                            (cd /root/repos/$REPO_NAME && docker stack deploy --compose-file docker-compose.yml $SERVICE_NAME --with-registry-auth)
+                        fi
+
+                        if [ "$SERVICE_NAME" = "custom" ]; then
+                            (cd /root/repos/$REPO_NAME && echo "$CUSTOM_VARS" >> .env && bash "$CUSTOM_INIT")
+                        fi
+
 
                     %{ endfor }
 

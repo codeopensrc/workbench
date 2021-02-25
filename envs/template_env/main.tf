@@ -161,8 +161,8 @@ module "mix" {
     app_definitions = var.app_definitions
     misc_repos = var.misc_repos
 
-    gitlab_server_url = var.gitlab_server_url
-    chef_email      = var.chef_email
+    gitlab_subdomain = var.gitlab_subdomain
+    contact_email      = var.contact_email
 
     root_domain_name = var.root_domain_name
 

@@ -4,7 +4,7 @@ resource "aws_instance" "main" {
     depends_on = [aws_internet_gateway.igw]
     key_name = var.aws_key_name
     ami = var.servers[count.index].image == "" ? var.packer_image_id : var.servers[count.index].image
-    instance_type = var.servers[count.index].size
+    instance_type = var.servers[count.index].size["aws"]
 
     tags = {
         Name = "${var.server_name_prefix}-${var.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
