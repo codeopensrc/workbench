@@ -110,7 +110,6 @@ module "cron" {
 
     # DB specific
     num_dbs = length(var.dbs_to_import)
-    db_backups_enabled = var.db_backups_enabled
     redis_dbs = length(local.redis_dbs) > 0 ? local.redis_dbs : []
     mongo_dbs = length(local.mongo_dbs) > 0 ? local.mongo_dbs : []
     pg_dbs = length(local.pg_dbs) > 0 ? local.pg_dbs : []
@@ -646,134 +645,6 @@ module "docker" {
 }
 
 
-resource "null_resource" "install_runner" {
-    count = local.num_lead_servers
-    depends_on = [ module.docker ]
-
-    provisioner "file" {
-        content = <<-EOF
-
-            HAS_SERVICE_REPO=${ contains(keys(var.misc_repos), "service") }
-
-            curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
-            apt-cache madison gitlab-runner
-            sudo apt-get install gitlab-runner jq -y
-            sudo usermod -aG docker gitlab-runner
-
-            if [ "$HAS_SERVICE_REPO" = "true" ]; then
-                SERVICE_REPO_URL=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_url" ) : "" }
-                SERVICE_REPO_NAME=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : "" }
-                SERVICE_REPO_VER=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "stable_version" ) : "" }
-                DOCKER_IMAGE=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_registry_image" ) : "" }
-
-                git clone $SERVICE_REPO_URL /home/gitlab-runner/$SERVICE_REPO_NAME
-                ###! We should already be authed for this, kinda lazy/hacky atm. TODO: Turn this block into resource to run after install_runner
-                docker pull $DOCKER_IMAGE:$SERVICE_REPO_VER
-            fi
-
-            mkdir -p /home/gitlab-runner/.aws
-            touch /home/gitlab-runner/.aws/credentials
-            chown -R gitlab-runner:gitlab-runner /home/gitlab-runner
-        EOF
-        # chmod 0775 -R /home/gitlab-runner/$SERVICE_REPO_NAME
-        destination = "/tmp/install_runner.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/install_runner.sh",
-            "/tmp/install_runner.sh",
-            "rm /tmp/install_runner.sh",
-        ]
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-            [default]
-            aws_access_key_id = ${var.aws_bot_access_key}
-            aws_secret_access_key = ${var.aws_bot_secret_key}
-        EOF
-        destination = "/home/gitlab-runner/.aws/credentials"
-    }
-
-    connection {
-        # TODO: Handling runners on multiple "leader" or "build" servers
-        host = element(var.lead_public_ips, 0)
-        type = "ssh"
-    }
-}
-
-##### NOTE: After obtaining the token we register the runner from the page
-# TODO: Figure out a way to retrieve the token programmatically
-
-# For a fresh project
-# https://docs.gitlab.com/ee/api/projects.html#create-project
-# For now this is overkill but we need to create the project, get its id, retrieve a private token
-#   with api scope, make a curl request to get the project level runners_token and use that
-# Programatically creating the project is a little tedious but honestly not a bad idea
-#  considering we can then just push the code and images up if we didnt/dont have a backup
-
-resource "null_resource" "register_runner" {
-    # We can use count to actually say how many runners we want
-    # Have a trigger set to update/destroy based on id etc
-    # /etc/gitlab-runner/config.toml   set concurrent to number of runners
-    # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
-    count = var.num_gitlab_runners
-    depends_on = [null_resource.install_runner]
-
-    # TODO: 1 or 2 prod runners with rest non-prod
-    # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
-    provisioner "remote-exec" {
-        inline = [
-            <<-EOF
-
-                REGISTRATION_TOKEN=${var.gitlab_runner_tokens["service"]}
-                echo $REGISTRATION_TOKEN
-
-
-                if [ -z "$REGISTRATION_TOKEN" ]; then
-                    echo "Obtain token and populate `service` key for `gitlab_runner_tokens` var in credentials.tf"
-                    exit 1;
-                fi
-
-                sleep $((3 + $((${count.index} * 5)) ))
-
-                sed -i "s|concurrent = 1|concurrent = 5|" /etc/gitlab-runner/config.toml
-
-                sudo gitlab-runner register -n \
-                  --url "https://gitlab.${var.root_domain_name}" \
-                  --registration-token "$REGISTRATION_TOKEN" \
-                  --executor shell \
-                  --run-untagged="true" \
-                  --locked="false" \
-                  --description "Shell Runner"
-
-                  sleep $((2 + $((${count.index} * 5)) ))
-
-                  # https://gitlab.com/gitlab-org/gitlab-runner/issues/1316
-                  gitlab-runner verify --delete
-            EOF
-        ]
-        # sudo gitlab-runner register \
-        #     --non-interactive \
-        #     --url "https://gitlab.${var.root_domain_name}" \
-        #     --registration-token "${REGISTRATION_TOKEN}" \
-        #     --description "docker-runner" \
-        #     --tag-list "docker" \
-        #     --run-untagged="true" \
-        #     --locked="false" \
-        #     --executor "docker" \
-        #     --docker-image "docker:19.03.1" \
-        #     --docker-privileged \
-        #     --docker-volumes "/certs/client"
-    }
-    connection {
-        host = element(var.lead_public_ips, 0)
-        type = "ssh"
-    }
-}
-
-
 resource "null_resource" "docker_ready" {
     count = local.admin_servers[0]
     depends_on = [
@@ -781,6 +652,7 @@ resource "null_resource" "docker_ready" {
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         module.admin_nginx,
+        module.docker
     ]
 
     provisioner "file" {
@@ -831,7 +703,8 @@ resource "null_resource" "setup_letsencrypt" {
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         module.admin_nginx,
-        null_resource.docker_ready,
+        module.docker,
+        null_resource.docker_ready
     ]
 
     triggers = {
@@ -918,13 +791,7 @@ resource "null_resource" "setup_letsencrypt" {
 # Restart service, re-fetching ssl keys
 resource "null_resource" "add_keys" {
     count = local.num_lead_servers > 0 ? 1 : 0
-    depends_on = [
-        null_resource.add_proxy_hosts,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-        null_resource.docker_ready,
-        null_resource.setup_letsencrypt
-    ]
+    depends_on = [ null_resource.setup_letsencrypt ]
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -969,6 +836,133 @@ resource "null_resource" "add_keys" {
         ]
     }
 
+    connection {
+        host = element(var.lead_public_ips, 0)
+        type = "ssh"
+    }
+}
+
+resource "null_resource" "install_runner" {
+    count = local.num_lead_servers
+    depends_on = [ null_resource.add_keys ]
+
+    provisioner "file" {
+        content = <<-EOF
+
+            HAS_SERVICE_REPO=${ contains(keys(var.misc_repos), "service") }
+
+            curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+            apt-cache madison gitlab-runner
+            sudo apt-get install gitlab-runner jq -y
+            sudo usermod -aG docker gitlab-runner
+
+            if [ "$HAS_SERVICE_REPO" = "true" ]; then
+                SERVICE_REPO_URL=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_url" ) : "" }
+                SERVICE_REPO_NAME=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : "" }
+                SERVICE_REPO_VER=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "stable_version" ) : "" }
+                DOCKER_IMAGE=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_registry_image" ) : "" }
+
+                git clone $SERVICE_REPO_URL /home/gitlab-runner/$SERVICE_REPO_NAME
+                ###! We should already be authed for this, kinda lazy/hacky atm. TODO: Turn this block into resource to run after install_runner
+                docker pull $DOCKER_IMAGE:$SERVICE_REPO_VER
+            fi
+
+            mkdir -p /home/gitlab-runner/.aws
+            touch /home/gitlab-runner/.aws/credentials
+            chown -R gitlab-runner:gitlab-runner /home/gitlab-runner
+        EOF
+        # chmod 0775 -R /home/gitlab-runner/$SERVICE_REPO_NAME
+        destination = "/tmp/install_runner.sh"
+    }
+
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/install_runner.sh",
+            "/tmp/install_runner.sh",
+            "rm /tmp/install_runner.sh",
+        ]
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+            [default]
+            aws_access_key_id = ${var.aws_bot_access_key}
+            aws_secret_access_key = ${var.aws_bot_secret_key}
+        EOF
+        destination = "/home/gitlab-runner/.aws/credentials"
+    }
+
+    connection {
+        # TODO: Handling runners on multiple "leader" or "build" servers
+        host = element(var.lead_public_ips, 0)
+        type = "ssh"
+    }
+}
+
+##### NOTE: After obtaining the token we register the runner from the page
+# TODO: Figure out a way to retrieve the token programmatically
+
+# For a fresh project
+# https://docs.gitlab.com/ee/api/projects.html#create-project
+# For now this is overkill but we need to create the project, get its id, retrieve a private token
+#   with api scope, make a curl request to get the project level runners_token and use that
+# Programatically creating the project is a little tedious but honestly not a bad idea
+#  considering we can then just push the code and images up if we didnt/dont have a backup
+
+resource "null_resource" "register_runner" {
+    # We can use count to actually say how many runners we want
+    # Have a trigger set to update/destroy based on id etc
+    # /etc/gitlab-runner/config.toml   set concurrent to number of runners
+    # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
+    count = var.num_gitlab_runners
+    depends_on = [ null_resource.install_runner ]
+
+    # TODO: 1 or 2 prod runners with rest non-prod
+    # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
+    provisioner "remote-exec" {
+        inline = [
+            <<-EOF
+
+                REGISTRATION_TOKEN=${var.gitlab_runner_tokens["service"]}
+                echo $REGISTRATION_TOKEN
+
+
+                if [ -z "$REGISTRATION_TOKEN" ]; then
+                    echo "Obtain token and populate `service` key for `gitlab_runner_tokens` var in credentials.tf"
+                    exit 1;
+                fi
+
+                sleep $((3 + $((${count.index} * 5)) ))
+
+                sed -i "s|concurrent = 1|concurrent = 5|" /etc/gitlab-runner/config.toml
+
+                sudo gitlab-runner register -n \
+                  --url "https://gitlab.${var.root_domain_name}" \
+                  --registration-token "$REGISTRATION_TOKEN" \
+                  --executor shell \
+                  --run-untagged="true" \
+                  --locked="false" \
+                  --description "Shell Runner"
+
+                  sleep $((2 + $((${count.index} * 5)) ))
+
+                  # https://gitlab.com/gitlab-org/gitlab-runner/issues/1316
+                  gitlab-runner verify --delete
+            EOF
+        ]
+        # sudo gitlab-runner register \
+        #     --non-interactive \
+        #     --url "https://gitlab.${var.root_domain_name}" \
+        #     --registration-token "${REGISTRATION_TOKEN}" \
+        #     --description "docker-runner" \
+        #     --tag-list "docker" \
+        #     --run-untagged="true" \
+        #     --locked="false" \
+        #     --executor "docker" \
+        #     --docker-image "docker:19.03.1" \
+        #     --docker-privileged \
+        #     --docker-volumes "/certs/client"
+    }
     connection {
         host = element(var.lead_public_ips, 0)
         type = "ssh"

@@ -1,5 +1,4 @@
 
-variable "cidr_block" { default = "10.1.0.0/16" }
 locals {
     vpc_name = "${var.server_name_prefix}_vpc"
 }

@@ -18,7 +18,6 @@ variable "servers" { default = [] }
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
 
-variable "db_backups_enabled" {}
 variable "run_service_enabled" {}
 variable "send_logs_enabled" {}
 variable "send_jsons_enabled" {}
@@ -26,7 +25,7 @@ variable "import_dbs" {}
 
 variable "dbs_to_import" {
     type = list(object({ type=string, aws_bucket=string, aws_region=string,
-        dbname=string, import=string, fn=string }))
+        dbname=string, import=string, backups_enabled=string, fn=string }))
 }
 
 variable "serverkey" {}
@@ -53,7 +52,8 @@ variable "app_definitions" {
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
         green_service=string, blue_service=string, default_active=string,
         create_dns_record=string, create_dev_dns=string, create_ssl_cert=string, subdomain_name=string,
-        backup=string, backupfile=string, custom_init=string, custom_vars=string
+        use_custom_backup=string, custom_backup_file=string, backup_frequency=string,
+        use_custom_restore=string, custom_restore_file=string, custom_init=string, custom_vars=string
     }))
 }
 variable "misc_repos" {
@@ -124,23 +124,23 @@ locals {
 
     redis_dbs = [
         for db in var.dbs_to_import:
-        db.dbname
-        if db.type == "redis" && db.import == "true"
+        {name = db.dbname, backups_enabled = db.backups_enabled}
+        if db.type == "redis" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
     pg_dbs = [
         for db in var.dbs_to_import:
-        db.dbname
-        if db.type == "pg" && db.import == "true"
+        {name = db.dbname, backups_enabled = db.backups_enabled}
+        if db.type == "pg" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
     mongo_dbs = [
         for db in var.dbs_to_import:
-        db.dbname
-        if db.type == "mongo" && db.import == "true"
+        {name = db.dbname, backups_enabled = db.backups_enabled}
+        if db.type == "mongo" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
     pg_fn = {
         for db in var.dbs_to_import:
         db.type => db.fn
-        if db.type == "pg" && db.import == "true"
+        if db.type == "pg" && ( db.import == "true" || db.backups_enabled == "true" )
     }
 
     docker_service_name   = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_service_name" ) : ""

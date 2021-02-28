@@ -1,5 +1,4 @@
 
-variable "cidr_block" { default = "10.1.0.0/16" }
 locals {
     vpc_name = "${var.server_name_prefix}-vpc"
 }
@@ -69,14 +68,14 @@ resource "digitalocean_firewall" "app" {
     inbound_rule {
         protocol    = "tcp"
         port_range   = 8085
-        source_addresses = ["10.1.0.0/16"]
+        source_addresses = [var.cidr_block]
     }
 
     # "https"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 4433
-        source_addresses = ["10.1.0.0/16"]
+        source_addresses = [var.cidr_block]
     }
 
     # App/Api

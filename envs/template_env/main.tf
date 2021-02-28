@@ -67,6 +67,7 @@ module "digital_ocean" {
     leader_arecord_aliases = var.leader_arecord_aliases
     app_definitions = var.app_definitions
 
+    cidr_block = var.cidr_block
     app_ips = var.app_ips
     station_ips = var.station_ips
 
@@ -96,6 +97,7 @@ module "aws" {
     leader_arecord_aliases = var.leader_arecord_aliases
     app_definitions = var.app_definitions
 
+    cidr_block = var.cidr_block
     app_ips = var.app_ips
     station_ips = var.station_ips
 
@@ -133,7 +135,6 @@ module "mix" {
     mattermost_subdomain = var.mattermost_subdomain
     wekan_subdomain = var.wekan_subdomain
 
-    db_backups_enabled  = var.db_backups_enabled
     run_service_enabled = var.run_service_enabled
     send_logs_enabled   = var.send_logs_enabled
     send_jsons_enabled  = var.send_jsons_enabled

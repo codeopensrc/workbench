@@ -22,7 +22,6 @@ variable "redis_dbs" { default = [] }
 variable "mongo_dbs" { default = [] }
 variable "pg_dbs" { default = [] }
 variable "pg_fn" { default = "" }
-variable "db_backups_enabled" { default = false }
 
 #Leader
 variable "run_service" { default = false }
@@ -33,7 +32,7 @@ variable "app_definitions" {
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
         green_service=string, blue_service=string, default_active=string, subdomain_name=string,
-        backup=string, backupfile=string
+        use_custom_backup=string, custom_backup_file=string, backup_frequency=string
     }))
 }
 # TempLeader
@@ -95,7 +94,6 @@ resource "null_resource" "db" {
         content = fileexists("${path.module}/templates/${var.templates["redisdb"]}") ? templatefile("${path.module}/templates/${var.templates["redisdb"]}", {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
-            db_backups_enabled = var.db_backups_enabled
             redis_dbs = length(var.redis_dbs) > 0 ? var.redis_dbs : []
         }) : ""
         destination = var.destinations["redisdb"]
@@ -106,7 +104,6 @@ resource "null_resource" "db" {
         content = fileexists("${path.module}/templates/${var.templates["mongodb"]}") ? templatefile("${path.module}/templates/${var.templates["mongodb"]}", {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
-            db_backups_enabled = var.db_backups_enabled
             mongo_dbs = length(var.mongo_dbs) > 0 ? var.mongo_dbs : []
             host = "vpc.my_private_ip"  # TODO: Add ability to specific host/hostnames/ip
         }) : ""
@@ -118,7 +115,6 @@ resource "null_resource" "db" {
         content = fileexists("${path.module}/templates/${var.templates["pgdb"]}") ? templatefile("${path.module}/templates/${var.templates["pgdb"]}", {
             aws_bucket_region = var.aws_bucket_region
             aws_bucket_name = var.aws_bucket_name
-            db_backups_enabled = var.db_backups_enabled
             pg_dbs = length(var.pg_dbs) > 0 ? var.pg_dbs : []
             pg_fn = length(var.pg_fn) > 0 ? var.pg_fn : "" # TODO: hack
         }) : ""
@@ -168,8 +164,9 @@ resource "null_resource" "leader" {
         content = fileexists("${path.module}/templates/${var.templates["app"]}") ? templatefile("${path.module}/templates/${var.templates["app"]}", {
             app_definitions = [
                 for APP in var.app_definitions:
-                {backupfile = APP.backupfile, repo_name = APP.repo_name}
-                if APP.backup == "true"
+                {   custom_backup_file = APP.custom_backup_file, repo_name = APP.repo_name,
+                    backup_frequency = APP.backup_frequency, use_custom_backup = APP.use_custom_backup   }
+                if APP.custom_backup_file != ""
             ]
             aws_bucket_name = var.aws_bucket_name
             aws_bucket_region = var.aws_bucket_region

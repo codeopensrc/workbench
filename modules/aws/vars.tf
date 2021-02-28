@@ -30,6 +30,7 @@ variable "app_definitions" {
     }))
 }
 
+variable "cidr_block" {}
 variable "app_ips" { default = [] }
 variable "station_ips" { default = [] }
 

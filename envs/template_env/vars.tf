@@ -23,6 +23,7 @@ provider "aws" {
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
 variable "stun_port" { default = "" }
+variable "cidr_block" { default = "10.1.0.0/16" }
 
 variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }
@@ -32,7 +33,6 @@ variable "gitlab_backups_enabled" { default = false }
 variable "run_service_enabled" { default = false }
 variable "send_logs_enabled" { default = false }
 variable "send_jsons_enabled" { default = false }
-variable "db_backups_enabled" { default = false }
 
 variable "dns_provider" { default = "aws_route53" }
 

@@ -38,7 +38,7 @@ variable "import_dbs" { default = true }
 
 variable "dbs_to_import" {
     type = list(object({ type=string, aws_bucket=string, aws_region=string,
-        dbname=string, import=string, fn=string }))  # TODO: "fn" hack
+        dbname=string, import=string, backups_enabled=string, fn=string }))  # TODO: "fn" hack
     default = [
         {
             "type" = "mongo"
@@ -46,6 +46,7 @@ variable "dbs_to_import" {
             "aws_region" = "us-east-2"
             "dbname" = "wekan"
             "import" = "false"
+            "backups_enabled" = "false"
             "fn" = ""
         }
     ]
@@ -58,15 +59,14 @@ variable "dbs_to_import" {
 # TODO: Digital Ocean, Azure, and Google Cloud docker registry options
 # Initial Options: docker_hub, aws_ecr
 # Aditional Options will be: digital_ocean_registry, azure, google_cloud
-# TODO: Change "backup" to "use_backup_file" or make more granular per app instead
-#    of global "db_backups_enabled"
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
         docker_registry_url=string, docker_registry_user=string, docker_registry_pw=string, service_name=string,
         green_service=string, blue_service=string, default_active=string,
         create_dns_record=string, create_dev_dns=string, create_ssl_cert=string, subdomain_name=string,
-        backup=string, backupfile=string, custom_init=string, custom_vars=string
+        use_custom_backup=string, custom_backup_file=string, backup_frequency=string,
+        use_custom_restore=string, custom_restore_file=string, custom_init=string, custom_vars=string
     }))
 
     default = {
@@ -89,8 +89,11 @@ variable "app_definitions" {
         #     "create_dev_dns"        = "true"    ## Affects dns and letsencrypt
         #     "create_ssl_cert"       = "true"    ## Affects dns and letsencrypt
         #     "subdomain_name"        = "www"     ## Affects dns and letsencrypt
-        #     "backup"                = "false"
-        #     "backupfile"            = ""
+        #     "use_custom_backup"     = "false"
+        #     "custom_backup_file"    = ""
+        #     "backup_frequency"      = ""
+        #     "use_custom_restore"    = "false"
+        #     "custom_restore_file"   = ""
         #     "custom_init"           = ""
         #     "custom_vars"           = ""# <<-EOF EOF
         # }
@@ -113,38 +116,44 @@ variable "app_definitions" {
         #     "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
         #     "create_ssl_cert"       = "false"    ## Affects dns and letsencrypt
         #     "subdomain_name"        = "stun"     ## Affects dns and letsencrypt
-        #     "backup"                = "false"
-        #     "backupfile"            = ""
+        #     "use_custom_backup"     = "false"
+        #     "custom_backup_file"    = ""
+        #     "backup_frequency"      = ""
+        #     "use_custom_restore"    = "false"
+        #     "custom_restore_file"   = ""
         #     "custom_init"           = ""
         #     "custom_vars"           = ""# <<-EOF EOF
         # }
-        # btcpay = {
-        #     "pull"                  = "true"
-        #     "stable_version"        = ""
-        #     "use_stable"            = "false"
-        #     "repo_url"              = "https://gitlab.codeopensrc.com/os/btcpay.git"
-        #     "repo_name"             = "btcpay"
-        #     "docker_registry"       = ""
-        #     "docker_registry_image" = ""
-        #     "docker_registry_url"   = ""
-        #     "docker_registry_user"  = ""
-        #     "docker_registry_pw"    = ""
-        #     "service_name"          = "custom"          ## Docker/Consul service name
-        #     "green_service"         = "btcpay_main"     ## Docker/Consul service name
-        #     "blue_service"          = "btcpay_dev"      ## Docker/Consul service name
-        #     "default_active"        = "green"
-        #     "create_dns_record"     = "false"    ## Affects dns and letsencrypt
-        #     "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
-        #     "create_ssl_cert"       = "true"    ## Affects dns and letsencrypt
-        #     "subdomain_name"        = "btcpay"     ## Affects dns and letsencrypt
-        #     "backup"                = "false"
-        #     "backupfile"            = ""
-        #     "custom_init"           = "init.sh"
-        #     "custom_vars"           = <<-EOF
-        #         export BTCPAY_HOST=\"btcpay.EXAMPLE.COM\"
-        #         export BTCPAYGEN_ADDITIONAL_FRAGMENTS=\"opt-save-storage-xxs\"
-        #     EOF
-        # }
+        btcpay = {
+            "pull"                  = "true"
+            "stable_version"        = ""
+            "use_stable"            = "false"
+            "repo_url"              = "https://gitlab.codeopensrc.com/os/btcpay.git"
+            "repo_name"             = "btcpay"
+            "docker_registry"       = ""
+            "docker_registry_image" = ""
+            "docker_registry_url"   = ""
+            "docker_registry_user"  = ""
+            "docker_registry_pw"    = ""
+            "service_name"          = "custom"          ## Docker/Consul service name
+            "green_service"         = "btcpay_main"     ## Docker/Consul service name
+            "blue_service"          = "btcpay_dev"      ## Docker/Consul service name
+            "default_active"        = "green"
+            "create_dns_record"     = "false"    ## Affects dns and letsencrypt
+            "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
+            "create_ssl_cert"       = "true"    ## Affects dns and letsencrypt
+            "subdomain_name"        = "btcpay"     ## Affects dns and letsencrypt
+            "use_custom_backup"     = "false"
+            "custom_backup_file"    = "backup.sh"
+            "backup_frequency"      = "0 1 * * 0"
+            "use_custom_restore"    = "false"
+            "custom_restore_file"   = "restore.sh -r AWS_BUCKET_REGION -b AWS_BUCKET_NAME"
+            "custom_init"           = "init.sh"
+            "custom_vars"           = <<-EOF
+                export BTCPAY_HOST=\"btcpay.EXAMPLE.COM\"
+                export BTCPAYGEN_ADDITIONAL_FRAGMENTS=\"opt-save-storage-xxs\"
+            EOF
+        }
         # wekan = {
         #     "pull"                  = "true"
         #     "stable_version"        = ""
@@ -161,11 +170,14 @@ variable "app_definitions" {
         #     "blue_service"          = "wekan_dev"          ## Docker/Consul service name
         #     "default_active"        = "green"
         #     "create_dns_record"     = "true"    ## Affects dns and letsencrypt
-        #     "create_dev_dns"        = "true"    ## Affects dns and letsencrypt
+        #     "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
         #     "create_ssl_cert"       = "true"    ## Affects dns and letsencrypt
         #     "subdomain_name"        = "wekan"       ## Affects dns and letsencrypt
-        #     "backup"                = "false"
-        #     "backupfile"            = ""
+        #     "use_custom_backup"     = "false"
+        #     "custom_backup_file"    = ""
+        #     "backup_frequency"      = ""
+        #     "use_custom_restore"    = "false"
+        #     "custom_restore_file"   = ""
         #     "custom_init"           = ""
         #     "custom_vars"           = ""# <<-EOF EOF
         # }
@@ -188,8 +200,11 @@ variable "app_definitions" {
             "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
             "create_ssl_cert"       = "false"    ## Affects dns and letsencrypt
             "subdomain_name"        = "proxy"     ## Affects dns and letsencrypt
-            "backup"                = "false"
-            "backupfile"            = ""
+            "use_custom_backup"     = "false"
+            "custom_backup_file"    = ""
+            "backup_frequency"      = ""
+            "use_custom_restore"    = "false"
+            "custom_restore_file"   = ""
             "custom_init"           = ""
             "custom_vars"           = ""# <<-EOF EOF
         }
@@ -209,11 +224,14 @@ variable "app_definitions" {
             "blue_service"          = "monitor_dev"     ## Docker/Consul service name
             "default_active"        = "green"
             "create_dns_record"     = "true"    ## Affects dns and letsencrypt
-            "create_dev_dns"        = "true"    ## Affects dns and letsencrypt
+            "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
             "create_ssl_cert"       = "true"    ## Affects dns and letsencrypt
             "subdomain_name"        = "monitor"     ## Affects dns and letsencrypt
-            "backup"                = "false"
-            "backupfile"            = ""
+            "use_custom_backup"     = "false"
+            "custom_backup_file"    = ""
+            "backup_frequency"      = ""
+            "use_custom_restore"    = "false"
+            "custom_restore_file"   = ""
             "custom_init"           = ""
             "custom_vars"           = ""# <<-EOF EOF
         }
