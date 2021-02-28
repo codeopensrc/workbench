@@ -31,7 +31,6 @@ variable "docker_machine_ip" { default = "" }
 variable "serverkey" { default = ""}
 
 variable "contact_email" { default = "your@email.com" }
-variable "gitlab_subdomain" { default = "gitlab" }
 
 # This is used for the fqdn
 variable "root_domain_name" { default = "DOMAIN.COM" }

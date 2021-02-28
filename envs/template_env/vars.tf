@@ -110,6 +110,7 @@ variable "servers" {
 
 ############ DNS ############
 #############################
+variable "gitlab_subdomain" { default = "gitlab" }
 # Used for gitlab oauth plugins
 variable "mattermost_subdomain" { default = "chat" }
 variable "wekan_subdomain" { default = "wekan" }
