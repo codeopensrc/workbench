@@ -18,7 +18,7 @@ locals {
 }
 
 resource "aws_route53_record" "default_stun_srv_udp" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0
+    count           = var.active_env_provider == "aws" && var.stun_port != "" ? 1 : 0
     name            = "_stun_udp.${var.root_domain_name}"
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
@@ -29,7 +29,7 @@ resource "aws_route53_record" "default_stun_srv_udp" {
     records = [ "0 0 ${var.stun_port} stun.${var.root_domain_name}" ]
 }
 resource "aws_route53_record" "default_stun_srv_tcp" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0
+    count           = var.active_env_provider == "aws" && var.stun_port != "" ? 1 : 0
     name            = "_stun_tcp.${var.root_domain_name}"
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
@@ -41,7 +41,7 @@ resource "aws_route53_record" "default_stun_srv_tcp" {
 }
 
 resource "aws_route53_record" "default_stun_a" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0
+    count           = var.active_env_provider == "aws" && var.stun_port != "" ? 1 : 0
     name            = "stun.${var.root_domain_name}"
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
@@ -51,7 +51,7 @@ resource "aws_route53_record" "default_stun_a" {
 }
 
 resource "aws_route53_record" "default_cname" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" ? length(compact(flatten(local.cname_aliases))) : 0
+    count           = var.active_env_provider == "aws" ? length(compact(flatten(local.cname_aliases))) : 0
     name            = compact(flatten(local.cname_aliases))[count.index]
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
@@ -61,7 +61,7 @@ resource "aws_route53_record" "default_cname" {
 }
 
 resource "aws_route53_record" "default_cname_dev" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" ? length(compact(flatten(local.cname_dev_aliases))) : 0
+    count           = var.active_env_provider == "aws" ? length(compact(flatten(local.cname_dev_aliases))) : 0
     name            = compact(flatten(local.cname_dev_aliases))[count.index]
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
@@ -71,7 +71,7 @@ resource "aws_route53_record" "default_cname_dev" {
 }
 
 resource "aws_route53_record" "default_a_admin" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" ? length(compact(var.admin_arecord_aliases)) : 0
+    count           = var.active_env_provider == "aws" ? length(compact(var.admin_arecord_aliases)) : 0
     zone_id         = data.aws_route53_zone.default.zone_id
     name            = compact(var.admin_arecord_aliases)[count.index]
     allow_overwrite = true
@@ -87,7 +87,7 @@ resource "aws_route53_record" "default_a_admin" {
 }
 
 resource "aws_route53_record" "default_a_db" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" ? length(compact(var.db_arecord_aliases)) : 0
+    count           = var.active_env_provider == "aws" ? length(compact(var.db_arecord_aliases)) : 0
     zone_id         = data.aws_route53_zone.default.zone_id
     name            = compact(var.db_arecord_aliases)[count.index]
     allow_overwrite = true
@@ -101,7 +101,7 @@ resource "aws_route53_record" "default_a_db" {
 }
 
 resource "aws_route53_record" "default_a_leader" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" ? length(compact(var.leader_arecord_aliases)) : 0
+    count           = var.active_env_provider == "aws" ? length(compact(var.leader_arecord_aliases)) : 0
     zone_id         = data.aws_route53_zone.default.zone_id
     name            = compact(var.leader_arecord_aliases)[count.index]
     allow_overwrite = true
@@ -126,7 +126,7 @@ resource "aws_route53_record" "default_a_leader" {
 }
 
 resource "aws_route53_record" "default_a_leader_root" {
-    count           = var.active_env_provider == "aws" && var.dns_provider == "aws_route53" ? 1 : 0
+    count           = var.active_env_provider == "aws" ? 1 : 0
     zone_id         = data.aws_route53_zone.default.zone_id
     name            = var.root_domain_name
     allow_overwrite = true

@@ -1,7 +1,6 @@
 variable "root_domain_name" {}
 variable "local_ssh_key_file" {}
 
-variable "dns_provider" {}
 variable "active_env_provider" {}
 variable "server_name_prefix" {}
 variable "region" { default = "" }
@@ -56,6 +55,18 @@ locals {
         SERVER.ipv4_address
         if length(regexall("lead", join(",", SERVER.tags))) > 0
     ])
+    db_server_ips = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.ipv4_address
+        if length(regexall("db", join(",", SERVER.tags))) > 0
+    ])
+    admin_server_ips = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.ipv4_address
+        if length(regexall("admin", join(",", SERVER.tags))) > 0
+    ])
+
+
 
     admin_server_ids = [
         for SERVER in digitalocean_droplet.main[*]:
@@ -76,6 +87,20 @@ locals {
     ])
 }
 
+# Based on app, create .db, .dev, and .dev.db subdomains (not used just yet)
+# TODO: See if we can do locals like this in an envs/vars.tf file with a just declared variable
+locals {
+    cname_aliases = [
+        for app in var.app_definitions:
+        [app.subdomain_name, format("${app.subdomain_name}.db")]
+        if app.create_dns_record == "true"
+    ]
+    cname_dev_aliases = [
+        for app in var.app_definitions:
+        [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
+        if app.create_dev_dns == "true"
+    ]
+}
 # ipv4_address
 terraform {
     required_providers {

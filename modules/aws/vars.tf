@@ -2,7 +2,6 @@
 variable "root_domain_name" {}
 variable "local_ssh_key_file" {}
 
-variable "dns_provider" {}
 variable "active_env_provider" {}
 variable "server_name_prefix" {}
 variable "region" { default = "" }

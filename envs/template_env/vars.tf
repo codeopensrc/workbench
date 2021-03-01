@@ -34,8 +34,6 @@ variable "run_service_enabled" { default = false }
 variable "send_logs_enabled" { default = false }
 variable "send_jsons_enabled" { default = false }
 
-variable "dns_provider" { default = "aws_route53" }
-
 ########## SOFTWARE VERSIONS ##########
 #######################################
 variable "packer_config" {
@@ -59,7 +57,7 @@ variable "packer_config" {
 
 # TODO: Azure and Google Cloud providers
 # Options will be digital_ocean, aws, azure, google_cloud etc.
-# NOTE: Still uses aws route53 & s3 atm
+# NOTE: Still uses aws s3 atm
 variable "active_env_provider" { default = "digital_ocean" } # "digital_ocean" or "aws"
 
 # Currently supports 1 server with all 3 roles or 3 servers each with a single role

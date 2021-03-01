@@ -9,20 +9,8 @@ data "aws_route53_zone" "default" {
     name         = var.root_domain_name
 }
 
-# Based on app, create .db, .dev, and .dev.db subdomains (not used just yet)
-# TODO: See if we can do locals like this in an envs/vars.tf file with a just declared variable
-locals {
-    cname_aliases = [
-        for app in var.app_definitions:
-        [app.subdomain_name, format("${app.subdomain_name}.db")]
-        if app.create_dns_record == "true"
-    ]
-    cname_dev_aliases = [
-        for app in var.app_definitions:
-        [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
-        if app.create_dev_dns == "true"
-    ]
-}
+# TODO: Will remove file once nameservers update
+variable "dns_provider" { default = "aws_route53" }
 
 resource "aws_route53_record" "default_stun_srv_udp" {
     count           = var.active_env_provider == "digital_ocean" && var.dns_provider == "aws_route53" && var.stun_port != "" ? 1 : 0

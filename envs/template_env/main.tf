@@ -46,7 +46,6 @@ module "digital_ocean" {
     count = var.active_env_provider == "digital_ocean" ? 1 : 0
     source             = "../../modules/digital_ocean"
     root_domain_name = var.root_domain_name
-    dns_provider = var.dns_provider
     server_name_prefix = var.server_name_prefix
     active_env_provider = var.active_env_provider
     region = var.do_region
@@ -78,7 +77,6 @@ module "aws" {
     count = var.active_env_provider == "aws" ? 1 : 0
     source             = "../../modules/aws"
     root_domain_name = var.root_domain_name
-    dns_provider = var.dns_provider
     server_name_prefix = var.server_name_prefix
     active_env_provider = var.active_env_provider
     region = var.aws_region_alias
