@@ -1,10 +1,10 @@
 #!/bin/bash
 
-while getopts "b:r:" flag; do
+while getopts "a:b:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
-        b) BUCKET_NAME=$OPTARG;;
-        r) REGION=$OPTARG;;
+        a) S3_ALIAS=$OPTARG;;
+        b) S3_BUCKET_NAME=$OPTARG;;
     esac
 done
 
@@ -17,10 +17,10 @@ tar czf "jsons_$TODAY.tar.gz" jsons
 tar czf "csv_$TODAY.tar.gz" csv
 
 #Upload JSON
-/usr/bin/aws s3 cp $HOME/code/"jsons_$TODAY.tar.gz" \
-  s3://$BUCKET_NAME/json_backups/"jsons_$TODAY.tar.gz" --region $REGION
-/usr/bin/aws s3 cp $HOME/code/"csv_$TODAY.tar.gz" \
-  s3://$BUCKET_NAME/csv_backups/"csv_$TODAY.tar.gz" --region $REGION
+/usr/local/bin/mc cp $HOME/code/"jsons_$TODAY.tar.gz" \
+  $S3_ALIAS/$S3_BUCKET_NAME/json_backups/"jsons_$TODAY.tar.gz"
+/usr/local/bin/mc cp $HOME/code/"csv_$TODAY.tar.gz" \
+  $S3_ALIAS/$S3_BUCKET_NAME/csv_backups/"csv_$TODAY.tar.gz"
 
 #Remove files
 rm -r $HOME/code/"jsons_$TODAY.tar.gz"

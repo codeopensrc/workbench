@@ -108,9 +108,15 @@ module "mix" {
     active_env_provider = var.active_env_provider
     region           = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
 
+    # TODO: Map
+    s3alias = var.active_env_provider == "digital_ocean" ? "spaces" : "s3"
+    s3bucket = var.active_env_provider == "digital_ocean" ? var.do_spaces_name : var.aws_bucket_name
+
+    do_spaces_region = var.do_spaces_region
+    do_spaces_access_key = var.do_spaces_access_key
+    do_spaces_secret_key = var.do_spaces_secret_key
+
     aws_ecr_region   = var.aws_ecr_region
-    aws_bucket_region   = var.aws_bucket_region
-    aws_bucket_name   = var.aws_bucket_name
 
     servers = var.servers
 

@@ -3,8 +3,8 @@
 variable "servers" { default = 0 }
 variable "templates" { default = [] }
 variable "destinations" { default = [] }
-variable "aws_bucket_region" { default = "" }
-variable "aws_bucket_name" { default = "" }
+variable "s3alias" { default = "" }
+variable "s3bucket" { default = "" }
 
 variable "admin_servers" { default = 0 }
 variable "lead_servers" { default = 0 }
@@ -59,8 +59,8 @@ resource "null_resource" "admin" {
     provisioner "file" {
         content = fileexists("${path.module}/templates/${var.templates["admin"]}") ? templatefile("${path.module}/templates/${var.templates["admin"]}", {
             gitlab_backups_enabled = var.gitlab_backups_enabled
-            aws_bucket_region = var.aws_bucket_region
-            aws_bucket_name = var.aws_bucket_name
+            s3alias = var.s3alias
+            s3bucket = var.s3bucket
         }) : ""
         destination = var.destinations["admin"]
     }
@@ -90,20 +90,18 @@ resource "null_resource" "db" {
     }
 
     provisioner "file" {
-        # TODO: aws_bucket_name and region based off imported db's options
         content = fileexists("${path.module}/templates/${var.templates["redisdb"]}") ? templatefile("${path.module}/templates/${var.templates["redisdb"]}", {
-            aws_bucket_region = var.aws_bucket_region
-            aws_bucket_name = var.aws_bucket_name
+            s3alias = var.s3alias
+            s3bucket = var.s3bucket
             redis_dbs = length(var.redis_dbs) > 0 ? var.redis_dbs : []
         }) : ""
         destination = var.destinations["redisdb"]
     }
 
     provisioner "file" {
-        # TODO: aws_bucket_name and region based off imported db's options
         content = fileexists("${path.module}/templates/${var.templates["mongodb"]}") ? templatefile("${path.module}/templates/${var.templates["mongodb"]}", {
-            aws_bucket_region = var.aws_bucket_region
-            aws_bucket_name = var.aws_bucket_name
+            s3alias = var.s3alias
+            s3bucket = var.s3bucket
             mongo_dbs = length(var.mongo_dbs) > 0 ? var.mongo_dbs : []
             host = "vpc.my_private_ip"  # TODO: Add ability to specific host/hostnames/ip
         }) : ""
@@ -111,10 +109,9 @@ resource "null_resource" "db" {
     }
 
     provisioner "file" {
-        # TODO: aws_bucket_name and region based off imported db's options
         content = fileexists("${path.module}/templates/${var.templates["pgdb"]}") ? templatefile("${path.module}/templates/${var.templates["pgdb"]}", {
-            aws_bucket_region = var.aws_bucket_region
-            aws_bucket_name = var.aws_bucket_name
+            s3alias = var.s3alias
+            s3bucket = var.s3bucket
             pg_dbs = length(var.pg_dbs) > 0 ? var.pg_dbs : []
             pg_fn = length(var.pg_fn) > 0 ? var.pg_fn : "" # TODO: hack
         }) : ""
@@ -144,8 +141,8 @@ resource "null_resource" "leader" {
             run_service = var.run_service
             send_logs = var.send_logs
             send_jsons = var.send_jsons
-            aws_bucket_name = var.aws_bucket_name
-            aws_bucket_region = var.aws_bucket_region
+            s3alias = var.s3alias
+            s3bucket = var.s3bucket
             check_ssl = count.index == 0 ? true : false
 
             # Temp
@@ -168,8 +165,8 @@ resource "null_resource" "leader" {
                     backup_frequency = APP.backup_frequency, use_custom_backup = APP.use_custom_backup   }
                 if APP.custom_backup_file != ""
             ]
-            aws_bucket_name = var.aws_bucket_name
-            aws_bucket_region = var.aws_bucket_region
+            s3alias = var.s3alias
+            s3bucket = var.s3bucket
         }) : ""
         destination = var.destinations["app"]
     }

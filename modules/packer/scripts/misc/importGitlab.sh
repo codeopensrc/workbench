@@ -7,20 +7,20 @@
 
 OPT_VERSION=""
 
-while getopts "b:r:v:f" flag; do
+while getopts "a:b:v:f" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
-        b) BUCKET_NAME=$OPTARG;;
+        a) S3_ALIAS=$OPTARG;;
+        b) S3_BUCKET_NAME=$OPTARG;;
         f) FILE_NAME=$OPTARG;;
-        r) REGION=$OPTARG;;
         v) OPT_VERSION=${OPTARG}_;;
     esac
 done
 
 
-if [[ -z $BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b BUCKET"; exit ; fi
+if [[ -z $S3_ALIAS ]]; then echo "Please provide s3 alias using -a S3_ALIAS"; exit ; fi
+if [[ -z $S3_BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b S3_BUCKET_NAME"; exit ; fi
 # if [[ -z $FILE_NAME ]]; then echo "Please provide file name using -f FILE_NAME"; exit ; fi
-if [[ -z $REGION ]]; then echo "Please provide region using -r REGION"; exit ; fi
 
 # TODO: Implement a way to change the date in the string we're looking for befor we can have this more generalized
 # if [[ -z $FILE_NAME ]]; then echo "Please provide FULL file location  using -f FILE_LOCATION"; exit ; fi
@@ -31,17 +31,17 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/letsencrypt_backups/${YEAR_MONTH}/letsencrypt_${DATE}.tar.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/letsencrypt_backups/${YEAR_MONTH}/letsencrypt_${DATE}.tar.gz"
     LOCAL_FILE="$HOME/code/backups/letsencrypt/letsencrypt_$DATE.tar.gz"
 
     echo "Checking $REMOTE_FILE";
-    aws s3 ls $REMOTE_FILE --region $REGION;
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
     if [[ $? == 0 ]]; then
 
         # Just downloading for now
         # letsencrypt
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
-        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
         ### I dont think we do this unless its the same domain name
         # rm -rf /etc/letsencrypt/
@@ -60,16 +60,16 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/ssh_keys_backups/${YEAR_MONTH}/ssh_keys_${DATE}.tar.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/ssh_keys_backups/${YEAR_MONTH}/ssh_keys_${DATE}.tar.gz"
     LOCAL_FILE="$HOME/code/backups/ssh_keys/ssh_keys_$DATE.tar.gz"
 
     echo "Checking $REMOTE_FILE";
-    aws s3 ls $REMOTE_FILE --region $REGION;
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
     if [[ $? == 0 ]]; then
 
         # ssh keys
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
-        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
         TODAY=$(date +"%F")
         (cd /etc/ssh/ && tar -czvf /etc/ssh/ssh_keys_$TODAY.tar.gz ssh_host_*_key*)
@@ -89,16 +89,16 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/dump_gitlab_backup_${OPT_VERSION}${DATE}.tar"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/dump_gitlab_backup_${OPT_VERSION}${DATE}.tar"
     LOCAL_FILE="/var/opt/gitlab/backups/dump_gitlab_backup_${DATE}.tar"
 
     echo "Checking $REMOTE_FILE";
-    aws s3 ls $REMOTE_FILE --region $REGION;
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
     if [[ $? == 0 ]]; then
 
         # gitlabdump
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
-        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
         # Gitlab must already be up and running
         # Backup path must be owned by git user
@@ -136,16 +136,16 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/gitlab-secrets_${OPT_VERSION}${DATE}.json"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/gitlab-secrets_${OPT_VERSION}${DATE}.json"
     LOCAL_FILE="/etc/gitlab/gitlab-secrets_${DATE}.json"
 
     echo "Checking $REMOTE_FILE";
-    aws s3 ls $REMOTE_FILE --region $REGION;
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
     if [[ $? == 0 ]]; then
 
         # gitlabsecrets
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
-        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
         GITLAB_SECRETS_FILE="/etc/gitlab/gitlab-secrets.json"
         # Move current backup to .bak
@@ -168,15 +168,15 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_data_${DATE}.tar.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_data_${DATE}.tar.gz"
     LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_data_${DATE}.tar.gz"
 
     echo "Checking $REMOTE_FILE";
-    aws s3 ls $REMOTE_FILE --region $REGION;
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
     if [[ $? == 0 ]]; then
 
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
-        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
         TODAY=$(date +"%F")
         MATTERMOST_DIR=/var/opt/gitlab/mattermost
@@ -194,15 +194,15 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="s3://${BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_dbdump_${DATE}.sql.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_dbdump_${DATE}.sql.gz"
     LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_dbdump_${DATE}.sql.gz"
 
     echo "Checking $REMOTE_FILE";
-    aws s3 ls $REMOTE_FILE --region $REGION;
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
     if [[ $? == 0 ]]; then
 
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
-        aws s3 cp $REMOTE_FILE $LOCAL_FILE --region $REGION;
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
         ###! Going to give gitlab postgres db a second to restore
         echo "Wait 10"

@@ -1,14 +1,11 @@
 #!/bin/bash
 
-PROFILE=default
-
-while getopts "b:r:p:d:u:" flag; do
+while getopts "a:b:d:u:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
-        b) BUCKET_NAME=$OPTARG;;
+        a) S3_ALIAS=$OPTARG;;
+        b) S3_BUCKET_NAME=$OPTARG;;
         d) DB_NAME=$OPTARG;;
-        r) REGION=$OPTARG;;
-        p) PROFILE=$OPTARG;;
         u) DB_USER=$OPTARG;;
     esac
 done
@@ -17,21 +14,29 @@ POSTGRES_USER=postgres
 if [[ $DB_USER != "" ]]; then POSTGRES_USER=$DB_USER; fi
 
 
-if [[ -z $BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b BUCKET"; exit ; fi
+if [[ -z $S3_ALIAS ]]; then echo "Please provide s3 alias using -a S3_ALIAS"; exit ; fi
+if [[ -z $S3_BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b S3_BUCKET_NAME"; exit ; fi
 if [[ -z $DB_NAME ]]; then echo "Please provide DB name using -d DB_NAME"; exit ; fi
-if [[ -z $REGION ]]; then echo "Please provide region using -r REGION"; exit ; fi
 
 for i in {0..20}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
-    echo "Checking $DATE";
-    aws --profile $PROFILE s3 ls s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME.gz --region $REGION;
+    YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
+
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/${DB_NAME}_backups/${YEAR_MONTH}/${DB_NAME}_${DATE}/${DB_NAME}.gz"
+    LOCAL_FILE="$HOME/code/backups/${DB_NAME}_backups/${DB_NAME}_${DATE}/${DB_NAME}.gz"
+
+    echo "Checking $REMOTE_FILE";
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
     if [[ $? == 0 ]]; then
-        echo "Downloading s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/"$DB_NAME".gz into ~/code/backups";
-        aws --profile $PROFILE s3 cp s3://"$BUCKET_NAME"/"$DB_NAME"_backups/"$DB_NAME"_$DATE/$DB_NAME.gz ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME.gz --region $REGION;
+        echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
+
         echo "Create DB $DB_NAME";
         createdb -T template0 -U $POSTGRES_USER $DB_NAME;
-        echo "Importing ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME.gz into postgres";
-        gunzip -c ~/code/backups/"$DB_NAME"_$DATE/$DB_NAME.gz | psql -U $POSTGRES_USER -d $DB_NAME;
+
+        echo "Importing $LOCAL_FILE into postgres";
+        gunzip -c $LOCAL_FILE | psql -U $POSTGRES_USER -d $DB_NAME;
+
         exit;
     fi
 done

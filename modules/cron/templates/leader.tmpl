@@ -16,7 +16,7 @@ ${send_logs ? "" : "#"}30 4 * * 2-5 bash $HOME/code/scripts/misc/sendLog.sh -s $
 MAILTO="root"
 SHELL="/bin/bash"
 HOME="/root"
-${send_jsons ? "" : "#"}30 22 * * 0 bash $HOME/code/scripts/misc/sendJsons.sh -b ${aws_bucket_name} -r ${aws_bucket_region} >> /dev/null 2>>$HOME/code/logs/errors.log
+${send_jsons ? "" : "#"}30 22 * * 0 bash $HOME/code/scripts/misc/sendJsons.sh -a ${s3alias} -b ${s3bucket} >> /dev/null 2>>$HOME/code/logs/errors.log
 
 # Name: Cleanup Docker Containers
 MAILTO="root"

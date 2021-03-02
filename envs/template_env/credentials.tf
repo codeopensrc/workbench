@@ -3,6 +3,12 @@ variable "do_ssh_fingerprint" { default = "" }
 ### Template
 variable "do_token" { default = "" }
 
+# DO Spaces
+variable "do_spaces_name" { default = "" }
+variable "do_spaces_region" { default = "" }
+variable "do_spaces_access_key" { default = "" }
+variable "do_spaces_secret_key" { default = "" }
+
 ### Template
 variable "aws_key_name" { default = "id_rsa" }
 variable "local_ssh_key_file" { default = "~/.ssh/id_rsa" } #Local ssh key file location of aws_key_name
@@ -10,7 +16,6 @@ variable "local_ssh_key_file" { default = "~/.ssh/id_rsa" } #Local ssh key file 
 
 # TODO: Configure multiple bucket name access (dev/stage. db/static/images etc)
 variable "aws_bucket_name" { default = ""}
-variable "aws_bucket_region" { default = ""}
 
 variable "aws_access_key" { default = ""}
 variable "aws_secret_key" { default = ""}
@@ -54,10 +59,15 @@ variable "gitlab_runner_tokens" {
 ###! https://www.terraform.io/docs/backends/config.html#first-time-configuration
 # terraform {
 #     backend "s3" {
-#         bucket = "aws_bucket_name"
+#         bucket = "bucket_name"
 #         key    = "remote_states/template_env"
-#         region = "aws_bucket_region"
-#         access_key = "aws_access_key" ## (Optional) AWS access key.
-#         secret_key = "aws_secret_key" ## (Optional) AWS secret access key.
+#         region = "us-east-2" ##! Must be valid aws region name even if digital ocean backend
+#         access_key = "" ##! S3 access key.
+#         secret_key = "" ##! S3 secret access key.
+#
+#         ###! Uncomment below to enable backend using digital ocean Spaces
+#         # endpoint = "https://SPACES_REGION.digitaloceanspaces.com"
+#         # skip_credentials_validation = true
+#         # skip_metadata_api_check = true
 #     }
 # }

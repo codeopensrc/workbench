@@ -57,7 +57,6 @@ variable "packer_config" {
 
 # TODO: Azure and Google Cloud providers
 # Options will be digital_ocean, aws, azure, google_cloud etc.
-# NOTE: Still uses aws s3 atm
 variable "active_env_provider" { default = "digital_ocean" } # "digital_ocean" or "aws"
 
 # Currently supports 1 server with all 3 roles or 3 servers each with a single role

@@ -1,6 +1,9 @@
 variable "servers" {}
 
 variable "region" {}
+variable "do_spaces_region" { default = "" }
+variable "do_spaces_access_key" { default = "" }
+variable "do_spaces_secret_key" { default = "" }
 
 variable "aws_bot_access_key" {}
 variable "aws_bot_secret_key" {}
@@ -30,9 +33,6 @@ variable "is_only_db_count" { default = 0 }
 
 variable "consul_lan_leader_ip" { default = "" }
 variable "consul_wan_leader_ip" { default = "" }
-
-# Using DOMAIN as an install url can cause issues resolving the domain
-#   as the newly booted servers sometimes dont resolve to certain domains/ip addresses.
 
 resource "null_resource" "docker_leader" {
     count = var.lead_servers
@@ -105,7 +105,7 @@ resource "null_resource" "docker_leader" {
 # }
 
 
-resource "null_resource" "update_aws" {
+resource "null_resource" "update_s3" {
     count = length(var.servers)
     depends_on = [
         null_resource.docker_leader,
@@ -120,6 +120,13 @@ resource "null_resource" "update_aws" {
         destination = "/root/.aws/credentials"
     }
 
+    provisioner "remote-exec" {
+        inline = [
+            (var.aws_bot_access_key != "" ? "mc alias set s3 https://s3.amazonaws.com ${var.aws_bot_access_key} ${var.aws_bot_secret_key}" : "echo 0;"),
+            (var.do_spaces_access_key != "" ? "mc alias set spaces https://${var.do_spaces_region}.digitaloceanspaces.com ${var.do_spaces_access_key} ${var.do_spaces_secret_key}" : "echo 0;"),
+        ]
+    }
+
     connection {
         host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
         type = "ssh"
@@ -131,7 +138,7 @@ resource "null_resource" "consul_file_admin" {
     count = var.admin_servers
     depends_on = [
         null_resource.docker_leader,
-        null_resource.update_aws,
+        null_resource.update_s3,
     ]
 
     provisioner "remote-exec" {
@@ -175,7 +182,7 @@ resource "null_resource" "consul_file_leader" {
     count = var.is_only_leader_count
     depends_on = [
         null_resource.docker_leader,
-        null_resource.update_aws,
+        null_resource.update_s3,
     ]
 
     provisioner "file" {
@@ -220,7 +227,7 @@ resource "null_resource" "consul_file" {
     count = var.is_only_db_count
     depends_on = [
         null_resource.docker_leader,
-        null_resource.update_aws,
+        null_resource.update_s3,
     ]
 
     provisioner "file" {
@@ -259,7 +266,7 @@ resource "null_resource" "consul_service" {
     count = length(var.servers)
     depends_on = [
         null_resource.docker_leader,
-        null_resource.update_aws,
+        null_resource.update_s3,
         null_resource.consul_file_leader,
         null_resource.consul_file,
         null_resource.consul_file_admin
@@ -327,7 +334,7 @@ resource "null_resource" "consul_service" {
 output "output" {
     depends_on = [
         null_resource.docker_leader,
-        null_resource.update_aws,
+        null_resource.update_s3,
         null_resource.consul_file_leader,
         null_resource.consul_file,
         null_resource.consul_file_admin,

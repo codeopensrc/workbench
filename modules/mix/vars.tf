@@ -6,14 +6,13 @@ variable "active_env_provider" {}
 variable "root_domain_name" {}
 variable "region" { default = "" }
 variable "aws_ecr_region" { default = "" }
-variable "aws_bucket_region" { default = "" }
-variable "aws_bucket_name" { default = "" }
+variable "s3alias" { default = "" }
+variable "s3bucket" { default = "" }
+variable "do_spaces_region" { default = "" }
+variable "do_spaces_access_key" { default = "" }
+variable "do_spaces_secret_key" { default = "" }
 
 variable "servers" { default = [] }
-
-# Cloudflare/dns variables _should_ be optional to modify DNS settings on cloudflare
-# At this time, they are required until properly refactored
-# UPD: Cloudflare should no longer be needed but some dns variables still need to be populated until refactor
 
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
@@ -24,7 +23,7 @@ variable "send_jsons_enabled" {}
 variable "import_dbs" {}
 
 variable "dbs_to_import" {
-    type = list(object({ type=string, aws_bucket=string, aws_region=string,
+    type = list(object({ type=string, s3bucket=string, s3alias=string,
         dbname=string, import=string, backups_enabled=string, fn=string }))
 }
 

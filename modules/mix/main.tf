@@ -46,6 +46,9 @@ module "provisioners" {
     db_private_ips = var.db_private_ips
 
     region      = var.region
+    do_spaces_region = var.do_spaces_region
+    do_spaces_access_key = var.do_spaces_access_key
+    do_spaces_secret_key = var.do_spaces_secret_key
 
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
@@ -79,8 +82,8 @@ module "hostname" {
 module "cron" {
     source = "../cron"
 
-    aws_bucket_region = var.aws_bucket_region
-    aws_bucket_name = var.aws_bucket_name
+    s3alias = var.s3alias
+    s3bucket = var.s3bucket
 
     servers = length(var.servers)
 
@@ -319,7 +322,7 @@ resource "null_resource" "restore_gitlab" {
                 if [ ! -z "${var.import_gitlab_version}" ]; then IMPORT_GITLAB_VERSION="-v ${var.import_gitlab_version}"; fi
 
                 if [ "$IMPORT_GITLAB" = "true" ]; then
-                    bash /root/code/scripts/misc/importGitlab.sh -r ${var.aws_bucket_region} -b ${var.aws_bucket_name} $IMPORT_GITLAB_VERSION;
+                    bash /root/code/scripts/misc/importGitlab.sh -a ${var.s3alias} -b ${var.s3bucket} $IMPORT_GITLAB_VERSION;
                     echo "=== Wait 90s for restore ==="
                     sleep 90
                 fi
@@ -505,8 +508,8 @@ resource "null_resource" "install_dbs" {
             "chmod +x /root/code/scripts/install/install_redis.sh",
             "chmod +x /root/code/scripts/install/install_mongo.sh",
             "chmod +x /root/code/scripts/install/install_pg.sh",
-            (length(local.redis_dbs) > 0 ? "sudo service redis_6379 start;" : ""),
-            (length(local.redis_dbs) > 0 ? "sudo systemctl enable redis_6379" : ""),
+            (length(local.redis_dbs) > 0 ? "sudo service redis_6379 start;" : "echo 0;"),
+            (length(local.redis_dbs) > 0 ? "sudo systemctl enable redis_6379" : "echo 0;"),
             (length(local.mongo_dbs) > 0
                 ? "bash /root/code/scripts/install/install_mongo.sh -v 4.2.7 -i ${element(var.db_private_ips, count.index)};"
                 : "echo 0;"),
@@ -537,23 +540,23 @@ resource "null_resource" "import_dbs" {
         content = <<-EOF
             IMPORT=${var.dbs_to_import[count.index]["import"]};
             DB_TYPE=${var.dbs_to_import[count.index]["type"]};
-            AWS_BUCKET_NAME=${var.dbs_to_import[count.index]["aws_bucket"]};
-            AWS_BUCKET_REGION=${var.dbs_to_import[count.index]["aws_region"]};
+            S3_BUCKET_NAME=${var.dbs_to_import[count.index]["s3bucket"]};
+            S3_ALIAS=${var.dbs_to_import[count.index]["s3alias"]};
             DB_NAME=${var.dbs_to_import[count.index]["dbname"]};
             HOST=${element(var.db_private_ips, count.index)}
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
-                bash /root/code/scripts/db/import_mongo_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME -h $HOST;
+                bash /root/code/scripts/db/import_mongo_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME -h $HOST;
                 cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
-                bash /root/code/scripts/db/import_pg_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                bash /root/code/scripts/db/import_pg_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME;
                 cp /etc/consul.d/templates/pg.json /etc/consul.d/conf.d/pg.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
-                bash /root/code/scripts/db/import_redis_db.sh -r $AWS_BUCKET_REGION -b $AWS_BUCKET_NAME -d $DB_NAME;
+                bash /root/code/scripts/db/import_redis_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME;
                 cp /etc/consul.d/templates/redis.json /etc/consul.d/conf.d/redis.json
             fi
         EOF
@@ -869,6 +872,8 @@ resource "null_resource" "install_runner" {
 
             mkdir -p /home/gitlab-runner/.aws
             touch /home/gitlab-runner/.aws/credentials
+            mkdir -p /home/gitlab-runner/.mc
+            cp /root/.mc/config.json /home/gitlab-runner/.mc/config.json
             chown -R gitlab-runner:gitlab-runner /home/gitlab-runner
         EOF
         # chmod 0775 -R /home/gitlab-runner/$SERVICE_REPO_NAME

@@ -10,21 +10,21 @@
 
 OPT_VERSION=""
 
-while getopts "b:r:v:cf" flag; do
+while getopts "a:b:v:cf" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
-        b) BUCKET_NAME=$OPTARG;;
+        a) S3_ALIAS=$OPTARG;;
+        b) S3_BUCKET_NAME=$OPTARG;;
         c) GC_DOCKER_REGISTRY=true;;
         f) FILE_NAME=$OPTARG;;
-        r) REGION=$OPTARG;;
         v) OPT_VERSION=${OPTARG}_;;
     esac
 done
 
 
-if [[ -z $BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b BUCKET"; exit ; fi
+if [[ -z $S3_ALIAS ]]; then echo "Please provide s3 alias using -a S3_ALIAS"; exit ; fi
+if [[ -z $S3_BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b S3_BUCKET_NAME"; exit ; fi
 # if [[ -z $FILE_NAME ]]; then echo "Please provide file name using -f FILE_NAME"; exit ; fi
-if [[ -z $REGION ]]; then echo "Please provide region using -r REGION"; exit ; fi
 
 
 TODAY=$(date +"%F")
@@ -60,25 +60,25 @@ sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/pg_dump -h /var/opt/gitlab/po
 
 
 # Upload
-/usr/bin/aws s3 cp $HOME/code/backups/letsencrypt/letsencrypt_$TODAY.tar.gz \
-    s3://$BUCKET_NAME/admin_backups/letsencrypt_backups/$YEAR_MONTH/letsencrypt_$TODAY.tar.gz --region $REGION
+/usr/local/bin/mc cp $HOME/code/backups/letsencrypt/letsencrypt_$TODAY.tar.gz \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/letsencrypt_backups/$YEAR_MONTH/letsencrypt_$TODAY.tar.gz
 
-/usr/bin/aws s3 cp $HOME/code/backups/ssh_keys/ssh_keys_$TODAY.tar.gz \
-    s3://$BUCKET_NAME/admin_backups/ssh_keys_backups/$YEAR_MONTH/ssh_keys_$TODAY.tar.gz --region $REGION
+/usr/local/bin/mc cp $HOME/code/backups/ssh_keys/ssh_keys_$TODAY.tar.gz \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/ssh_keys_backups/$YEAR_MONTH/ssh_keys_$TODAY.tar.gz
 
-/usr/bin/aws s3 cp $HOME/code/backups/mattermost/mattermost_data_$TODAY.tar.gz \
-    s3://$BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_data_$TODAY.tar.gz --region $REGION
+/usr/local/bin/mc cp $HOME/code/backups/mattermost/mattermost_data_$TODAY.tar.gz \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_data_$TODAY.tar.gz
 
-/usr/bin/aws s3 cp $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz \
-    s3://$BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_dbdump_$TODAY.sql.gz --region $REGION
+/usr/local/bin/mc cp $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_dbdump_$TODAY.sql.gz
 
 # The goal is to rsync over the previous days and keep snapshot once a week instead of storing a daily multi gig backup
-/usr/bin/aws s3 cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
-    s3://$BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar --region $REGION
+/usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar
 
 # Dont keep secrets backup on server I guess? Directly upload the single json file
-/usr/bin/aws s3 cp /etc/gitlab/gitlab-secrets.json \
-    s3://$BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json --region $REGION
+/usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json
 
 
 # Cleanup every Sunday
