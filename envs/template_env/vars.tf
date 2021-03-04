@@ -6,20 +6,6 @@ variable "aws_region_alias" { default = "awseast" }
 variable "aws_region" { default = "us-east-2" }
 variable "aws_ecr_region" { default = "us-east-2" }
 
-########## PROVIDER CREDENTIALS ##########
-##########################################
-provider "digitalocean" {
-    token = var.do_token
-}
-
-provider "aws" {
-    region = var.aws_region
-
-    # profile = "${var.profile}"
-    access_key = var.aws_access_key
-    secret_key = var.aws_secret_key
-}
-
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
 variable "stun_port" { default = "" }
