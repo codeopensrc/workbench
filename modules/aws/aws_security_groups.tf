@@ -19,21 +19,21 @@ resource "aws_security_group" "db_ports" {
         description = "postgresql"
         from_port   = 5432
         to_port     = 5432
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
     ingress {
         description = "redis"
         from_port   = 6379
         to_port     = 6379
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
     ingress {
         description = "mongo"
         from_port   = 27017
         to_port     = 27017
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
 
@@ -69,14 +69,14 @@ resource "aws_security_group" "app_ports" {
         description = "http"
         from_port   = 8085
         to_port     = 8085
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
     ingress {
         description = "https"
         from_port   = 4433
         to_port     = 4433
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
 
@@ -122,7 +122,7 @@ resource "aws_security_group" "app_ports" {
         description = "Docker Machine (user)"
         from_port   = 2376
         to_port     = 2376
-        cidr_blocks = ["${var.docker_machine_ip}/32"]
+        cidr_blocks = ["${var.config.docker_machine_ip}/32"]
         protocol    = "tcp"
     }
 
@@ -130,7 +130,7 @@ resource "aws_security_group" "app_ports" {
         description = "btcpay"
         from_port   = 6080
         to_port     = 6080
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
 
@@ -139,12 +139,12 @@ resource "aws_security_group" "app_ports" {
         for_each = {
             for key, value in var.stun_protos:
             key => value
-            if var.stun_port != ""
+            if var.config.stun_port != ""
         }
         content {
             description = "Stun: ${ingress.value}"
-            from_port   = var.stun_port
-            to_port     = var.stun_port
+            from_port   = var.config.stun_port
+            to_port     = var.config.stun_port
             cidr_blocks = ["0.0.0.0/0"]
             protocol    = ingress.value
         }
@@ -226,14 +226,14 @@ resource "aws_security_group" "default_ports" {
         description = "All User"
         from_port   = 0
         to_port     = 65535
-        cidr_blocks = ["${var.docker_machine_ip}/32"]
+        cidr_blocks = ["${var.config.docker_machine_ip}/32"]
         protocol    = "tcp"
     }
     ingress {
         description = "All User UDP"
         from_port   = 0
         to_port     = 65535
-        cidr_blocks = ["${var.docker_machine_ip}/32"]
+        cidr_blocks = ["${var.config.docker_machine_ip}/32"]
         protocol    = "udp"
     }
 
@@ -242,35 +242,35 @@ resource "aws_security_group" "default_ports" {
         description = "consul1"
         from_port   = 8300
         to_port     = 8302
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
     ingress {
         description = "consuludp1"
         from_port   = 8300
         to_port     = 8302
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "udp"
     }
     ingress {
         description = "consul2"
         from_port   = 8400
         to_port     = 8400
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
     ingress {
         description = "consul3"
         from_port   = 8500
         to_port     = 8500
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
     ingress {
         description = "consul4"
         from_port   = 8600
         to_port     = 8600
-        cidr_blocks = [var.cidr_block]
+        cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
     }
 
@@ -299,7 +299,7 @@ resource "aws_security_group" "ext_db" {
         from_port   = 5432
         to_port     = 5432
         cidr_blocks = [
-            for OBJ in var.app_ips:
+            for OBJ in var.config.app_ips:
             "${OBJ.ip}/32"
         ]
         protocol    = "tcp"
@@ -309,7 +309,7 @@ resource "aws_security_group" "ext_db" {
         from_port   = 6379
         to_port     = 6379
         cidr_blocks = [
-            for OBJ in var.app_ips:
+            for OBJ in var.config.app_ips:
             "${OBJ.ip}/32"
         ]
         protocol    = "tcp"
@@ -319,7 +319,7 @@ resource "aws_security_group" "ext_db" {
         from_port   = 27017
         to_port     = 27017
         cidr_blocks = [
-            for OBJ in var.app_ips:
+            for OBJ in var.config.app_ips:
             "${OBJ.ip}/32"
         ]
         protocol    = "tcp"
@@ -342,7 +342,7 @@ resource "aws_security_group" "ext_remote" {
         from_port   = 0
         to_port     = 65535
         cidr_blocks = [
-            for OBJ in var.station_ips:
+            for OBJ in var.config.station_ips:
             "${OBJ.ip}/32"
         ]
         protocol    = "tcp"

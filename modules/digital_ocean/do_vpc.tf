@@ -1,13 +1,13 @@
 
 locals {
-    vpc_name = "${var.server_name_prefix}-vpc"
+    vpc_name = "${var.config.server_name_prefix}-vpc"
 }
 
 # query/create vpc
 resource "digitalocean_vpc" "terraform_vpc" {
     name          = local.vpc_name
-    region        = var.region
-    ip_range      = var.cidr_block
+    region        = var.config.region
+    ip_range      = var.config.cidr_block
 }
 
 resource "digitalocean_firewall" "db" {
@@ -19,21 +19,21 @@ resource "digitalocean_firewall" "db" {
     inbound_rule  {
         protocol    = "tcp"
         port_range   = 5432
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
 
     # "redis"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 6379
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
 
     # "mongo"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 27017
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
 
     lifecycle {
@@ -68,14 +68,14 @@ resource "digitalocean_firewall" "app" {
     inbound_rule {
         protocol    = "tcp"
         port_range   = 8085
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
 
     # "https"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 4433
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
 
     # App/Api
@@ -120,14 +120,14 @@ resource "digitalocean_firewall" "app" {
     inbound_rule {
         protocol    = "tcp"
         port_range   = 2376
-        source_addresses = ["${var.docker_machine_ip}/32"]
+        source_addresses = ["${var.config.docker_machine_ip}/32"]
     }
 
     # "btcpay"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 6080
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
 
     # STUN
@@ -135,12 +135,12 @@ resource "digitalocean_firewall" "app" {
         for_each = {
             for key, value in var.stun_protos:
             key => value
-            if var.stun_port != ""
+            if var.config.stun_port != ""
         }
         # description = "Stun: ${ingress.value}"
         content {
             protocol    = inbound_rule.value
-            port_range   = var.stun_port
+            port_range   = var.config.stun_port
             source_addresses = ["0.0.0.0/0"]
         }
     }
@@ -212,13 +212,13 @@ resource "digitalocean_firewall" "default" {
     inbound_rule {
         protocol    = "tcp"
         port_range   = "1-65535"
-        source_addresses = ["${var.docker_machine_ip}/32"]
+        source_addresses = ["${var.config.docker_machine_ip}/32"]
     }
     # description = "All User UDP"
     inbound_rule {
         protocol    = "udp"
         port_range   = "1-65535"
-        source_addresses = ["${var.docker_machine_ip}/32"]
+        source_addresses = ["${var.config.docker_machine_ip}/32"]
     }
 
     # Consul communication between vpc
@@ -226,31 +226,31 @@ resource "digitalocean_firewall" "default" {
     inbound_rule {
         protocol    = "tcp"
         port_range   = "8300-8302"
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
     # description = "consuludp1"
     inbound_rule {
         protocol    = "udp"
         port_range   = "8300-8302"
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
     # description = "consul2"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 8400
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
     # description = "consul3"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 8500
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
     # description = "consul4"
     inbound_rule {
         protocol    = "tcp"
         port_range   = 8600
-        source_addresses = [var.cidr_block]
+        source_addresses = [var.config.cidr_block]
     }
 
 
@@ -283,7 +283,7 @@ resource "digitalocean_firewall" "ext_db" {
         protocol    = "tcp"
         port_range   = 5432
         source_addresses = [
-            for OBJ in var.app_ips:
+            for OBJ in var.config.app_ips:
             "${OBJ.ip}/32"
         ]
     }
@@ -293,7 +293,7 @@ resource "digitalocean_firewall" "ext_db" {
         protocol    = "tcp"
         port_range   = 6379
         source_addresses = [
-            for OBJ in var.app_ips:
+            for OBJ in var.config.app_ips:
             "${OBJ.ip}/32"
         ]
     }
@@ -303,7 +303,7 @@ resource "digitalocean_firewall" "ext_db" {
         protocol    = "tcp"
         port_range   = 27017
         source_addresses = [
-            for OBJ in var.app_ips:
+            for OBJ in var.config.app_ips:
             "${OBJ.ip}/32"
         ]
     }
@@ -323,7 +323,7 @@ resource "digitalocean_firewall" "ext_remote" {
         protocol    = "tcp"
         port_range   = "1-65535"
         source_addresses = [
-            for OBJ in var.station_ips:
+            for OBJ in var.config.station_ips:
             "${OBJ.ip}/32"
         ]
     }

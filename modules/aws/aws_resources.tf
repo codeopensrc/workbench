@@ -1,21 +1,109 @@
+data "aws_ami_ids" "latest" {
+    owners = ["self"]
+
+    filter {
+        name   = "tag:Type"
+        values = [ "build" ]
+    }
+    filter {
+        name   = "tag:consul_version"
+        values = [ var.config.packer_config.consul_version ]
+    }
+    filter {
+        name   = "tag:docker_version"
+        values = [ var.config.packer_config.docker_version ]
+    }
+    filter {
+        name   = "tag:docker_compose_version"
+        values = [ var.config.packer_config.docker_compose_version ]
+    }
+    filter {
+        name   = "tag:gitlab_version"
+        values = [ var.config.packer_config.gitlab_version ]
+    }
+    filter {
+        name   = "tag:redis_version"
+        values = [ var.config.packer_config.redis_version ]
+    }
+    filter {
+        name   = "tag:aws_key_name"
+        values = [ var.config.aws_key_name ]
+    }
+}
+
+module "packer" {
+    source             = "../packer"
+    build = length(data.aws_ami_ids.latest.id) >= 1 ? false : true
+
+    active_env_provider = var.config.active_env_provider
+
+    aws_access_key = var.config.aws_access_key
+    aws_secret_key = var.config.aws_secret_key
+    aws_region = var.config.aws_region
+    aws_key_name = var.config.aws_key_name
+    aws_instance_type = "t2.medium"
+
+    do_token = var.config.do_token
+    digitalocean_region = var.config.do_region
+    digitalocean_image_size = "s-2vcpu-4gb"
+
+    packer_config = var.config.packer_config
+}
+
+data "aws_ami" "latest" {
+    depends_on = [ module.packer ]
+    most_recent = true
+
+    owners = ["self"]
+
+    filter {
+        name   = "tag:Type"
+        values = [ "build" ]
+    }
+    filter {
+        name   = "tag:consul_version"
+        values = [ var.config.packer_config.consul_version ]
+    }
+    filter {
+        name   = "tag:docker_version"
+        values = [ var.config.packer_config.docker_version ]
+    }
+    filter {
+        name   = "tag:docker_compose_version"
+        values = [ var.config.packer_config.docker_compose_version ]
+    }
+    filter {
+        name   = "tag:gitlab_version"
+        values = [ var.config.packer_config.gitlab_version ]
+    }
+    filter {
+        name   = "tag:redis_version"
+        values = [ var.config.packer_config.redis_version ]
+    }
+    filter {
+        name   = "tag:aws_key_name"
+        values = [ var.config.aws_key_name ]
+    }
+}
+
 resource "aws_instance" "main" {
     # TODO: total of all counts
-    count = var.active_env_provider == "aws" ? length(var.servers) : 0
+    count = length(var.config.servers)
     depends_on = [aws_internet_gateway.igw]
-    key_name = var.aws_key_name
-    ami = var.servers[count.index].image == "" ? var.packer_image_id : var.servers[count.index].image
-    instance_type = var.servers[count.index].size["aws"]
+    key_name = var.config.aws_key_name
+    ami = var.config.servers[count.index].image == "" ? data.aws_ami.latest.id : var.config.servers[count.index].image
+    instance_type = var.config.servers[count.index].size["aws"]
 
     tags = {
-        Name = "${var.server_name_prefix}-${var.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
-        Roles = join(",", var.servers[count.index].roles)
+        Name = "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
+        Roles = join(",", var.config.servers[count.index].roles)
     }
     lifecycle {
         ignore_changes= [ tags ]
     }
 
     root_block_device {
-        volume_size = var.servers[count.index].aws_volume_size
+        volume_size = var.config.servers[count.index].aws_volume_size
     }
 
     subnet_id              = aws_subnet.public_subnet.id
@@ -24,11 +112,11 @@ resource "aws_instance" "main" {
         aws_security_group.default_ports.id,
         aws_security_group.ext_remote.id,
 
-        contains(var.servers[count.index].roles, "admin") ? aws_security_group.admin_ports.id : "",
-        contains(var.servers[count.index].roles, "lead") ? aws_security_group.app_ports.id : "",
+        contains(var.config.servers[count.index].roles, "admin") ? aws_security_group.admin_ports.id : "",
+        contains(var.config.servers[count.index].roles, "lead") ? aws_security_group.app_ports.id : "",
 
-        contains(var.servers[count.index].roles, "db") ? aws_security_group.db_ports.id : "",
-        contains(var.servers[count.index].roles, "db") ? aws_security_group.ext_db.id : "",
+        contains(var.config.servers[count.index].roles, "db") ? aws_security_group.db_ports.id : "",
+        contains(var.config.servers[count.index].roles, "db") ? aws_security_group.ext_db.id : "",
     ])
 
     provisioner "remote-exec" {
@@ -37,14 +125,14 @@ resource "aws_instance" "main" {
             host     = self.public_ip
             type     = "ssh"
             user     = "ubuntu"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
 
     provisioner "file" {
         content = <<-EOF
 
-            IS_LEAD=${contains(var.servers[count.index].roles, "lead") ? "true" : ""}
+            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
 
             if [ "$IS_LEAD" = "true" ]; then
                 docker service update --constraint-add "node.hostname!=${self.tags.Name}" proxy_main
@@ -57,13 +145,13 @@ resource "aws_instance" "main" {
             host     = self.public_ip
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "file" {
         content = <<-EOF
 
-            IS_LEAD=${contains(var.servers[count.index].roles, "lead") ? "true" : ""}
+            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
 
             if [ "$IS_LEAD" = "true" ]; then
                 sed -i "s|${self.private_ip}|${aws_instance.main[0].private_ip}|" /etc/nginx/conf.d/proxy.conf
@@ -76,7 +164,7 @@ resource "aws_instance" "main" {
             host     = aws_instance.main[0].public_ip
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "file" {
@@ -97,7 +185,7 @@ resource "aws_instance" "main" {
             host     = self.public_ip
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
 
@@ -116,10 +204,10 @@ resource "aws_instance" "main" {
 
 ###! Run this resource when downsizing from 2 leader servers to 1 in its own apply
 resource "null_resource" "cleanup" {
-    count = var.active_env_provider == "aws" ? 1 : 0
+    count = 1
 
     triggers = {
-        should_downsize = var.downsize
+        should_downsize = var.config.downsize
     }
 
     #### all proxies admin   -> change nginx route ip -> safe to leave swarm
@@ -129,37 +217,37 @@ resource "null_resource" "cleanup" {
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/dockerconstraint.sh",
-            var.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
+            var.config.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
         ]
         connection {
             host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/changeip-${element(aws_instance.main[*].tags.Name, length(aws_instance.main[*].tags.Name) - 1)}.sh",
-            var.downsize ? "/tmp/changeip-${element(aws_instance.main[*].tags.Name, length(aws_instance.main[*].tags.Name) - 1)}.sh" : "echo 0",
+            var.config.downsize ? "/tmp/changeip-${element(aws_instance.main[*].tags.Name, length(aws_instance.main[*].tags.Name) - 1)}.sh" : "echo 0",
         ]
         connection {
             host     = element(aws_instance.main[*].public_ip, 0)
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/remove.sh",
-            var.downsize ? "/tmp/remove.sh" : "echo 0",
+            var.config.downsize ? "/tmp/remove.sh" : "echo 0",
         ]
         connection {
             host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
 }

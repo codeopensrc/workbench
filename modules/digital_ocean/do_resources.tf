@@ -1,14 +1,77 @@
+data "digitalocean_images" "latest" {
+    filter {
+        key    = "name"
+        values = [ local.do_image_name ]
+        all = true
+    }
+    filter {
+        key    = "regions"
+        values = [ var.config.do_region ]
+        all = true
+    }
+    filter {
+        key    = "private"
+        values = ["true"]
+        all = true
+    }
+    sort {
+        key       = "created"
+        direction = "desc"
+    }
+}
+
+module "packer" {
+    source             = "../packer"
+    build = length(data.digitalocean_images.latest.images) >= 1 ? false : true
+
+    active_env_provider = var.config.active_env_provider
+
+    aws_access_key = var.config.aws_access_key
+    aws_secret_key = var.config.aws_secret_key
+    aws_region = var.config.aws_region
+    aws_key_name = var.config.aws_key_name
+    aws_instance_type = "t2.medium"
+
+    do_token = var.config.do_token
+    digitalocean_region = var.config.do_region
+    digitalocean_image_size = "s-2vcpu-4gb"
+
+    packer_config = var.config.packer_config
+}
+
+data "digitalocean_images" "output" {
+    depends_on = [ module.packer ]
+    filter {
+        key    = "name"
+        values = [ local.do_image_name ]
+        all = true
+    }
+    filter {
+        key    = "regions"
+        values = [ var.config.do_region ]
+        all = true
+    }
+    filter {
+        key    = "private"
+        values = ["true"]
+        all = true
+    }
+    sort {
+        key       = "created"
+        direction = "desc"
+    }
+}
 
 resource "digitalocean_droplet" "main" {
-    count = var.active_env_provider == "digital_ocean" ? length(var.servers) : 0
-    name     = "${var.server_name_prefix}-${var.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
-    image    = var.servers[count.index].image == "" ? var.packer_image_id : var.servers[count.index].image
-    region   = var.region
-    size     = var.servers[count.index].size["digital_ocean"]
-    ssh_keys = [var.do_ssh_fingerprint]
+    count = length(var.config.servers)
+    name     = "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
+    image    = var.config.servers[count.index].image == "" ? data.digitalocean_images.output.images[0].id : var.config.servers[count.index].image
+    region   = var.config.region
+    size     = var.config.servers[count.index].size["digital_ocean"]
+    ssh_keys = [var.config.do_ssh_fingerprint]
     tags = flatten([
-        "${var.server_name_prefix}-${var.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}",
-        var.servers[count.index].roles
+        "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}",
+        var.config.servers[count.index].roles
     ])
 
     lifecycle {
@@ -24,14 +87,14 @@ resource "digitalocean_droplet" "main" {
             host     = self.ipv4_address
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
 
     provisioner "file" {
         content = <<-EOF
 
-            IS_LEAD=${contains(var.servers[count.index].roles, "lead") ? "true" : ""}
+            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
 
             if [ "$IS_LEAD" = "true" ]; then
                 docker service update --constraint-add "node.hostname!=${self.name}" proxy_main
@@ -44,13 +107,13 @@ resource "digitalocean_droplet" "main" {
             host     = self.ipv4_address
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "file" {
         content = <<-EOF
 
-            IS_LEAD=${contains(var.servers[count.index].roles, "lead") ? "true" : ""}
+            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
 
             if [ "$IS_LEAD" = "true" ]; then
                 sed -i "s|${self.ipv4_address_private}|${digitalocean_droplet.main[0].ipv4_address_private}|" /etc/nginx/conf.d/proxy.conf
@@ -63,7 +126,7 @@ resource "digitalocean_droplet" "main" {
             host     = digitalocean_droplet.main[0].ipv4_address
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "file" {
@@ -84,7 +147,7 @@ resource "digitalocean_droplet" "main" {
             host     = self.ipv4_address
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
 
@@ -103,10 +166,10 @@ resource "digitalocean_droplet" "main" {
 
 
 resource "null_resource" "cleanup" {
-    count = var.active_env_provider == "digital_ocean" ? 1 : 0
+    count = 1
 
     triggers = {
-        should_downsize = var.downsize
+        should_downsize = var.config.downsize
     }
 
     #### all proxies admin   -> change nginx route ip -> safe to leave swarm
@@ -116,37 +179,37 @@ resource "null_resource" "cleanup" {
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/dockerconstraint.sh",
-            var.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
+            var.config.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
         ]
         connection {
             host     = element(digitalocean_droplet.main[*].ipv4_address, length(digitalocean_droplet.main[*].ipv4_address) - 1 )
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/changeip-${element(digitalocean_droplet.main[*].name, length(digitalocean_droplet.main[*].name) - 1)}.sh",
-            var.downsize ? "/tmp/changeip-${element(digitalocean_droplet.main[*].name, length(digitalocean_droplet.main[*].name) - 1)}.sh" : "echo 0",
+            var.config.downsize ? "/tmp/changeip-${element(digitalocean_droplet.main[*].name, length(digitalocean_droplet.main[*].name) - 1)}.sh" : "echo 0",
         ]
         connection {
             host     = element(digitalocean_droplet.main[*].ipv4_address, 0)
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/remove.sh",
-            var.downsize ? "/tmp/remove.sh" : "echo 0",
+            var.config.downsize ? "/tmp/remove.sh" : "echo 0",
         ]
         connection {
             host     = element(digitalocean_droplet.main[*].ipv4_address, length(digitalocean_droplet.main[*].ipv4_address) - 1 )
             type     = "ssh"
             user     = "root"
-            private_key = file(var.local_ssh_key_file)
+            private_key = file(var.config.local_ssh_key_file)
         }
     }
 }

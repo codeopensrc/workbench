@@ -1,11 +1,11 @@
 
 locals {
-    vpc_name = "${var.server_name_prefix}_vpc"
+    vpc_name = "${var.config.server_name_prefix}_vpc"
 }
 
 # query/create vpc
 resource "aws_vpc" "terraform_vpc" {
-    cidr_block           = var.cidr_block
+    cidr_block           = var.config.cidr_block
     enable_dns_support   = true
     enable_dns_hostnames = true
     tags = {

@@ -57,7 +57,14 @@ variable "packer_config" {
 
 # TODO: Azure and Google Cloud providers
 # Options will be digital_ocean, aws, azure, google_cloud etc.
-variable "active_env_provider" { default = "digital_ocean" } # "digital_ocean" or "aws"
+###! Current options: "digital_ocean" or "aws"
+variable "active_env_provider" { default = "digital_ocean" }
+module "main" {
+    source             = "../../modules/digital_ocean"  ###! Uncomment for digital ocean
+    # source             = "../../modules/aws"          ###! Uncomment for aws
+
+    config = local.config
+}
 
 # Currently supports 1 server with all 3 roles or 3 servers each with a single role
 # Supports admin+lead+db and 1 server as lead as well

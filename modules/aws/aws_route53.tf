@@ -1,48 +1,48 @@
 data "aws_route53_zone" "default" {
-    name         = var.root_domain_name
+    name         = var.config.root_domain_name
 }
 
 # Based on app, create .db, .dev, and .dev.db subdomains (not used just yet)
 # TODO: See if we can do locals like this in an envs/vars.tf file with a just declared variable
 locals {
     cname_aliases = [
-        for app in var.app_definitions:
+        for app in var.config.app_definitions:
         [app.subdomain_name, format("${app.subdomain_name}.db")]
         if app.create_dns_record == "true"
     ]
     cname_dev_aliases = [
-        for app in var.app_definitions:
+        for app in var.config.app_definitions:
         [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
         if app.create_dev_dns == "true"
     ]
 }
 
 resource "aws_route53_record" "default_stun_srv_udp" {
-    count           = var.active_env_provider == "aws" && var.stun_port != "" ? 1 : 0
-    name            = "_stun_udp.${var.root_domain_name}"
+    count           = var.config.stun_port != "" ? 1 : 0
+    name            = "_stun_udp.${var.config.root_domain_name}"
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
     type            = "SRV"
     ttl             = "300"
     # Format:
     #     [priority] [weight] [port] [server host name]
-    records = [ "0 0 ${var.stun_port} stun.${var.root_domain_name}" ]
+    records = [ "0 0 ${var.config.stun_port} stun.${var.config.root_domain_name}" ]
 }
 resource "aws_route53_record" "default_stun_srv_tcp" {
-    count           = var.active_env_provider == "aws" && var.stun_port != "" ? 1 : 0
-    name            = "_stun_tcp.${var.root_domain_name}"
+    count           = var.config.stun_port != "" ? 1 : 0
+    name            = "_stun_tcp.${var.config.root_domain_name}"
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
     type            = "SRV"
     ttl             = "300"
     # Format:
     #     [priority] [weight] [port] [server host name]
-    records = [ "0 0 ${var.stun_port} stun.${var.root_domain_name}" ]
+    records = [ "0 0 ${var.config.stun_port} stun.${var.config.root_domain_name}" ]
 }
 
 resource "aws_route53_record" "default_stun_a" {
-    count           = var.active_env_provider == "aws" && var.stun_port != "" ? 1 : 0
-    name            = "stun.${var.root_domain_name}"
+    count           = var.config.stun_port != "" ? 1 : 0
+    name            = "stun.${var.config.root_domain_name}"
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
     type            = "A"
@@ -51,29 +51,29 @@ resource "aws_route53_record" "default_stun_a" {
 }
 
 resource "aws_route53_record" "default_cname" {
-    count           = var.active_env_provider == "aws" ? length(compact(flatten(local.cname_aliases))) : 0
+    count           = length(compact(flatten(local.cname_aliases)))
     name            = compact(flatten(local.cname_aliases))[count.index]
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
     type            = "CNAME"
     ttl             = "300"
-    records = [ var.root_domain_name ]
+    records = [ var.config.root_domain_name ]
 }
 
 resource "aws_route53_record" "default_cname_dev" {
-    count           = var.active_env_provider == "aws" ? length(compact(flatten(local.cname_dev_aliases))) : 0
+    count           = length(compact(flatten(local.cname_dev_aliases)))
     name            = compact(flatten(local.cname_dev_aliases))[count.index]
     zone_id         = data.aws_route53_zone.default.zone_id
     allow_overwrite = true
     type            = "CNAME"
     ttl             = "300"
-    records = [ var.root_domain_name ]
+    records = [ var.config.root_domain_name ]
 }
 
 resource "aws_route53_record" "default_a_admin" {
-    count           = var.active_env_provider == "aws" ? length(compact(var.admin_arecord_aliases)) : 0
+    count           = length(compact(var.config.admin_arecord_aliases))
     zone_id         = data.aws_route53_zone.default.zone_id
-    name            = compact(var.admin_arecord_aliases)[count.index]
+    name            = compact(var.config.admin_arecord_aliases)[count.index]
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
@@ -87,9 +87,9 @@ resource "aws_route53_record" "default_a_admin" {
 }
 
 resource "aws_route53_record" "default_a_db" {
-    count           = var.active_env_provider == "aws" ? length(compact(var.db_arecord_aliases)) : 0
+    count           = length(compact(var.config.db_arecord_aliases))
     zone_id         = data.aws_route53_zone.default.zone_id
-    name            = compact(var.db_arecord_aliases)[count.index]
+    name            = compact(var.config.db_arecord_aliases)[count.index]
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
@@ -101,9 +101,9 @@ resource "aws_route53_record" "default_a_db" {
 }
 
 resource "aws_route53_record" "default_a_leader" {
-    count           = var.active_env_provider == "aws" ? length(compact(var.leader_arecord_aliases)) : 0
+    count           = length(compact(var.config.leader_arecord_aliases))
     zone_id         = data.aws_route53_zone.default.zone_id
-    name            = compact(var.leader_arecord_aliases)[count.index]
+    name            = compact(var.config.leader_arecord_aliases)[count.index]
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
@@ -126,9 +126,9 @@ resource "aws_route53_record" "default_a_leader" {
 }
 
 resource "aws_route53_record" "default_a_leader_root" {
-    count           = var.active_env_provider == "aws" ? 1 : 0
+    count           = 1
     zone_id         = data.aws_route53_zone.default.zone_id
-    name            = var.root_domain_name
+    name            = var.config.root_domain_name
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
