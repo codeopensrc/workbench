@@ -12,7 +12,7 @@ output "instances" {
 
 module "mix" {
     source             = "../../modules/mix"
-    server_name_prefix = var.server_name_prefix
+    server_name_prefix = local.server_name_prefix
     active_env_provider = var.active_env_provider
     region           = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
 
@@ -32,14 +32,17 @@ module "mix" {
     admin_private_ips = module.main.admin_private_ip_addresses
     lead_private_ips = module.main.lead_private_ip_addresses
     db_private_ips = module.main.db_private_ip_addresses
+    build_private_ips = module.main.build_private_ip_addresses
 
     admin_public_ips = module.main.admin_public_ip_addresses
     lead_public_ips = module.main.lead_public_ip_addresses
     db_public_ips = module.main.db_public_ip_addresses
+    build_public_ips = module.main.build_public_ip_addresses
 
     admin_names = module.main.admin_names
     lead_names = module.main.lead_names
     db_names = module.main.db_names
+    build_names = module.main.build_names
 
     db_ids = module.main.db_ids
 
@@ -68,7 +71,7 @@ module "mix" {
     import_gitlab = var.import_gitlab
     import_gitlab_version = var.import_gitlab_version
     gitlab_runner_tokens = var.gitlab_runner_tokens
-    num_gitlab_runners = var.num_gitlab_runners
+    num_gitlab_runners = local.num_gitlab_runners
 
     known_hosts = var.known_hosts
     app_definitions = var.app_definitions
@@ -77,7 +80,7 @@ module "mix" {
     gitlab_subdomain = var.gitlab_subdomain
     contact_email      = var.contact_email
 
-    root_domain_name = var.root_domain_name
+    root_domain_name = local.root_domain_name
 
     # TODO: Dynamically change if using multiple providers/modules
     external_leaderIP = (var.active_env_provider == "digital_ocean"
@@ -92,8 +95,8 @@ module "mix" {
 
 locals {
     config = {
-        root_domain_name = var.root_domain_name
-        server_name_prefix = var.server_name_prefix
+        root_domain_name = local.root_domain_name
+        server_name_prefix = local.server_name_prefix
         active_env_provider = var.active_env_provider
 
         region = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
@@ -120,7 +123,7 @@ locals {
         leader_arecord_aliases = var.leader_arecord_aliases
         app_definitions = var.app_definitions
 
-        cidr_block = var.cidr_block
+        cidr_block = local.cidr_block
         app_ips = var.app_ips
         station_ips = var.station_ips
 

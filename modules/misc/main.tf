@@ -22,6 +22,12 @@ variable "lead_public_ips" {}
 variable "lead_private_ips" {}
 variable "consul_lead_adv_addresses" {}
 
+variable "build_servers" { default = "" }
+variable "build_names" {}
+variable "build_public_ips" {}
+variable "build_private_ips" {}
+variable "consul_build_adv_addresses" {}
+
 variable "db_servers" { default = "" }
 variable "db_names" {}
 variable "db_public_ips" {}
@@ -30,6 +36,7 @@ variable "consul_db_adv_addresses" {}
 
 variable "is_only_leader_count" { default = 0 }
 variable "is_only_db_count" { default = 0 }
+variable "is_only_build_count" { default = 0 }
 
 variable "consul_lan_leader_ip" { default = "" }
 variable "consul_wan_leader_ip" { default = "" }
@@ -128,7 +135,7 @@ resource "null_resource" "update_s3" {
     }
 
     connection {
-        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
+        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips)), count.index)
         type = "ssh"
     }
 }
@@ -241,8 +248,8 @@ resource "null_resource" "consul_file" {
                 "node_name": "${tolist(setsubtract(setsubtract(var.db_names, var.lead_names), var.admin_names))[count.index]}",
                 "server": ${ length(regexall("db", element(var.db_names, count.index))) > 0 ? true : false},
                 "translate_wan_addrs": true,
-                "advertise_addr_wan": "${element(var.consul_db_adv_addresses, count.index)}",
-                "advertise_addr": "${element(var.consul_db_adv_addresses, count.index)}",
+                "advertise_addr_wan": "${tolist(setsubtract(setsubtract(var.consul_db_adv_addresses, var.consul_lead_adv_addresses), var.consul_admin_adv_addresses))[count.index]}",
+                "advertise_addr": "${tolist(setsubtract(setsubtract(var.consul_db_adv_addresses, var.consul_lead_adv_addresses), var.consul_admin_adv_addresses))[count.index]}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_script_checks": true,
                 "autopilot": {
@@ -256,6 +263,46 @@ resource "null_resource" "consul_file" {
         destination = "/etc/consul.d/consul.json"
         connection {
             host = tolist(setsubtract(setsubtract(var.db_public_ips, var.lead_public_ips), var.admin_public_ips))[count.index]
+            type = "ssh"
+        }
+    }
+
+}
+
+### TODO: TEMPORARY CAUSE IM LAZY
+resource "null_resource" "consul_file_build" {
+    count = var.is_only_build_count
+    depends_on = [
+        null_resource.docker_leader,
+        null_resource.update_s3,
+    ]
+
+    provisioner "file" {
+        content = <<-EOF
+            {
+                "datacenter": "${var.region}",
+                "bind_addr": "${element(var.build_private_ips, count.index)}",
+                "client_addr": "0.0.0.0",
+                "data_dir": "/tmp/consul",
+                "log_level": "INFO",
+                "node_name": "${element(var.build_names, count.index)}",
+                "server": false,
+                "translate_wan_addrs": true,
+                "advertise_addr_wan": "${element(var.consul_build_adv_addresses, count.index)}",
+                "advertise_addr": "${element(var.consul_build_adv_addresses, count.index)}",
+                "retry_join": [ "${var.consul_lan_leader_ip}" ],
+                "enable_script_checks": true,
+                "autopilot": {
+                    "cleanup_dead_servers": true,
+                    "last_contact_threshold": "5s",
+                    "max_trailing_logs": 250,
+                    "server_stabilization_time": "10s"
+                }
+            }
+        EOF
+        destination = "/etc/consul.d/consul.json"
+        connection {
+            host = element(var.build_public_ips, count.index)
             type = "ssh"
         }
     }
@@ -325,7 +372,7 @@ resource "null_resource" "consul_service" {
     }
 
     connection {
-        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
+        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips)), count.index)
         type = "ssh"
     }
 

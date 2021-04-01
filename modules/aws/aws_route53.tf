@@ -2,21 +2,6 @@ data "aws_route53_zone" "default" {
     name         = var.config.root_domain_name
 }
 
-# Based on app, create .db, .dev, and .dev.db subdomains (not used just yet)
-# TODO: See if we can do locals like this in an envs/vars.tf file with a just declared variable
-locals {
-    cname_aliases = [
-        for app in var.config.app_definitions:
-        [app.subdomain_name, format("${app.subdomain_name}.db")]
-        if app.create_dns_record == "true"
-    ]
-    cname_dev_aliases = [
-        for app in var.config.app_definitions:
-        [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
-        if app.create_dev_dns == "true"
-    ]
-}
-
 resource "aws_route53_record" "default_stun_srv_udp" {
     count           = var.config.stun_port != "" ? 1 : 0
     name            = "_stun_udp.${var.config.root_domain_name}"
@@ -77,31 +62,23 @@ resource "aws_route53_record" "default_a_admin" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
+    records = slice(local.admin_server_ips, 0, 1)
     # TODO: Check how we support tags changing while deployed as we have each aws_instance
     #  lifecycle attr set to     ignore_changes= [ tags ]
-    records = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("admin", SERVER.tags.Roles)) > 0
-    ]
 }
 
 resource "aws_route53_record" "default_a_db" {
-    count           = length(compact(var.config.db_arecord_aliases))
+    count           = length(local.db_server_ips) > 0 ? length(compact(var.config.db_arecord_aliases)) : 0
     zone_id         = data.aws_route53_zone.default.zone_id
     name            = compact(var.config.db_arecord_aliases)[count.index]
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = slice([
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("db", SERVER.tags.Roles)) > 0
-    ], 0, 1)
+    records = slice(local.db_server_ips, 0, 1)
 }
 
 resource "aws_route53_record" "default_a_leader" {
-    count           = length(compact(var.config.leader_arecord_aliases))
+    count           = length(local.lead_server_ips) > 0 ? length(compact(var.config.leader_arecord_aliases)) : 0
     zone_id         = data.aws_route53_zone.default.zone_id
     name            = compact(var.config.leader_arecord_aliases)[count.index]
     allow_overwrite = true
@@ -126,16 +103,11 @@ resource "aws_route53_record" "default_a_leader" {
 }
 
 resource "aws_route53_record" "default_a_leader_root" {
-    count           = 1
+    count           = length(local.lead_server_ips) > 0 ? 1 : 0
     zone_id         = data.aws_route53_zone.default.zone_id
     name            = var.config.root_domain_name
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
     records = slice(local.lead_server_ips, 0, 1)
-    # records = slice([
-    #     for SERVER in aws_instance.main[*]:
-    #     SERVER.public_ip
-    #     if length(regexall("lead", SERVER.tags.Roles)) > 0
-    # ], 0, 1)
 }

@@ -82,3 +82,27 @@ output "db_ids" {
         if length(regexall("db", SERVER.tags.Roles)) > 0
     ]
 }
+
+
+
+output "build_private_ip_addresses" {
+    value = [
+        for SERVER in aws_instance.main[*]:
+        SERVER.private_ip
+        if length(regexall("build", SERVER.tags.Roles)) > 0
+    ]
+}
+output "build_public_ip_addresses" {
+    value = [
+        for SERVER in aws_instance.main[*]:
+        SERVER.public_ip
+        if length(regexall("build", SERVER.tags.Roles)) > 0
+    ]
+}
+output "build_names" {
+    value = [
+        for SERVER in aws_instance.main[*]:
+        SERVER.tags.Name
+        if length(regexall("build", SERVER.tags.Roles)) > 0
+    ]
+}

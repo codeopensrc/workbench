@@ -20,7 +20,6 @@ variable "app_definitions" {
     }))
 }
 
-variable "prev_module_output" {}
 variable "registry_ready" {}
 
 resource "null_resource" "pull_images" {
@@ -40,7 +39,6 @@ resource "null_resource" "pull_images" {
         # TODO: Seperate out docker credentials from git credentials. docker pull vs git clone
         inline = [
             <<-EOF
-                echo ${join(",", var.prev_module_output)}
 
                 %{ for APP in var.app_definitions }
 

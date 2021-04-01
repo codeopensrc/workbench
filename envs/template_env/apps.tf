@@ -36,6 +36,7 @@ variable "station_ips" {
 
 variable "import_dbs" { default = true }
 
+## Supports types "mongo", "redis", and "pg"
 variable "dbs_to_import" {
     type = list(object({ type=string, s3bucket=string, s3alias=string,
         dbname=string, import=string, backups_enabled=string, fn=string }))  # TODO: "fn" hack
@@ -46,7 +47,7 @@ variable "dbs_to_import" {
             "s3alias" = "" ##! s3 OR spaces
             "dbname" = "wekan"
             "import" = "false"
-            "backups_enabled" = "false"
+            "backups_enabled" = "false"  ## auto false if not "default" workspace
             "fn" = ""
         }
     ]
@@ -143,14 +144,14 @@ variable "app_definitions" {
             "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
             "create_ssl_cert"       = "true"    ## Affects dns and letsencrypt
             "subdomain_name"        = "btcpay"     ## Affects dns and letsencrypt
-            "use_custom_backup"     = "false"
+            "use_custom_backup"     = "false"   ## auto false if not "default" workspace
             "custom_backup_file"    = "backup.sh"
             "backup_frequency"      = "0 1 * * 0"
             "use_custom_restore"    = "false"
             "custom_restore_file"   = "restore.sh -a S3_ALIAS -b S3_BUCKET_NAME"
             "custom_init"           = "init.sh"
             "custom_vars"           = <<-EOF
-                export BTCPAY_HOST=\"btcpay.EXAMPLE.COM\"
+                export BTCPAY_HOST=\"btcpay.`hostname -d`\"
                 export BTCPAYGEN_ADDITIONAL_FRAGMENTS=\"opt-save-storage-xxs\"
             EOF
         }

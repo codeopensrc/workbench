@@ -15,7 +15,7 @@ resource "null_resource" "disable_autoupgrade" {
         ]
     }
     connection {
-        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
+        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips)), count.index)
         type = "ssh"
     }
 }
@@ -27,23 +27,29 @@ module "provisioners" {
     servers = var.servers
 
     # TODO: Refactor docker and consul resources inside module
-    is_only_leader_count = length(local.is_only_leader_count) > 0 ? local.is_only_leader_count[0] : 0
-    is_only_db_count = length(local.is_only_db_count) > 0 ? local.is_only_db_count[0] : 0
+    is_only_leader_count = local.is_only_leader_count
+    is_only_db_count = local.is_only_db_count
+    is_only_build_count = local.is_only_build_count
 
-    admin_servers = local.admin_servers[0]
+    admin_servers = local.admin_servers
     admin_names       = var.admin_names
     admin_public_ips  = var.admin_public_ips
     admin_private_ips = var.admin_private_ips
 
-    lead_servers = local.num_lead_servers
+    lead_servers = local.lead_servers
     lead_names       = var.lead_names
     lead_public_ips  = var.lead_public_ips
     lead_private_ips = var.lead_private_ips
 
-    db_servers = local.db_servers[0]
+    db_servers = local.db_servers
     db_names       = var.db_names
     db_public_ips  = var.db_public_ips
     db_private_ips = var.db_private_ips
+
+    build_servers = local.build_servers
+    build_names       = var.build_names
+    build_public_ips  = var.build_public_ips
+    build_private_ips = var.build_private_ips
 
     region      = var.region
     do_spaces_region = var.do_spaces_region
@@ -59,6 +65,7 @@ module "provisioners" {
     consul_admin_adv_addresses = local.consul_admin_adv_addresses
     consul_lead_adv_addresses = local.consul_lead_adv_addresses
     consul_db_adv_addresses = local.consul_db_adv_addresses
+    consul_build_adv_addresses = local.consul_build_adv_addresses
     datacenter_has_admin = length(var.admin_public_ips) > 0
 }
 
@@ -71,9 +78,9 @@ module "hostname" {
     hostname = "${var.gitlab_subdomain}.${var.root_domain_name}"
     servers = length(var.servers)
 
-    names       = distinct(concat(var.admin_names, var.lead_names, var.db_names))
-    public_ips  = distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips))
-    private_ips = distinct(concat(var.admin_private_ips, var.lead_private_ips, var.db_private_ips))
+    names       = distinct(concat(var.admin_names, var.lead_names, var.db_names, var.build_names))
+    public_ips  = distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips))
+    private_ips = distinct(concat(var.admin_private_ips, var.lead_private_ips, var.db_private_ips, var.build_private_ips))
 
     root_domain_name = var.root_domain_name
     prev_module_output = module.provisioners.output
@@ -87,9 +94,9 @@ module "cron" {
 
     servers = length(var.servers)
 
-    lead_servers = local.num_lead_servers
-    db_servers = local.db_servers[0]
-    admin_servers = local.admin_servers[0]
+    lead_servers = local.lead_servers
+    db_servers = local.db_servers
+    admin_servers = local.admin_servers
     admin_public_ips = var.admin_public_ips
     lead_public_ips = var.lead_public_ips
     db_public_ips = var.db_public_ips
@@ -116,7 +123,6 @@ module "cron" {
     redis_dbs = length(local.redis_dbs) > 0 ? local.redis_dbs : []
     mongo_dbs = length(local.mongo_dbs) > 0 ? local.mongo_dbs : []
     pg_dbs = length(local.pg_dbs) > 0 ? local.pg_dbs : []
-    pg_fn = length(local.pg_fn) > 0 ? local.pg_fn["pg"] : "" # TODO: hack
 
     # Leader specific
     run_service = var.run_service_enabled
@@ -143,8 +149,8 @@ module "provision_files" {
 
     servers = length(var.servers)
 
-    public_ips  = distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips))
-    private_ips = distinct(concat(var.admin_private_ips, var.lead_private_ips, var.db_private_ips))
+    public_ips  = distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips))
+    private_ips = distinct(concat(var.admin_private_ips, var.lead_private_ips, var.db_private_ips, var.build_private_ips))
 
     known_hosts = var.known_hosts
     deploy_key_location = var.deploy_key_location
@@ -162,7 +168,7 @@ module "provision_files" {
 
 ### NOTE: Only thing for this is consul needs to be installed
 resource "null_resource" "add_proxy_hosts" {
-    count      = local.admin_servers[0]
+    count      = local.admin_servers
     depends_on = [
         module.provisioners,
         module.hostname,
@@ -222,7 +228,7 @@ resource "null_resource" "add_proxy_hosts" {
 
 
 resource "null_resource" "install_gitlab" {
-    count = local.admin_servers[0]
+    count = local.admin_servers
     depends_on = [ null_resource.add_proxy_hosts ]
 
     # # After renewing certs possibly
@@ -305,7 +311,7 @@ resource "null_resource" "install_gitlab" {
 
 
 resource "null_resource" "restore_gitlab" {
-    count = local.admin_servers[0]
+    count = local.admin_servers
     depends_on = [
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -347,7 +353,7 @@ resource "null_resource" "restore_gitlab" {
 }
 
 resource "null_resource" "gitlab_plugins" {
-    count = local.admin_servers[0]
+    count = local.admin_servers
     depends_on = [
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -471,9 +477,10 @@ resource "null_resource" "reauthorize_mattermost" {
 
 
 module "admin_nginx" {
+    count = local.lead_servers > 0 ? local.admin_servers : 0
     source = "../nginx"
 
-    servers = local.admin_servers[0]
+    servers = local.admin_servers
     public_ips = var.admin_public_ips
 
     root_domain_name = var.root_domain_name
@@ -493,7 +500,7 @@ module "admin_nginx" {
 
 
 resource "null_resource" "install_dbs" {
-    count      = local.db_servers[0] > 0 ? local.db_servers[0] : 0
+    count      = local.db_servers > 0 ? local.db_servers : 0
     depends_on = [
         module.provisioners,
         module.hostname,
@@ -526,7 +533,7 @@ resource "null_resource" "install_dbs" {
 }
 
 resource "null_resource" "import_dbs" {
-    count = var.import_dbs && local.db_servers[0] > 0 ? length(var.dbs_to_import) : 0
+    count = var.import_dbs && local.db_servers > 0 ? length(var.dbs_to_import) : 0
     depends_on = [
         module.provisioners,
         module.hostname,
@@ -579,7 +586,7 @@ resource "null_resource" "import_dbs" {
 
 
 resource "null_resource" "db_ready" {
-    count = local.db_servers[0]
+    count = local.db_servers
     depends_on = [
         module.provisioners,
         module.hostname,
@@ -630,8 +637,9 @@ resource "null_resource" "db_ready" {
 ## NOTE: Internally waits for init/db_bootstrapped from consul before starting containers
 module "docker" {
     source = "../docker"
+    depends_on = [ module.admin_nginx ]
 
-    servers = local.num_lead_servers
+    servers = local.lead_servers
     public_ips = var.lead_public_ips
 
     app_definitions = var.app_definitions
@@ -643,13 +651,11 @@ module "docker" {
     https_port = "4433"
 
     registry_ready = element(concat(null_resource.restore_gitlab[*].id, [""]), 0)
-
-    prev_module_output = module.admin_nginx.output
 }
 
 
 resource "null_resource" "docker_ready" {
-    count = local.admin_servers[0]
+    count = local.admin_servers
     depends_on = [
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -700,7 +706,7 @@ resource "null_resource" "docker_ready" {
 
 # TODO: Turn this into an ansible playbook
 resource "null_resource" "setup_letsencrypt" {
-    count = local.num_lead_servers > 0 ? 1 : 0
+    count = local.lead_servers > 0 ? 1 : 0
     depends_on = [
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -793,7 +799,7 @@ resource "null_resource" "setup_letsencrypt" {
 # TODO: Turn this into an ansible playbook
 # Restart service, re-fetching ssl keys
 resource "null_resource" "add_keys" {
-    count = local.num_lead_servers > 0 ? 1 : 0
+    count = local.lead_servers > 0 ? 1 : 0
     depends_on = [ null_resource.setup_letsencrypt ]
 
     triggers = {
@@ -846,8 +852,14 @@ resource "null_resource" "add_keys" {
 }
 
 resource "null_resource" "install_runner" {
-    count = local.num_lead_servers
-    depends_on = [ null_resource.add_keys ]
+    count = local.lead_servers + local.build_servers
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.provision_files,
+        null_resource.add_keys
+    ]
+
 
     provisioner "file" {
         content = <<-EOF
@@ -874,7 +886,14 @@ resource "null_resource" "install_runner" {
             touch /home/gitlab-runner/.aws/credentials
             mkdir -p /home/gitlab-runner/.mc
             cp /root/.mc/config.json /home/gitlab-runner/.mc/config.json
+            mkdir -p /home/gitlab-runner/rmscripts
             chown -R gitlab-runner:gitlab-runner /home/gitlab-runner
+
+            sed -i "s|concurrent = 1|concurrent = 3|" /etc/gitlab-runner/config.toml
+
+            ### https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-runnerscaches3-section
+            ### Setup caching using a cluster minio instance
+            ### Will allow runners across machines to share cache instead of each machine
         EOF
         # chmod 0775 -R /home/gitlab-runner/$SERVICE_REPO_NAME
         destination = "/tmp/install_runner.sh"
@@ -898,8 +917,7 @@ resource "null_resource" "install_runner" {
     }
 
     connection {
-        # TODO: Handling runners on multiple "leader" or "build" servers
-        host = element(var.lead_public_ips, 0)
+        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
         type = "ssh"
     }
 }
@@ -914,16 +932,25 @@ resource "null_resource" "install_runner" {
 # Programatically creating the project is a little tedious but honestly not a bad idea
 #  considering we can then just push the code and images up if we didnt/dont have a backup
 
+#TODO: Big obstacle is figuring out the different types of runners we want and how many per and per machine
+# Where does the prod runner run vs a build runner vs a generic vs a scheduled vs a unity builder etc.
 resource "null_resource" "register_runner" {
     # We can use count to actually say how many runners we want
     # Have a trigger set to update/destroy based on id etc
     # /etc/gitlab-runner/config.toml   set concurrent to number of runners
     # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
-    count = var.num_gitlab_runners
+    #TODO: var.gitlab_enabled ? var.servers : 0;
+    count = local.lead_servers + local.build_servers
     depends_on = [ null_resource.install_runner ]
 
     # TODO: 1 or 2 prod runners with rest non-prod
     # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
+    triggers = {
+        num_names = join(",", concat(var.lead_names, var.build_names))
+        num_runners = var.num_gitlab_runners
+    }
+
+
     provisioner "remote-exec" {
         inline = [
             <<-EOF
@@ -939,15 +966,27 @@ resource "null_resource" "register_runner" {
 
                 sleep $((3 + $((${count.index} * 5)) ))
 
-                sed -i "s|concurrent = 1|concurrent = 5|" /etc/gitlab-runner/config.toml
+                ## Split runners *evenly* between multiple machines
+                ## If not evenly distributed/divisible, all runners unregister atm
+                ## Due to float arithmetic and how runners are registered/unregistered
+                %{ for NUM in range(1, 1 + (var.num_gitlab_runners / length(concat(var.lead_names, var.build_names)) )) }
 
-                sudo gitlab-runner register -n \
-                  --url "https://gitlab.${var.root_domain_name}" \
-                  --registration-token "$REGISTRATION_TOKEN" \
-                  --executor shell \
-                  --run-untagged="true" \
-                  --locked="false" \
-                  --description "Shell Runner"
+                    MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
+                    RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
+                    FULL_NAME="$${RUNNER_NAME}_shell_${NUM}"
+                    FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg")
+
+                    if [ -z "$FOUND_NAME" ]; then
+                        sudo gitlab-runner register -n \
+                          --url "https://gitlab.${var.root_domain_name}" \
+                          --registration-token "$REGISTRATION_TOKEN" \
+                          --executor shell \
+                          --run-untagged="true" \
+                          --locked="false" \
+                          --name "$FULL_NAME"
+                    fi
+
+                %{ endfor }
 
                   sleep $((2 + $((${count.index} * 5)) ))
 
@@ -968,16 +1007,109 @@ resource "null_resource" "register_runner" {
         #     --docker-privileged \
         #     --docker-volumes "/certs/client"
     }
+
+    provisioner "file" {
+        content = <<-EOF
+            MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
+            RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
+            NAMES=( $(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg") )
+
+            for NAME in "$${NAMES[@]}"; do
+                sudo gitlab-runner unregister --name $NAME
+            done
+        EOF
+        destination = "/home/gitlab-runner/rmscripts/rmrunners.sh"
+    }
+
+
     connection {
-        host = element(var.lead_public_ips, 0)
+        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
         type = "ssh"
     }
 }
 
+#Scale down runners based on num of runners and active names/ip addresses
+#Unregisters excess runners per machine
+resource "null_resource" "unregister_runner" {
+    #TODO: var.gitlab_enabled ? var.servers * 2 : 0;
+    count = local.lead_servers + local.build_servers
+    depends_on = [ null_resource.install_runner, null_resource.register_runner ]
+
+    triggers = {
+        num_names = join(",", concat(var.lead_names, var.build_names))
+        num_runners = var.num_gitlab_runners
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+            MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
+            RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
+            RUNNERS_ON_MACHINE=($(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg"))
+            CURRENT_NUM_RUNNERS="$${#RUNNERS_ON_MACHINE[@]}"
+            MAX_RUNNERS_PER_MACHINE=${var.num_gitlab_runners / (local.lead_servers + local.build_servers) }
+            RM_INDEX_START=$(( $MAX_RUNNERS_PER_MACHINE+1 ))
+
+            for NUM in $(seq $RM_INDEX_START $CURRENT_NUM_RUNNERS); do
+                SINGLE_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "shell_$${NUM}" | jq -r ".msg")
+                [ "$SINGLE_NAME" ] && sudo gitlab-runner unregister --name $SINGLE_NAME
+            done
+
+        EOF
+        destination = "/home/gitlab-runner/rmscripts/unregister.sh"
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /home/gitlab-runner/rmscripts/unregister.sh",
+            "bash /home/gitlab-runner/rmscripts/unregister.sh"
+        ]
+    }
+
+    connection {
+        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
+        type = "ssh"
+    }
+}
+
+resource "null_resource" "install_unity" {
+    count = local.build_servers
+    depends_on = [
+        null_resource.install_runner,
+        null_resource.register_runner,
+        null_resource.unregister_runner
+    ]
+
+    provisioner "file" {
+        ## TODO: Unity version root level. Get year from version
+        source = "${path.module}/../packer/ignore/Unity_v2020.x.ulf"
+        destination = "/root/code/scripts/misc/Unity_v2020.x.ulf"
+    }
+
+    provisioner "remote-exec" {
+        ## TODO: Unity version root level.
+        inline = [
+            "cd /root/code/scripts/misc",
+            "chmod +x installUnity3d.sh",
+            "bash installUnity3d.sh -c c53830e277f1 -v 2020.2.7f1 -y" #TODO: Auto input "yes" if license exists
+        ]
+        #Cleanup anything no longer needed
+    }
+
+    connection {
+        host = element(var.build_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
+
 # Re-enable after everything installed
 resource "null_resource" "enable_autoupgrade" {
     count = length(var.servers)
-    depends_on = [ null_resource.add_keys ]
+    depends_on = [
+        null_resource.install_runner,
+        null_resource.register_runner,
+        null_resource.unregister_runner,
+        null_resource.install_unity
+    ]
 
     provisioner "remote-exec" {
         inline = [
@@ -986,7 +1118,7 @@ resource "null_resource" "enable_autoupgrade" {
         ]
     }
     connection {
-        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
+        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips)), count.index)
         type = "ssh"
     }
 }

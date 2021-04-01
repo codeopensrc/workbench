@@ -4,12 +4,12 @@
 # Name: Backup '${DB.name}' Redis DB
 SHELL="/bin/bash"
 HOME="/root"
-${DB.backups_enabled ? "" : "#"}0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupRedis.sh -a ${s3alias} -b ${s3bucket} -d ${DB.name} >> /dev/null 2>>$HOME/code/logs/errors.log
+${DB.backups_enabled && allow_cron_backups ? "" : "#"}0 22 * * 1,2,3,4,5 bash $HOME/code/scripts/db/backupRedis.sh -a ${s3alias} -b ${s3bucket} -d ${DB.name} >> /dev/null 2>>$HOME/code/logs/errors.log
 
 # Name: Remove '${DB.name}' Redis Backups
 SHELL="/bin/bash"
 HOME="/root"
-${DB.backups_enabled ? "" : "#"}0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d ${DB.name} >> /dev/null 2>>$HOME/code/logs/errors.log
+${DB.backups_enabled && allow_cron_backups ? "" : "#"}0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d ${DB.name} >> /dev/null 2>>$HOME/code/logs/errors.log
 
 #### ==========
 %{ endfor }

@@ -162,7 +162,64 @@ resource "digitalocean_droplet" "main" {
     }
 
 
+    provisioner "remote-exec" {
+        when = destroy
+        inline = [
+            <<-EOF
+                consul leave;
+                if [ "${length( regexall("build", join(",", self.tags)) ) > 0}" = "true" ]; then
+                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
+                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
+                fi
+            EOF
+        ]
+        on_failure = continue
+        connection {
+            host     = self.ipv4_address
+            type     = "ssh"
+            user     = "root"
+        }
+    }
 }
+
+resource "null_resource" "cleanup_consul" {
+    count = 1
+    depends_on = [ digitalocean_droplet.main ]
+
+    triggers = {
+        machine_ids = join(",", digitalocean_droplet.main[*].id)
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+            #Wait for consul to detect failure;
+            sleep 20;
+            DOWN_MEMBERS=( $(consul members | grep "left\|failed" | cut -d " " -f1) )
+            echo "DOWN MEMBERS: $${DOWN_MEMBERS[@]}"
+            if [ -n "$DOWN_MEMBERS" ]; then
+                for MEMBER in "$${DOWN_MEMBERS[@]}"
+                do
+                    echo "Force leaving: $MEMBER";
+                    consul force-leave $MEMBER;
+                done
+            fi
+            exit 0;
+        EOF
+        destination = "/tmp/update_consul_members.sh"
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/update_consul_members.sh",
+            "bash /tmp/update_consul_members.sh"
+        ]
+    }
+
+    connection {
+        host = element(digitalocean_droplet.main[*].ipv4_address, 0)
+        type = "ssh"
+    }
+}
+
 
 
 resource "null_resource" "cleanup" {

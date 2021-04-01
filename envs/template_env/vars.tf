@@ -9,13 +9,11 @@ variable "aws_ecr_region" { default = "us-east-2" }
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
 variable "stun_port" { default = "" }
-variable "cidr_block" { default = "10.1.0.0/16" }
 
 variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }
-variable "num_gitlab_runners" { default = 0 }
 
-variable "gitlab_backups_enabled" { default = false }
+variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "run_service_enabled" { default = false }
 variable "send_logs_enabled" { default = false }
 variable "send_jsons_enabled" { default = false }
@@ -92,6 +90,16 @@ variable "servers" {
         #     "size" = {
         #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][1]
         #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #     }
+        #     "aws_volume_size" = 40
+        # },
+        # {
+        #     "count" = 1
+        #     "image" = ""
+        #     "roles" = ["build"]
+        #     "size" = {
+        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][1]
+        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][1]
         #     }
         #     "aws_volume_size" = 40
         # },

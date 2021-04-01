@@ -198,9 +198,64 @@ resource "aws_instance" "main" {
         EOF
         on_failure = continue
     }
+
+    provisioner "remote-exec" {
+        when = destroy
+        inline = [
+            <<-EOF
+                consul leave;
+                if [ "${length( regexall("build", self.tags.Roles) ) > 0}" = "true" ]; then
+                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
+                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
+                fi
+            EOF
+        ]
+        on_failure = continue
+        connection {
+            host     = self.public_ip
+            type     = "ssh"
+            user     = "root"
+        }
+    }
 }
 
+resource "null_resource" "cleanup_consul" {
+    count = 1
+    depends_on = [ aws_instance.main ]
 
+    triggers = {
+        machine_ids = join(",", aws_instance.main[*].id)
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+            #Wait for consul to detect failure;
+            sleep 20;
+            DOWN_MEMBERS=( $(consul members | grep "left\|failed" | cut -d " " -f1) )
+            echo "DOWN MEMBERS: $${DOWN_MEMBERS[@]}"
+            if [ -n "$DOWN_MEMBERS" ]; then
+                for MEMBER in "$${DOWN_MEMBERS[@]}"
+                do
+                    echo "Force leaving: $MEMBER";
+                    consul force-leave $MEMBER;
+                done
+            fi
+            exit 0;
+        EOF
+        destination = "/tmp/update_consul_members.sh"
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/update_consul_members.sh",
+            "bash /tmp/update_consul_members.sh"
+        ]
+    }
+
+    connection {
+        host = element(aws_instance.main[*].public_ip, 0)
+        type = "ssh"
+    }
+}
 
 ###! Run this resource when downsizing from 2 leader servers to 1 in its own apply
 resource "null_resource" "cleanup" {

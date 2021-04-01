@@ -49,9 +49,36 @@ locals {
         element(app.roles, 0)
     ]
 
+    cname_aliases = [
+        for app in var.config.app_definitions:
+        [app.subdomain_name, format("${app.subdomain_name}.db")]
+        if app.create_dns_record == "true"
+    ]
+    cname_dev_aliases = [
+        for app in var.config.app_definitions:
+        [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
+        if app.create_dev_dns == "true"
+    ]
+
     lead_server_ips = tolist([
         for SERVER in aws_instance.main[*]:
         SERVER.public_ip
         if length(regexall("lead", SERVER.tags.Roles)) > 0
     ])
+    db_server_ips = tolist([
+        for SERVER in aws_instance.main[*]:
+        SERVER.public_ip
+        if length(regexall("db", SERVER.tags.Roles)) > 0
+    ])
+    admin_server_ips = tolist([
+        for SERVER in aws_instance.main[*]:
+        SERVER.public_ip
+        if length(regexall("admin", SERVER.tags.Roles)) > 0
+    ])
+    build_server_ips = tolist([
+        for SERVER in aws_instance.main[*]:
+        SERVER.public_ip
+        if length(regexall("build", SERVER.tags.Roles)) > 0
+    ])
+
 }

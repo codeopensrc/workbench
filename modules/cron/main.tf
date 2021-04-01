@@ -21,7 +21,6 @@ variable "num_dbs" { default = 0 }
 variable "redis_dbs" { default = [] }
 variable "mongo_dbs" { default = [] }
 variable "pg_dbs" { default = [] }
-variable "pg_fn" { default = "" }
 
 #Leader
 variable "run_service" { default = false }
@@ -45,6 +44,9 @@ variable "service_repo_name" { default = "" }
 
 variable "prev_module_output" {}
 
+locals {
+    allow_cron_backups = terraform.workspace == "default"
+}
 
 resource "null_resource" "admin" {
     count = var.admin_servers
@@ -58,7 +60,7 @@ resource "null_resource" "admin" {
 
     provisioner "file" {
         content = fileexists("${path.module}/templates/${var.templates["admin"]}") ? templatefile("${path.module}/templates/${var.templates["admin"]}", {
-            gitlab_backups_enabled = var.gitlab_backups_enabled
+            gitlab_backups_enabled = var.gitlab_backups_enabled && local.allow_cron_backups
             s3alias = var.s3alias
             s3bucket = var.s3bucket
         }) : ""
@@ -94,6 +96,7 @@ resource "null_resource" "db" {
             s3alias = var.s3alias
             s3bucket = var.s3bucket
             redis_dbs = length(var.redis_dbs) > 0 ? var.redis_dbs : []
+            allow_cron_backups = local.allow_cron_backups
         }) : ""
         destination = var.destinations["redisdb"]
     }
@@ -104,6 +107,7 @@ resource "null_resource" "db" {
             s3bucket = var.s3bucket
             mongo_dbs = length(var.mongo_dbs) > 0 ? var.mongo_dbs : []
             host = "vpc.my_private_ip"  # TODO: Add ability to specific host/hostnames/ip
+            allow_cron_backups = local.allow_cron_backups
         }) : ""
         destination = var.destinations["mongodb"]
     }
@@ -113,7 +117,7 @@ resource "null_resource" "db" {
             s3alias = var.s3alias
             s3bucket = var.s3bucket
             pg_dbs = length(var.pg_dbs) > 0 ? var.pg_dbs : []
-            pg_fn = length(var.pg_fn) > 0 ? var.pg_fn : "" # TODO: hack
+            allow_cron_backups = local.allow_cron_backups
         }) : ""
         destination = var.destinations["pgdb"]
     }
@@ -167,6 +171,7 @@ resource "null_resource" "leader" {
             ]
             s3alias = var.s3alias
             s3bucket = var.s3bucket
+            allow_cron_backups = local.allow_cron_backups
         }) : ""
         destination = var.destinations["app"]
     }

@@ -70,14 +70,17 @@ variable "contact_email" { default = "" }
 variable "admin_private_ips" { type = list(string) }
 variable "lead_private_ips" { type = list(string) }
 variable "db_private_ips" { type = list(string) }
+variable "build_private_ips" { type = list(string) }
 
 variable "admin_public_ips" { type = list(string) }
 variable "lead_public_ips" { type = list(string) }
 variable "db_public_ips" { type = list(string) }
+variable "build_public_ips" { type = list(string) }
 
 variable "admin_names" { type = list(string) }
 variable "lead_names" { type = list(string) }
 variable "db_names" { type = list(string) }
+variable "build_names" { type = list(string) }
 
 variable "db_ids" { type = list(string) }
 
@@ -87,39 +90,45 @@ locals {
     #     for SERVER in var.servers:
     #     # reduce count attribute if roles contains same key
     # }
-    lead_servers = [
+    lead_servers = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
         if contains(SERVER.roles, "lead")
-    ]
-    # TODO: Still isnt reducing count but roughly works for now
-    num_lead_servers = length([
-        for SERVER in var.servers:
-        SERVER.count
-        if contains(SERVER.roles, "lead")
-    ])
-    admin_servers = [
+    ])))
+    admin_servers = sum(tolist([
         for SERVER in var.servers:
         SERVER.count
         if contains(SERVER.roles, "admin")
-    ]
-    db_servers = [
+    ]))
+    db_servers = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
         if contains(SERVER.roles, "db")
-    ]
+    ])))
+    build_servers = sum(concat([0], tolist([
+        for SERVER in var.servers:
+        SERVER.count
+        if contains(SERVER.roles, "build")
+    ])))
+
 
     ### TODO: Holy moly fix these 2
-    is_only_leader_count = [
+    is_only_leader_count = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
         if contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
-    ]
-    is_only_db_count = [
+    ])))
+    is_only_db_count = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
         if contains(SERVER.roles, "db") && !contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
-    ]
+    ])))
+    is_only_build_count = sum(concat([0], tolist([
+        for SERVER in var.servers:
+        SERVER.count
+        if contains(SERVER.roles, "build")
+    ])))
+
 
     redis_dbs = [
         for db in var.dbs_to_import:
@@ -136,11 +145,6 @@ locals {
         {name = db.dbname, backups_enabled = db.backups_enabled}
         if db.type == "mongo" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
-    pg_fn = {
-        for db in var.dbs_to_import:
-        db.type => db.fn
-        if db.type == "pg" && ( db.import == "true" || db.backups_enabled == "true" )
-    }
 
     docker_service_name   = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_service_name" ) : ""
     consul_service_name   = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "consul_service_name" ) : ""
@@ -155,6 +159,7 @@ locals {
     consul_admin_adv_addresses = var.admin_private_ips
     consul_lead_adv_addresses = var.lead_private_ips
     consul_db_adv_addresses = var.db_private_ips
+    consul_build_adv_addresses = var.build_private_ips
 }
 
 ## for_each example

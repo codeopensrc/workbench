@@ -42,13 +42,18 @@ sudo sed -i "s|\\\u@\\\h|\\\u@\\\H|g" /root/.bashrc
 cp /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 timedatectl set-timezone 'America/Los_Angeles'
 
-
-echo -e "deb http://mirrors.kernel.org/ubuntu `lsb_release -cs` main" | sudo tee -a /etc/apt/sources.list
-sleep 5;
+### Mirrors
+#sed -i "s/# deb-src \(.*\) xenial main restricted/deb-src \1 xenial main restricted/" /etc/apt/sources.list
+#sed -i "s/# deb-src \(.*\) xenial-updates main restricted/deb-src \1 xenial-updates main restricted/" /etc/apt/sources.list
+#echo -e "deb http://mirrors.kernel.org/ubuntu `lsb_release -cs` main" | sudo tee -a /etc/apt/sources.list
+#echo -e "deb-src http://mirrors.kernel.org/ubuntu `lsb_release -cs` main" | sudo tee -a /etc/apt/sources.list
+#sleep 5;
 
 sudo apt-get update
+sudo apt-get upgrade -y
 # Base/essentials
-sudo apt-get install build-essential apt-utils -y
+sudo apt-get install build-essential -y
+sudo apt-get install apt-utils -y
 # Misc
 sudo apt-get install openjdk-8-jdk vim git awscli jq -y
 # unzip for consul, rest for gitlab
@@ -61,7 +66,7 @@ chmod +x /usr/local/bin/docker-compose
 
 
 # aws
-curl -O https://bootstrap.pypa.io/3.4/get-pip.py
+curl -O https://bootstrap.pypa.io/pip/3.4/get-pip.py
 python3 get-pip.py
 pip3 install awscli --upgrade
 

@@ -76,6 +76,11 @@ locals {
         SERVER.ipv4_address
         if length(regexall("admin", join(",", SERVER.tags))) > 0
     ])
+    build_server_ips = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.ipv4_address
+        if length(regexall("build", join(",", SERVER.tags))) > 0
+    ])
 
 
 
@@ -95,6 +100,12 @@ locals {
         for SERVER in digitalocean_droplet.main[*]:
         SERVER.id
         if length(regexall("db", join(",", SERVER.tags))) > 0
+    ])
+
+    build_server_ids = tolist([
+        for SERVER in digitalocean_droplet.main[*]:
+        SERVER.id
+        if length(regexall("build", join(",", SERVER.tags))) > 0
     ])
 }
 
