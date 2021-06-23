@@ -21,7 +21,6 @@ variable "app_definitions" {
     }))
 }
 
-variable "prev_module_output" {}
 
 
 
@@ -36,7 +35,6 @@ resource "null_resource" "proxy_config" {
     provisioner "remote-exec" {
         # TODO: Test if changing the group necessary or not to reading directory for nginx
         inline = [
-            "echo ${join(",", var.prev_module_output)}",
             "mkdir -p /etc/nginx/conf.d",
             "chown root:gitlab-www /etc/nginx/conf.d"
         ]

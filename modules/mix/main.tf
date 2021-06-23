@@ -60,7 +60,7 @@ module "provisioners" {
     aws_bot_secret_key = var.aws_bot_secret_key
 
     # TODO: This might cause a problem when launching the 2nd admin server when swapping
-    consul_wan_leader_ip = var.external_leaderIP
+    #consul_wan_leader_ip = var.external_leaderIP
     consul_lan_leader_ip = local.consul_lan_leader_ip
     consul_admin_adv_addresses = local.consul_admin_adv_addresses
     consul_lead_adv_addresses = local.consul_lead_adv_addresses
@@ -168,7 +168,7 @@ module "provision_files" {
 
 ### NOTE: Only thing for this is consul needs to be installed
 resource "null_resource" "add_proxy_hosts" {
-    count      = local.admin_servers
+    count      = 1
     depends_on = [
         module.provisioners,
         module.hostname,
@@ -221,7 +221,7 @@ resource "null_resource" "add_proxy_hosts" {
         ]
     }
     connection {
-        host = element(var.admin_public_ips, count.index)
+        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
         type = "ssh"
     }
 }
@@ -479,6 +479,15 @@ resource "null_resource" "reauthorize_mattermost" {
 module "admin_nginx" {
     count = local.lead_servers > 0 ? local.admin_servers : 0
     source = "../nginx"
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab
+    ]
 
     servers = local.admin_servers
     public_ips = var.admin_public_ips
@@ -493,8 +502,6 @@ module "admin_nginx" {
     https_port = "4433"
     cert_port = "7080" ## Currently hardcoded in letsencrypt/letsencrypt.tmpl
 
-    prev_module_output = concat(module.provisioners.output, module.provisioners.output, module.cron.output,
-        null_resource.add_proxy_hosts.*.id, null_resource.install_gitlab.*.id, null_resource.restore_gitlab.*.id)
 }
 
 
@@ -506,6 +513,7 @@ resource "null_resource" "install_dbs" {
         module.hostname,
         module.cron,
         module.provision_files,
+        null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
     ]
 
@@ -539,6 +547,7 @@ resource "null_resource" "import_dbs" {
         module.hostname,
         module.cron,
         module.provision_files,
+        null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.install_dbs
     ]
@@ -592,6 +601,7 @@ resource "null_resource" "db_ready" {
         module.hostname,
         module.cron,
         module.provision_files,
+        null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.install_dbs,
         null_resource.import_dbs,
@@ -637,7 +647,18 @@ resource "null_resource" "db_ready" {
 ## NOTE: Internally waits for init/db_bootstrapped from consul before starting containers
 module "docker" {
     source = "../docker"
-    depends_on = [ module.admin_nginx ]
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab,
+        module.admin_nginx,
+        null_resource.install_dbs,
+        null_resource.import_dbs,
+    ]
 
     servers = local.lead_servers
     public_ips = var.lead_public_ips
@@ -655,12 +676,18 @@ module "docker" {
 
 
 resource "null_resource" "docker_ready" {
-    count = local.admin_servers
+    count = local.lead_servers > 0 ? 1 : 0
     depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         module.admin_nginx,
+        null_resource.install_dbs,
+        null_resource.import_dbs,
         module.docker
     ]
 
@@ -691,7 +718,7 @@ resource "null_resource" "docker_ready" {
         ]
     }
     connection {
-        host = element(var.admin_public_ips, count.index)
+        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
         type = "ssh"
     }
 }
@@ -782,14 +809,14 @@ resource "null_resource" "setup_letsencrypt" {
             "export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh",
             "sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
             "sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
-            "gitlab-ctl reconfigure"
+            (local.admin_servers > 0 ? "gitlab-ctl reconfigure" : "echo 0"),
         ]
         ## If we find reconfigure screwing things up, maybe just try hup nginx
         ## "gitlab-ctl hup nginx"
     }
 
     connection {
-        host = element(var.admin_public_ips, count.index)
+        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
         type = "ssh"
     }
 
@@ -852,11 +879,14 @@ resource "null_resource" "add_keys" {
 }
 
 resource "null_resource" "install_runner" {
-    count = local.lead_servers + local.build_servers
+    count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [
         module.provisioners,
         module.hostname,
+        module.cron,
         module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.setup_letsencrypt,
         null_resource.add_keys
     ]
 
@@ -940,7 +970,7 @@ resource "null_resource" "register_runner" {
     # /etc/gitlab-runner/config.toml   set concurrent to number of runners
     # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
     #TODO: var.gitlab_enabled ? var.servers : 0;
-    count = local.lead_servers + local.build_servers
+    count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [ null_resource.install_runner ]
 
     # TODO: 1 or 2 prod runners with rest non-prod
@@ -975,6 +1005,14 @@ resource "null_resource" "register_runner" {
                     RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
                     FULL_NAME="$${RUNNER_NAME}_shell_${NUM}"
                     FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg")
+                    TAG=""
+                    if [ ${NUM} = 1 ]; then
+                        case "$MACHINE_NAME" in
+                            *build*) TAG=unity ;;
+                            *admin*) TAG=prod ;;
+                            *) TAG="" ;;
+                        esac
+                    fi
 
                     if [ -z "$FOUND_NAME" ]; then
                         sudo gitlab-runner register -n \
@@ -983,7 +1021,8 @@ resource "null_resource" "register_runner" {
                           --executor shell \
                           --run-untagged="true" \
                           --locked="false" \
-                          --name "$FULL_NAME"
+                          --name "$FULL_NAME" \
+                          --tag-list "$TAG"
                     fi
 
                 %{ endfor }
@@ -1032,7 +1071,7 @@ resource "null_resource" "register_runner" {
 #Unregisters excess runners per machine
 resource "null_resource" "unregister_runner" {
     #TODO: var.gitlab_enabled ? var.servers * 2 : 0;
-    count = local.lead_servers + local.build_servers
+    count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [ null_resource.install_runner, null_resource.register_runner ]
 
     triggers = {
@@ -1105,6 +1144,11 @@ resource "null_resource" "install_unity" {
 resource "null_resource" "enable_autoupgrade" {
     count = length(var.servers)
     depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
         null_resource.install_runner,
         null_resource.register_runner,
         null_resource.unregister_runner,

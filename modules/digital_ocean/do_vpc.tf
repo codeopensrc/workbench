@@ -64,14 +64,14 @@ resource "digitalocean_firewall" "app" {
         source_addresses = ["0.0.0.0/0"]
     }
 
-    # "http"
+    # "http" when admin + lead same server. see module.docker
     inbound_rule {
         protocol    = "tcp"
         port_range   = 8085
         source_addresses = [var.config.cidr_block]
     }
 
-    # "https"
+    # "https" when admin + lead same server. see module.docker
     inbound_rule {
         protocol    = "tcp"
         port_range   = 4433
@@ -112,15 +112,6 @@ resource "digitalocean_firewall" "app" {
         protocol    = "tcp"
         port_range   = "1-65535"
         source_addresses = ["172.16.0.0/12"]
-    }
-
-    # We allow all ports by default for user, but this will ensure we can at least
-    #  make a docker-machine connection even if that rule is deleted
-    # "Docker Machine (user)"
-    inbound_rule {
-        protocol    = "tcp"
-        port_range   = 2376
-        source_addresses = ["${var.config.docker_machine_ip}/32"]
     }
 
     # "btcpay"

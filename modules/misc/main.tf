@@ -156,6 +156,7 @@ resource "null_resource" "consul_file_admin" {
         content = <<-EOF
             {
                 "bootstrap": true,
+                "ui": true,
                 "datacenter": "${var.region}",
                 "bind_addr": "${element(var.admin_private_ips, count.index)}",
                 "client_addr": "0.0.0.0",
@@ -163,7 +164,6 @@ resource "null_resource" "consul_file_admin" {
                 "log_level": "INFO",
                 "node_name": "${element(var.admin_names, count.index)}",
                 "server": true,
-                "ui": true,
                 "translate_wan_addrs": true,
                 "advertise_addr_wan": "${element(var.consul_admin_adv_addresses, count.index)}",
                 "advertise_addr": "${element(var.consul_admin_adv_addresses, count.index)}",
@@ -198,7 +198,9 @@ resource "null_resource" "consul_file_leader" {
         # ${count.index == 0 && !var.datacenter_has_admin ? "bootstrap_expect: 1," : ""}
         content = <<-EOF
             {
-                ${var.consul_wan_leader_ip != "" ? "\"retry_join_wan\": [ \"var.consul_wan_leader_ip\" ]," : ""}
+                "bootstrap": ${!var.datacenter_has_admin},
+                "ui": ${!var.datacenter_has_admin},
+                "retry_join_wan": [ "${var.consul_wan_leader_ip}" ],
                 "datacenter": "${var.region}",
                 "bind_addr": "${tolist(setsubtract(var.lead_private_ips, var.admin_private_ips))[count.index]}",
                 "client_addr": "0.0.0.0",

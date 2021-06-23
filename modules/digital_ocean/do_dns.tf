@@ -61,7 +61,7 @@ resource "digitalocean_record" "default_a_admin" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element(slice(local.admin_server_ips, 0, 1), 0)
+    value  = element(slice(concat(local.admin_server_ips, local.lead_server_ips), 0, 1), 0)
 }
 
 resource "digitalocean_record" "default_a_db" {
