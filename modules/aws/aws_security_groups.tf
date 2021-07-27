@@ -274,6 +274,16 @@ resource "aws_security_group" "default_ports" {
         protocol    = "tcp"
     }
 
+    #System metrics
+    ingress {
+        description = "prometheus"
+        from_port   = 9100
+        to_port     = 9100
+        cidr_blocks = [var.config.cidr_block]
+        protocol    = "tcp"
+    }
+
+
     egress {
         description = "All traffic"
         from_port   = 0

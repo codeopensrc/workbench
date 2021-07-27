@@ -4,10 +4,10 @@
     "tags": ["mongo"],
     "address": "",
     "port": 27017,
-    "enableTagOverride": false,
+    "enable_tag_override": false,
     "checks": [
       {
-        "script": "echo 'exit' | mongo --host ${ip_address}",
+        "args": ["mongo", "--host", "${ip_address}", "--eval", "'exit'"],
         "interval": "30s"
       }
     ]

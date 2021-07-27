@@ -245,6 +245,13 @@ resource "digitalocean_firewall" "default" {
     }
 
 
+    # description = "prometheus"
+    inbound_rule {
+        protocol    = "tcp"
+        port_range   = 9100
+        source_addresses = [var.config.cidr_block]
+    }
+
 
     # description = "All traffic tcp"
     outbound_rule {

@@ -22,16 +22,16 @@ variable "send_jsons_enabled" { default = false }
 #######################################
 variable "packer_config" {
     default = {
-        gitlab_version = "13.5.4-ce.0"
-        docker_version = "19.03.12"
-        docker_compose_version = "1.27.4"
-        consul_version = "1.0.6"
+        gitlab_version = "13.12.5-ce.0"
+        docker_version = "20.10.7"
+        docker_compose_version = "1.29.2"
+        consul_version = "1.10.0"
         redis_version = "5.0.9"
         base_amis = {
             "us-east-2" = "ami-0d03add87774b12c5"
         }
         digitalocean_image_os = {
-            "main" = "ubuntu-16-04-x64"
+            "main" = "ubuntu-20-04-x64"
         }
     }
 }

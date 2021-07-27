@@ -4,10 +4,10 @@
     "tags": ["redis"],
     "address": "",
     "port": 6379,
-    "enableTagOverride": false,
+    "enable_tag_override": false,
     "checks": [
       {
-        "script": "redis-cli ping",
+        "args": ["redis-cli", "ping"],
         "interval": "30s"
       }
     ]

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MONGO_VERSION="4.2.7"
+MONGO_VERSION="4.4.6"
 BIND_IP="0.0.0.0"
 
 while getopts "v:i:b" flag; do
@@ -33,7 +33,7 @@ fi
 sudo apt-get install gnupg;
 wget -qO - https://www.mongodb.org/static/pgp/server-$MONGO_MAJOR_MINOR.asc | sudo apt-key add -
 
-echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/$MONGO_MAJOR_MINOR multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-$MONGO_MAJOR_MINOR.list
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/$MONGO_MAJOR_MINOR multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-$MONGO_MAJOR_MINOR.list
 
 sudo apt-get update
 

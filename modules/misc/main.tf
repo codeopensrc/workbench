@@ -167,7 +167,7 @@ resource "null_resource" "consul_file_admin" {
                 "translate_wan_addrs": true,
                 "advertise_addr_wan": "${element(var.consul_admin_adv_addresses, count.index)}",
                 "advertise_addr": "${element(var.consul_admin_adv_addresses, count.index)}",
-                "enable_script_checks": true,
+                "enable_local_script_checks": true,
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",
@@ -212,7 +212,7 @@ resource "null_resource" "consul_file_leader" {
                 "advertise_addr_wan": "${tolist(setsubtract(var.consul_lead_adv_addresses, var.consul_admin_adv_addresses))[count.index]}",
                 "advertise_addr": "${tolist(setsubtract(var.consul_lead_adv_addresses, var.consul_admin_adv_addresses))[count.index]}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
-                "enable_script_checks": true,
+                "enable_local_script_checks": true,
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",
@@ -253,7 +253,7 @@ resource "null_resource" "consul_file" {
                 "advertise_addr_wan": "${tolist(setsubtract(setsubtract(var.consul_db_adv_addresses, var.consul_lead_adv_addresses), var.consul_admin_adv_addresses))[count.index]}",
                 "advertise_addr": "${tolist(setsubtract(setsubtract(var.consul_db_adv_addresses, var.consul_lead_adv_addresses), var.consul_admin_adv_addresses))[count.index]}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
-                "enable_script_checks": true,
+                "enable_local_script_checks": true,
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",
@@ -293,7 +293,7 @@ resource "null_resource" "consul_file_build" {
                 "advertise_addr_wan": "${element(var.consul_build_adv_addresses, count.index)}",
                 "advertise_addr": "${element(var.consul_build_adv_addresses, count.index)}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
-                "enable_script_checks": true,
+                "enable_local_script_checks": true,
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",

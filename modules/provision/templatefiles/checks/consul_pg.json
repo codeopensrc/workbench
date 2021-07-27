@@ -4,10 +4,10 @@
     "tags": ["pg"],
     "address": "",
     "port": 5432,
-    "enableTagOverride": false,
+    "enable_tag_override": false,
     "checks": [
       {
-        "script": "echo '\\q' | psql postgresql://pgcheck:${read_only_pw}@${ip_address}/postgres",
+        "args": ["echo", "'\\q'", "|", "psql", "postgresql://pgcheck:${read_only_pw}@${ip_address}/postgres"],
         "interval": "30s"
       }
     ]

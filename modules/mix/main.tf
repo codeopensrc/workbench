@@ -526,7 +526,7 @@ resource "null_resource" "install_dbs" {
             (length(local.redis_dbs) > 0 ? "sudo service redis_6379 start;" : "echo 0;"),
             (length(local.redis_dbs) > 0 ? "sudo systemctl enable redis_6379" : "echo 0;"),
             (length(local.mongo_dbs) > 0
-                ? "bash /root/code/scripts/install/install_mongo.sh -v 4.2.7 -i ${element(var.db_private_ips, count.index)};"
+                ? "bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i ${element(var.db_private_ips, count.index)};"
                 : "echo 0;"),
             (length(local.pg_dbs) > 0
                 ? "bash /root/code/scripts/install/install_pg.sh -v 9.5;"
