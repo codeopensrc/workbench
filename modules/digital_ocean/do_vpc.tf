@@ -167,6 +167,13 @@ resource "digitalocean_firewall" "admin" {
         source_addresses = ["0.0.0.0/0"]
     }
 
+    # description = "Loki"
+    inbound_rule {
+        protocol    = "tcp"
+        port_range   = 3100
+        source_addresses = [var.config.cidr_block]
+    }
+
     lifecycle {
         create_before_destroy = true
     }

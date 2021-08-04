@@ -193,14 +193,14 @@ resource "null_resource" "cleanup_consul" {
     provisioner "file" {
         content = <<-EOF
             #Wait for consul to detect failure;
-            sleep 20;
+            sleep 120;
             DOWN_MEMBERS=( $(consul members | grep "left\|failed" | cut -d " " -f1) )
             echo "DOWN MEMBERS: $${DOWN_MEMBERS[@]}"
             if [ -n "$DOWN_MEMBERS" ]; then
                 for MEMBER in "$${DOWN_MEMBERS[@]}"
                 do
                     echo "Force leaving: $MEMBER";
-                    consul force-leave $MEMBER;
+                    consul force-leave -prune $MEMBER;
                 done
             fi
             exit 0;
@@ -210,7 +210,8 @@ resource "null_resource" "cleanup_consul" {
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/update_consul_members.sh",
-            "bash /tmp/update_consul_members.sh"
+            "tmux new -d -s update_consul",
+            "tmux send -t update_consul.0 \"bash /tmp/update_consul_members.sh; exit\" ENTER"
         ]
     }
 
@@ -220,8 +221,7 @@ resource "null_resource" "cleanup_consul" {
     }
 }
 
-
-
+###! Run this resource when downsizing from 2 leader servers to 1 in its own apply
 resource "null_resource" "cleanup" {
     count = 1
 

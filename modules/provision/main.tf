@@ -108,19 +108,27 @@ resource "null_resource" "consul_checks" {
         content = templatefile("${path.module}/templatefiles/checks/consul_pg.json", {
             read_only_pw = var.pg_read_only_pw
             ip_address = element(var.db_private_ips, count.index)
+            port = "5432"
+            version = "9.5"
         })
         destination = "/etc/consul.d/templates/pg.json"
     }
 
     provisioner "file" {
+        # TODO: Un-hardcode version/port
         content = templatefile("${path.module}/templatefiles/checks/consul_mongo.json", {
             ip_address = element(var.db_private_ips, count.index)
+            port = "27017"
+            version = "4.4.6"
         })
         destination = "/etc/consul.d/templates/mongo.json"
     }
 
     provisioner "file" {
-        content = file("${path.module}/templatefiles/checks/consul_redis.json")
+        content = templatefile("${path.module}/templatefiles/checks/consul_redis.json", {
+            port = "6379"
+            version = "5.0.9"
+        })
         destination = "/etc/consul.d/templates/redis.json"
     }
 

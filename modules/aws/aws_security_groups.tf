@@ -186,6 +186,14 @@ resource "aws_security_group" "admin_ports" {
         protocol    = "tcp"
     }
 
+    ingress {
+        description = "Loki"
+        from_port   = 3100
+        to_port     = 3100
+        cidr_blocks = [var.config.cidr_block]
+        protocol    = "tcp"
+    }
+
     lifecycle {
         create_before_destroy = true
     }

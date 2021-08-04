@@ -26,7 +26,7 @@ if [[ -z $S3_BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b S
 # if [[ -z $FILE_NAME ]]; then echo "Please provide FULL file location  using -f FILE_LOCATION"; exit ; fi
 
 
-
+### SSL
 for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
@@ -55,7 +55,7 @@ for i in {0..15}; do
 done
 
 
-
+## SSH
 for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
@@ -84,7 +84,7 @@ for i in {0..15}; do
 done
 
 
-
+## Gitlab
 for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
@@ -131,7 +131,7 @@ for i in {0..15}; do
 done
 
 
-
+## Gitlab secrets
 for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
@@ -163,7 +163,7 @@ for i in {0..15}; do
 done
 
 
-
+## Mattermost
 for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
@@ -189,7 +189,7 @@ for i in {0..15}; do
     fi
 done
 
-
+## Mattermost
 for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
@@ -219,6 +219,32 @@ for i in {0..15}; do
 done
 
 
+## Grafana
+for i in {0..15}; do
+    DATE=$(date --date="$i days ago" +"%Y-%m-%d");
+    YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
+
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/grafana_backups/${YEAR_MONTH}/grafana_data_${DATE}.tar.gz"
+    LOCAL_FILE="$HOME/code/backups/grafana/grafana_data_${DATE}.tar.gz"
+
+    echo "Checking $REMOTE_FILE";
+    /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
+    if [[ $? == 0 ]]; then
+
+        echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
+        /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
+
+        TODAY=$(date +"%F")
+        GRAFANA_DIR=/var/opt/gitlab/grafana
+
+        (cd $GRAFANA_DIR/ && tar -czvf $GRAFANA_DIR/grafana_data_$TODAY.tar.gz data)
+        tar -xzvf $LOCAL_FILE -C $GRAFANA_DIR
+        chown -R gitlab-prometheus:gitlab-prometheus $GRAFANA_DIR/data
+        sudo gitlab-ctl restart grafana
+
+        break
+    fi
+done
 
 
 

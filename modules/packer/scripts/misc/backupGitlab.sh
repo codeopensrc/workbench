@@ -47,16 +47,25 @@ WED=$(date -d "Wed" +"%Y-%m-%d")
 ###! Everything below performs the Backup
 ###!###!###!###!###!###!###!###!###!###!###!
 
+## SSL Certs
 mkdir -p $HOME/code/backups/letsencrypt
 (cd /etc/ && tar -czvf $HOME/code/backups/letsencrypt/letsencrypt_$TODAY.tar.gz letsencrypt)
+## SSH Keys
 mkdir -p $HOME/code/backups/ssh_keys
 (cd /etc/ssh/ && tar -czvf $HOME/code/backups/ssh_keys/ssh_keys_$TODAY.tar.gz ssh_host_*_key*)
+
 gitlab-backup create BACKUP=dump GZIP_RSYNCABLE=yes
 # CRON=1 suppresses output
 # gitlab-backup create BACKUP=dump GZIP_RSYNCABLE=yes CRON=1
+
+## Mattermost
 mkdir -p $HOME/code/backups/mattermost
 (cd /var/opt/gitlab/mattermost/ && tar -czvf $HOME/code/backups/mattermost/mattermost_data_$TODAY.tar.gz *)
 sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/pg_dump -h /var/opt/gitlab/postgresql mattermost_production | gzip > $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz
+
+##Grafana
+mkdir -p $HOME/code/backups/grafana
+(cd /var/opt/gitlab/grafana && tar -czvf $HOME/code/backups/grafana/grafana_data_$TODAY.tar.gz data)
 
 
 # Upload
@@ -72,6 +81,9 @@ sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/pg_dump -h /var/opt/gitlab/po
 /usr/local/bin/mc cp $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz \
     $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_dbdump_$TODAY.sql.gz
 
+/usr/local/bin/mc cp $HOME/code/backups/grafana/grafana_data_$TODAY.tar.gz \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/grafana_backups/$YEAR_MONTH/grafana_data_$TODAY.tar.gz
+
 # The goal is to rsync over the previous days and keep snapshot once a week instead of storing a daily multi gig backup
 /usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
     $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar
@@ -86,6 +98,7 @@ if [[ "$TODAY" == "$SUNDAY" ]]; then
     rm -rf $HOME/code/backups/letsencrypt/*
     rm -rf $HOME/code/backups/ssh_keys/*
     rm -rf $HOME/code/backups/mattermost/*
+    rm -rf $HOME/code/backups/grafana/*
 
     if [[ "$GC_DOCKER_REGISTRY" == true ]]; then
         # https://gitlab.com/help/administration/packages/container_registry.md#container-registry-garbage-collection

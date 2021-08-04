@@ -226,6 +226,65 @@ resource "null_resource" "add_proxy_hosts" {
     }
 }
 
+resource "null_resource" "prometheus_targets" {
+    count = local.admin_servers
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+    ]
+
+    triggers = {
+        ips = join(",", local.all_private_ips)
+    }
+
+    ## 9107 is consul exporter
+    provisioner "file" {
+            #{
+            #    "targets": ["localhost:9107"]
+            #}
+        content = <<-EOF
+        [
+        %{ for ind, IP in local.all_private_ips }
+            {
+                "targets": ["${length(regexall("admin", local.all_names[ind])) > 0 ? "localhost" : IP}:9100"],
+                "labels": {
+                    "hostname": "${length(regexall("admin", local.all_names[ind])) > 0 ? "gitlab.${var.root_domain_name}" : local.all_names[ind]}",
+                    "public_ip": "${local.all_public_ips[ind]}",
+                    "private_ip": "${IP}",
+                    "nodename": "${local.all_names[ind]}"
+                }
+            }${ind < length(local.all_private_ips) - 1 ? "," : ""}
+        %{ endfor }
+        ]
+        EOF
+        destination = "/tmp/targets.json"
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+        {
+            "service": {
+                "name": "consulexporter",
+                "port": 9107
+            }
+        }
+        EOF
+        destination = "/etc/consul.d/conf.d/consulexporter.json"
+    }
+
+    provisioner "remote-exec" {
+        inline = [ "consul reload" ]
+    }
+
+    connection {
+        host = element(var.admin_public_ips, 0)
+        type = "ssh"
+    }
+}
+
 
 resource "null_resource" "install_gitlab" {
     count = local.admin_servers
@@ -252,6 +311,9 @@ resource "null_resource" "install_gitlab" {
     ###! /var/opt/gitlab/mattermost/config.json   for server settings
     ###! /var/opt/gitlab/mattermost/*plugins      for plugins
     ###! /var/opt/gitlab/mattermost/data          for server data
+
+    ###! Grafana data located at /var/opt/gitlab/grafana/data/
+    ###! Loaded prometheus config at /var/opt/gitlab/prometheus/prometheus.yml managed by gitlab.rb
 
     # Enable project level access tokens
     # https://docs.gitlab.com/ee/user/project/settings/project_access_tokens.html
@@ -280,6 +342,26 @@ resource "null_resource" "install_gitlab" {
                 sed -i "s|# letsencrypt\['auto_renew_day_of_month'\]|letsencrypt\['auto_renew_day_of_month'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|# nginx\['custom_nginx_config'\]|nginx\['custom_nginx_config'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|\"include /etc/nginx/conf\.d/example\.conf;\"|\"include /etc/nginx/conf\.d/\*\.conf;\"|" /etc/gitlab/gitlab.rb
+
+                CONFIG="prometheus['scrape_configs'] = [
+                    {
+                        'job_name': 'node-file',
+                        'honor_labels': true,
+                        'file_sd_configs' => [
+                            'files' => ['/tmp/targets.json']
+                        ],
+                    },
+                    {
+                        'job_name': 'consul-exporter',
+                        'honor_labels': true,
+                        'consul_sd_configs' => [
+                            'server': 'localhost:8500',
+                            'services' => ['consulexporter']
+                        ]
+                    }
+                ]"
+                printf '%s\n' "/# prometheus\['scrape_configs'\]" ".,+7c" "$CONFIG" . wq | ed -s /etc/gitlab/gitlab.rb
+
 
                 sleep 5;
                 sudo gitlab-ctl reconfigure
@@ -368,9 +450,18 @@ resource "null_resource" "gitlab_plugins" {
             <<-EOF
                 PLUGIN1_NAME="WekanPlugin";
                 PLUGIN2_NAME="MattermostPlugin";
+                PLUGIN3_NAME="GrafanaPlugin";
+                PLUGIN3_INIT_NAME="GitLab Grafana";
                 TERRA_UUID=${uuid()}
                 echo $TERRA_UUID;
 
+                ## To initially access grafana as admin, must enable login using user/pass
+                ## https://docs.gitlab.com/omnibus/settings/grafana.html#enable-login-using-username-and-password
+                ## grafana['disable_login_form'] = false
+
+                ## Also MUST change admin password using: `gitlab-ctl set-grafana-password`
+                ## Modifying "grafana['admin_password'] = 'foobar'" will NOT work (multiple reconfigures have occured)
+                ## https://docs.gitlab.com/omnibus/settings/grafana.html#resetting-the-admin-password
 
                 echo "=== Wait 90s for gitlab api for oauth plugins ==="
                 sleep 90;
@@ -411,6 +502,27 @@ resource "null_resource" "gitlab_plugins" {
                     sed -i "s|\"gitlaboauthclientsecret\": \"[0-9a-zA-Z.-]*\"|\"gitlaboauthclientsecret\": \"$APP_SECRET2\"|" /var/opt/gitlab/mattermost/config.json
 
                     sudo gitlab-ctl restart mattermost;
+                fi
+
+                FOUND_CORRECT_ID3=$(curl --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications" | jq ".[] | select(.application_name | contains (\"$PLUGIN3_INIT_NAME\")) | select(.callback_url | contains (\"${var.root_domain_name}\")) | .id");
+
+                ## If we dont find "GitLab Grafana" (initial grafana oauth app), we have to update /etc/gitlab/gitlab.rb every time with our own
+                ## Wish there was a way to revert to the original oauth version after deleting it but not sure how
+                if [ -z "$FOUND_CORRECT_ID3" ]; then
+                    PLUGIN3_ID=$(curl --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications" | jq ".[] | select(.application_name | contains (\"$PLUGIN3_NAME\")) | .id");
+                    curl --request DELETE --header "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/applications/$PLUGIN3_ID";
+
+                    OAUTH3=$(curl --request POST --header "PRIVATE-TOKEN: $TERRA_UUID" \
+                        --data "name=$PLUGIN3_NAME&redirect_uri=https://gitlab.${var.root_domain_name}/-/grafana/login/gitlab&scopes=read_user" \
+                        "https://gitlab.${var.root_domain_name}/api/v4/applications");
+
+                    APP_ID3=$(echo $OAUTH3 | jq -r ".application_id");
+                    APP_SECRET3=$(echo $OAUTH3 | jq -r ".secret");
+
+                    sed -i "s|# grafana\['gitlab_application_id'\] = 'GITLAB_APPLICATION_ID'|grafana\['gitlab_application_id'\] = '$APP_ID3'|" /etc/gitlab/gitlab.rb
+                    sed -i "s|# grafana\['gitlab_secret'\] = 'GITLAB_SECRET'|grafana\['gitlab_secret'\] = '$APP_SECRET3'|" /etc/gitlab/gitlab.rb
+
+                    sudo gitlab-ctl reconfigure;
                 fi
 
                 sleep 3;
@@ -475,6 +587,127 @@ resource "null_resource" "reauthorize_mattermost" {
     }
 }
 
+
+
+resource "null_resource" "node_exporter" {
+    count = length(var.servers)
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab
+    ]
+
+    #TODO: pass node_exporter version
+    #TODO: pass consul_exporter version
+    #TODO: pass promtail version
+    provisioner "remote-exec" {
+        inline = [
+            "FILENAME1=node_exporter-1.2.0.linux-amd64.tar.gz",
+            "[ ! -f /tmp/$FILENAME1 ] && wget https://github.com/prometheus/node_exporter/releases/download/v1.2.0/$FILENAME1 -P /tmp",
+            "tar xvfz /tmp/$FILENAME1 --wildcards --strip-components=1 -C /usr/local/bin */node_exporter",
+            "FILENAME2=promtail-linux-amd64.zip",
+            "[ ! -f /tmp/$FILENAME2 ] && wget https://github.com/grafana/loki/releases/download/v2.2.1/$FILENAME2 -P /tmp",
+            "unzip /tmp/$FILENAME2 -d /usr/local/bin && chmod a+x /usr/local/bin/promtail*amd64",
+            "FILENAME3=promtail-local-config.yaml",
+            "mkdir -p /etc/promtail.d",
+            "[ ! -f /etc/promtail.d/$FILENAME3 ] && wget https://raw.githubusercontent.com/grafana/loki/main/clients/cmd/promtail/$FILENAME3 -P /etc/promtail.d",
+            "sed -i \"s/localhost:/${var.admin_private_ips[0]}:/\" /etc/promtail.d/$FILENAME3",
+            "sed -ni '/nodename:/!p; $ a \\      nodename: ${local.all_names[count.index]}' /etc/promtail.d/$FILENAME3",
+            "FILENAME4=consul_exporter-0.7.1.linux-amd64.tar.gz",
+            "[ ! -f /tmp/$FILENAME4 ] && wget https://github.com/prometheus/consul_exporter/releases/download/v0.7.1/$FILENAME4 -P /tmp",
+            "tar xvfz /tmp/$FILENAME4 --wildcards --strip-components=1 -C /usr/local/bin */consul_exporter",
+        ]
+    }
+
+    #Temp?
+    ##TODO: Probably best in provision module
+    provisioner "file" {
+        content = templatefile("${path.module}/templates/nodeexporter.service", {})
+        destination = "/etc/systemd/system/nodeexporter.service"
+    }
+    #Temp?
+    provisioner "file" {
+        content = templatefile("${path.module}/templates/consulexporter.service", {})
+        destination = "/etc/systemd/system/consulexporter.service"
+    }
+    #Temp?
+    provisioner "file" {
+        content = templatefile("${path.module}/templates/promtail.service", {})
+        destination = "/etc/systemd/system/promtail.service"
+    }
+
+    provisioner "remote-exec" {
+        inline = [
+            length(regexall("admin", local.all_names[count.index])) > 0 ? "echo 0" : "sudo systemctl start nodeexporter",
+            length(regexall("admin", local.all_names[count.index])) > 0 ? "echo 0" : "sudo systemctl enable nodeexporter",
+            length(regexall("admin", local.all_names[count.index])) > 0 ? "sudo systemctl start consulexporter" : "echo 0",
+            length(regexall("admin", local.all_names[count.index])) > 0 ? "sudo systemctl enable consulexporter" : "echo 0",
+            "sudo systemctl start promtail",
+            "sudo systemctl enable promtail",
+        ]
+    }
+
+    connection {
+        host = element(local.all_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
+#TODO: pass Loki version
+resource "null_resource" "install_loki" {
+    count = local.admin_servers
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab
+    ]
+
+    provisioner "file" {
+        content = templatefile("${path.module}/templates/loki.service", {})
+        destination = "/etc/systemd/system/loki.service"
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+            ARCH=$(dpkg --print-architecture)
+            LOKI_VERSION=2.2.1
+            LOKI_LOCATION="/etc/loki.d"
+            LOKI_USER="root"
+            FILENAME="loki-linux-$ARCH"
+            sudo mkdir -p $LOKI_LOCATION
+            sudo chown -R $LOKI_USER:$LOKI_USER $LOKI_LOCATION
+            curl -L https://github.com/grafana/loki/releases/download/v$LOKI_VERSION/$FILENAME.zip -o /tmp/$FILENAME.zip
+            unzip /tmp/$FILENAME.zip -d $LOKI_LOCATION/
+            wget https://raw.githubusercontent.com/grafana/loki/v$LOKI_VERSION/cmd/loki/loki-local-config.yaml -P $LOKI_LOCATION
+            rm -rf /tmp/$FILENAME.zip
+            sudo mv $LOKI_LOCATION/$FILENAME /usr/local/bin/loki
+            sudo systemctl daemon-reload
+            sudo systemctl start loki.service
+            sudo systemctl enable loki.service
+        EOF
+        destination = "/tmp/install_loki.sh"
+    }
+
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/install_loki.sh",
+            "/tmp/install_loki.sh"
+        ]
+    }
+
+    connection {
+        host = element(var.admin_public_ips, count.index)
+        type = "ssh"
+    }
+}
 
 module "admin_nginx" {
     count = local.lead_servers > 0 ? local.admin_servers : 0

@@ -112,6 +112,14 @@ locals {
     ])))
 
 
+    all_private_ips = distinct(concat(var.admin_private_ips, var.lead_private_ips, var.db_private_ips,
+        var.build_private_ips))
+
+    all_public_ips = distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips,
+        var.build_public_ips))
+
+    all_names = distinct(concat(var.admin_names, var.lead_names, var.db_names, var.build_names))
+
     ### TODO: Holy moly fix these 2
     is_only_leader_count = sum(concat([0], tolist([
         for SERVER in var.servers:

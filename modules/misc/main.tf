@@ -156,7 +156,9 @@ resource "null_resource" "consul_file_admin" {
         content = <<-EOF
             {
                 "bootstrap": true,
-                "ui": true,
+                "ui_config": {
+                    "enabled": true
+                },
                 "datacenter": "${var.region}",
                 "bind_addr": "${element(var.admin_private_ips, count.index)}",
                 "client_addr": "0.0.0.0",
@@ -168,6 +170,7 @@ resource "null_resource" "consul_file_admin" {
                 "advertise_addr_wan": "${element(var.consul_admin_adv_addresses, count.index)}",
                 "advertise_addr": "${element(var.consul_admin_adv_addresses, count.index)}",
                 "enable_local_script_checks": true,
+                "reconnect_timeout": "12h",
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",
@@ -199,7 +202,9 @@ resource "null_resource" "consul_file_leader" {
         content = <<-EOF
             {
                 "bootstrap": ${!var.datacenter_has_admin},
-                "ui": ${!var.datacenter_has_admin},
+                "ui_config": {
+                    "enabled": ${!var.datacenter_has_admin},
+                },
                 "retry_join_wan": [ "${var.consul_wan_leader_ip}" ],
                 "datacenter": "${var.region}",
                 "bind_addr": "${tolist(setsubtract(var.lead_private_ips, var.admin_private_ips))[count.index]}",
@@ -213,6 +218,7 @@ resource "null_resource" "consul_file_leader" {
                 "advertise_addr": "${tolist(setsubtract(var.consul_lead_adv_addresses, var.consul_admin_adv_addresses))[count.index]}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_local_script_checks": true,
+                "reconnect_timeout": "12h",
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",
@@ -254,6 +260,7 @@ resource "null_resource" "consul_file" {
                 "advertise_addr": "${tolist(setsubtract(setsubtract(var.consul_db_adv_addresses, var.consul_lead_adv_addresses), var.consul_admin_adv_addresses))[count.index]}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_local_script_checks": true,
+                ${ length(regexall("db", element(var.db_names, count.index))) > 0 ? "" : "'advertise_reconnect_timeout': '8h'," }
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",
@@ -294,6 +301,7 @@ resource "null_resource" "consul_file_build" {
                 "advertise_addr": "${element(var.consul_build_adv_addresses, count.index)}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_local_script_checks": true,
+                "advertise_reconnect_timeout": "12h",
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",

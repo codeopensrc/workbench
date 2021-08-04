@@ -1,9 +1,9 @@
 {
   "service": {
     "name": "mongo",
-    "tags": ["mongo"],
+    "tags": ["_port=${port}", "_version=${version}"],
     "address": "",
-    "port": 27017,
+    "port": "${port}",
     "enable_tag_override": false,
     "checks": [
       {

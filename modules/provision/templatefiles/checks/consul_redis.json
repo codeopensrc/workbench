@@ -1,9 +1,9 @@
 {
   "service": {
     "name": "redis",
-    "tags": ["redis"],
+    "tags": ["_port=${port}", "_version=${version}"],
     "address": "",
-    "port": 6379,
+    "port": "${port}",
     "enable_tag_override": false,
     "checks": [
       {

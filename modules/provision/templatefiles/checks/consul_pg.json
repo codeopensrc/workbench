@@ -1,9 +1,9 @@
 {
   "service": {
     "name": "pg",
-    "tags": ["pg"],
+    "tags": ["_port=${port}", "_version=${version}"],
     "address": "",
-    "port": 5432,
+    "port": "${port}",
     "enable_tag_override": false,
     "checks": [
       {
