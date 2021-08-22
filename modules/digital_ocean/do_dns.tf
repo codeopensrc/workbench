@@ -1,3 +1,20 @@
+resource "digitalocean_domain" "additional" {
+    for_each = var.config.additional_domains
+    name = each.key
+    ip_address  = element(slice(local.admin_server_ips, 0, 1), 0)
+}
+
+resource "digitalocean_record" "additional_cname" {
+    for_each = {
+        for ind, domain in local.cname_additional_aliases :
+        "${domain.domainname}.${domain.subdomainname}" => domain
+    }
+    name   = each.value.subdomainname
+    domain = each.value.domainname
+    type   = "CNAME"
+    ttl    = "300"
+    value  = "${each.value.domainname}."
+}
 
 resource "digitalocean_domain" "default" {
     name = var.config.root_domain_name
@@ -26,6 +43,15 @@ resource "digitalocean_record" "default_stun_srv_tcp" {
     weight = "0"
     port = var.config.stun_port
     value  = "stun.${var.config.root_domain_name}."
+}
+
+resource "digitalocean_record" "default_a_offsite" {
+    count = length(var.config.offsite_arecord_aliases)
+    name   = var.config.offsite_arecord_aliases[count.index].name
+    domain = digitalocean_domain.default.name
+    type   = "A"
+    ttl    = "300"
+    value  = var.config.offsite_arecord_aliases[count.index].ip
 }
 
 resource "digitalocean_record" "default_stun_a" {
@@ -65,7 +91,7 @@ resource "digitalocean_record" "default_a_admin" {
 }
 
 resource "digitalocean_record" "default_a_db" {
-    count = length(compact(var.config.db_arecord_aliases))
+    count  = local.db_servers > 0 ? length(compact(var.config.db_arecord_aliases)) : 0
     name   = compact(flatten(var.config.db_arecord_aliases))[count.index]
     domain = digitalocean_domain.default.name
     type   = "A"
@@ -74,7 +100,7 @@ resource "digitalocean_record" "default_a_db" {
 }
 
 resource "digitalocean_record" "default_a_leader" {
-    count = length(compact(var.config.leader_arecord_aliases))
+    count  = local.lead_servers > 0 ? length(compact(var.config.leader_arecord_aliases)) : 0
     name   = compact(flatten(var.config.leader_arecord_aliases))[count.index]
     domain = digitalocean_domain.default.name
     type   = "A"
@@ -98,7 +124,7 @@ resource "digitalocean_record" "default_a_leader" {
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
-    count = 1
+    count  = local.lead_servers > 0 ? 1 : 0
     name   = "@"
     domain = digitalocean_domain.default.name
     type   = "A"

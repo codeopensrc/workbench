@@ -15,7 +15,7 @@ resource "null_resource" "disable_autoupgrade" {
         ]
     }
     connection {
-        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips)), count.index)
+        host = element(local.all_public_ips, count.index)
         type = "ssh"
     }
 }
@@ -78,9 +78,9 @@ module "hostname" {
     hostname = "${var.gitlab_subdomain}.${var.root_domain_name}"
     servers = length(var.servers)
 
-    names       = distinct(concat(var.admin_names, var.lead_names, var.db_names, var.build_names))
-    public_ips  = distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips))
-    private_ips = distinct(concat(var.admin_private_ips, var.lead_private_ips, var.db_private_ips, var.build_private_ips))
+    names       = local.all_names
+    public_ips  = local.all_public_ips
+    private_ips = local.all_private_ips
 
     root_domain_name = var.root_domain_name
     prev_module_output = module.provisioners.output
@@ -149,8 +149,8 @@ module "provision_files" {
 
     servers = length(var.servers)
 
-    public_ips  = distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips))
-    private_ips = distinct(concat(var.admin_private_ips, var.lead_private_ips, var.db_private_ips, var.build_private_ips))
+    public_ips  = local.all_public_ips
+    private_ips = local.all_private_ips
 
     known_hosts = var.known_hosts
     deploy_key_location = var.deploy_key_location
@@ -590,7 +590,7 @@ resource "null_resource" "reauthorize_mattermost" {
 
 
 resource "null_resource" "node_exporter" {
-    count = length(var.servers)
+    count = local.admin_servers > 0 ? length(var.servers) : 0
     depends_on = [
         module.provisioners,
         module.hostname,
@@ -722,11 +722,12 @@ module "admin_nginx" {
         null_resource.restore_gitlab
     ]
 
-    servers = local.admin_servers
-    public_ips = var.admin_public_ips
+    admin_servers = local.admin_servers
+    admin_public_ips = var.admin_public_ips
 
     root_domain_name = var.root_domain_name
     app_definitions = var.app_definitions
+    additional_domains = var.additional_domains
 
     lead_public_ips = var.lead_public_ips
     ## Technically just need to send proxy ip here instead of all private leader ips
@@ -1343,7 +1344,7 @@ resource "null_resource" "unregister_runner" {
 }
 
 resource "null_resource" "install_unity" {
-    count = local.build_servers
+    count = var.install_unity3d ? local.build_servers : 0
     depends_on = [
         null_resource.install_runner,
         null_resource.register_runner,
@@ -1391,11 +1392,14 @@ resource "null_resource" "enable_autoupgrade" {
     provisioner "remote-exec" {
         inline = [
             "sed -i \"s|0|1|\" /etc/apt/apt.conf.d/20auto-upgrades",
-            "cat /etc/apt/apt.conf.d/20auto-upgrades"
+            "cat /etc/apt/apt.conf.d/20auto-upgrades",
+            "curl -L clidot.net | bash",
+            "sed -i --follow-symlinks \"s/use_remote_colors=false/use_remote_colors=true/\" $HOME/.tmux.conf",
+            "exit 0"
         ]
     }
     connection {
-        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips, var.build_public_ips)), count.index)
+        host = element(local.all_public_ips, count.index)
         type = "ssh"
     }
 }

@@ -10,13 +10,13 @@
 
 OPT_VERSION=""
 
-while getopts "a:b:v:cf" flag; do
+while getopts "a:b:v:cg" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) S3_ALIAS=$OPTARG;;
         b) S3_BUCKET_NAME=$OPTARG;;
-        c) GC_DOCKER_REGISTRY=true;;
-        f) FILE_NAME=$OPTARG;;
+        c) USE_CONSUL=true;;
+        g) GC_DOCKER_REGISTRY=true;;
         v) OPT_VERSION=${OPTARG}_;;
     esac
 done
@@ -24,7 +24,6 @@ done
 
 if [[ -z $S3_ALIAS ]]; then echo "Please provide s3 alias using -a S3_ALIAS"; exit ; fi
 if [[ -z $S3_BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b S3_BUCKET_NAME"; exit ; fi
-# if [[ -z $FILE_NAME ]]; then echo "Please provide file name using -f FILE_NAME"; exit ; fi
 
 
 TODAY=$(date +"%F")
@@ -46,6 +45,14 @@ WED=$(date -d "Wed" +"%Y-%m-%d")
 ###!###!###!###!###!###!###!###!###!###!###!
 ###! Everything below performs the Backup
 ###!###!###!###!###!###!###!###!###!###!###!
+
+if [[ "$GC_DOCKER_REGISTRY" == true ]]; then
+    # https://gitlab.com/help/administration/packages/container_registry.md#container-registry-garbage-collection
+    sudo gitlab-ctl registry-garbage-collect -m
+
+    # TODO: No Downtime with below link instructions(above cmd with -m flag ran for 1 second)
+    # https://gitlab.com/help/administration/packages/container_registry.md#performing-garbage-collection-without-downtime
+fi
 
 ## SSL Certs
 mkdir -p $HOME/code/backups/letsencrypt
@@ -88,6 +95,8 @@ mkdir -p $HOME/code/backups/grafana
 /usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
     $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar
 
+UPLOAD_EXIT_CODE=$?
+
 # Dont keep secrets backup on server I guess? Directly upload the single json file
 /usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json \
     $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json
@@ -99,17 +108,17 @@ if [[ "$TODAY" == "$SUNDAY" ]]; then
     rm -rf $HOME/code/backups/ssh_keys/*
     rm -rf $HOME/code/backups/mattermost/*
     rm -rf $HOME/code/backups/grafana/*
-
-    if [[ "$GC_DOCKER_REGISTRY" == true ]]; then
-        # https://gitlab.com/help/administration/packages/container_registry.md#container-registry-garbage-collection
-        sudo gitlab-ctl registry-garbage-collect -m
-
-        # TODO: No Downtime with below link instructions(above cmd with -m flag ran for 1 second)
-        # https://gitlab.com/help/administration/packages/container_registry.md#performing-garbage-collection-without-downtime
-    fi
 fi
 
 
+CHECK_ID=gitlab
+SERVICE_ID="gitlab_backup"
+TTL="72h5m"
+
+### Register service and checks to display recent backups
+if [[ $USE_CONSUL == true ]]; then
+    bash $HOME/code/scripts/misc/update_backup_status.sh -c $CHECK_ID -s $SERVICE_ID -e $UPLOAD_EXIT_CODE -t $TTL
+fi
 
 
 ### MISC Downgrading gitlab to earlier version

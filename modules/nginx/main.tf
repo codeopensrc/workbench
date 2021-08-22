@@ -1,7 +1,8 @@
 
-variable "servers" {}
+variable "admin_servers" {}
 variable "root_domain_name" { default = "" }
-variable "public_ips" {
+variable "additional_domains" { default = {} }
+variable "admin_public_ips" {
     type = list(string)
     default = []
 }
@@ -25,7 +26,7 @@ variable "app_definitions" {
 
 
 resource "null_resource" "proxy_config" {
-    count = var.servers
+    count = var.admin_servers
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -84,7 +85,7 @@ resource "null_resource" "proxy_config" {
         content = templatefile("${path.module}/templatefiles/mainproxy.tmpl", {
             root_domain_name = var.root_domain_name
             proxy_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
-            https_port = contains(var.lead_public_ips, element(var.public_ips, count.index)) ? var.https_port : 443
+            https_port = contains(var.lead_public_ips, element(var.admin_public_ips, count.index)) ? var.https_port : 443
             cert_port = var.cert_port
             subdomains = [
                 for HOST in var.app_definitions:
@@ -105,6 +106,47 @@ resource "null_resource" "proxy_config" {
         destination = "/etc/nginx/conf.d/btcpay.conf"
     }
 
+    connection {
+        host = element(var.admin_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
+## TODO: This does not clean up additional config files on server after removing from var.additional_domains
+resource "null_resource" "proxy_additional_config" {
+    count = length(keys(var.additional_domains))
+    depends_on = [
+        null_resource.proxy_config
+    ]
+
+    provisioner "file" {
+        content = templatefile("${path.module}/templatefiles/additional.tmpl", {
+            root_domain_name = element(keys(var.additional_domains), count.index)
+            subdomains = element(values(var.additional_domains), count.index)
+            cert_port = var.cert_port
+        })
+        destination = "/etc/nginx/conf.d/additional-${count.index}.conf"
+    }
+
+    connection {
+        host = element(var.admin_public_ips, 0)
+        type = "ssh"
+    }
+}
+
+
+resource "null_resource" "nginx_reconfigure" {
+    count = var.admin_servers
+    depends_on = [
+        null_resource.proxy_config,
+        null_resource.proxy_additional_config,
+    ]
+
+    triggers = {
+        mainproxy = join(",", null_resource.proxy_config.*.id)
+        additionalproxy  = join(",", null_resource.proxy_additional_config.*.id)
+    }
+
     provisioner "remote-exec" {
         ## TODO: Because of this convenience for config on app change, it has to be run after gitlab is installed
 
@@ -117,14 +159,14 @@ resource "null_resource" "proxy_config" {
     }
 
     connection {
-        host = element(var.public_ips, count.index)
+        host = element(var.admin_public_ips, count.index)
         type = "ssh"
     }
 }
 
 output "output" {
     depends_on = [
-        null_resource.proxy_config,
+        null_resource.nginx_reconfigure,
     ]
-    value = null_resource.proxy_config.*.id
+    value = null_resource.nginx_reconfigure.*.id
 }

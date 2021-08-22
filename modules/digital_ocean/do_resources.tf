@@ -39,7 +39,7 @@ module "packer" {
     packer_config = var.config.packer_config
 }
 
-data "digitalocean_images" "output" {
+data "digitalocean_images" "new" {
     depends_on = [ module.packer ]
     filter {
         key    = "name"
@@ -65,7 +65,12 @@ data "digitalocean_images" "output" {
 resource "digitalocean_droplet" "main" {
     count = length(var.config.servers)
     name     = "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
-    image    = var.config.servers[count.index].image == "" ? data.digitalocean_images.output.images[0].id : var.config.servers[count.index].image
+    #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
+    image = (var.config.servers[count.index].image != ""
+        ? var.config.servers[count.index].image
+        : (length(data.digitalocean_images.latest.images) > 0
+            ? data.digitalocean_images.latest.images[0].id : data.digitalocean_images.new.images[0].id)
+    )
     region   = var.config.region
     size     = var.config.servers[count.index].size["digital_ocean"]
     ssh_keys = [var.config.do_ssh_fingerprint]
@@ -151,17 +156,6 @@ resource "digitalocean_droplet" "main" {
         }
     }
 
-
-    provisioner "local-exec" {
-        when = destroy
-        command = <<-EOF
-            ssh-keygen -R ${self.ipv4_address}
-            exit 0;
-        EOF
-        on_failure = continue
-    }
-
-
     provisioner "remote-exec" {
         when = destroy
         inline = [
@@ -179,6 +173,15 @@ resource "digitalocean_droplet" "main" {
             type     = "ssh"
             user     = "root"
         }
+    }
+
+    provisioner "local-exec" {
+        when = destroy
+        command = <<-EOF
+            ssh-keygen -R ${self.ipv4_address}
+            exit 0;
+        EOF
+        on_failure = continue
     }
 }
 

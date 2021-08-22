@@ -203,7 +203,7 @@ resource "null_resource" "consul_file_leader" {
             {
                 "bootstrap": ${!var.datacenter_has_admin},
                 "ui_config": {
-                    "enabled": ${!var.datacenter_has_admin},
+                    "enabled": ${!var.datacenter_has_admin}
                 },
                 "retry_join_wan": [ "${var.consul_wan_leader_ip}" ],
                 "datacenter": "${var.region}",

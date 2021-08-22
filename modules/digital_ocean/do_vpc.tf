@@ -110,7 +110,7 @@ resource "digitalocean_firewall" "app" {
     # "Docker Bridge"
     inbound_rule {
         protocol    = "tcp"
-        port_range   = "1-65535"
+        port_range   = "all"
         source_addresses = ["172.16.0.0/12"]
     }
 
@@ -195,13 +195,13 @@ resource "digitalocean_firewall" "default" {
     # description = "localhost1"
     inbound_rule {
         protocol    = "tcp"
-        port_range   = "1-65535"
+        port_range   = "all"
         source_addresses = ["127.0.0.0/20"]
     }
     # description = "localhost2"
     inbound_rule {
         protocol    = "tcp"
-        port_range   = "1-65535"
+        port_range   = "all"
         source_addresses = ["192.168.0.0/20"]
     }
 
@@ -209,13 +209,13 @@ resource "digitalocean_firewall" "default" {
     # description = "All User"
     inbound_rule {
         protocol    = "tcp"
-        port_range   = "1-65535"
+        port_range   = "all"
         source_addresses = ["${var.config.docker_machine_ip}/32"]
     }
     # description = "All User UDP"
     inbound_rule {
         protocol    = "udp"
-        port_range   = "1-65535"
+        port_range   = "all"
         source_addresses = ["${var.config.docker_machine_ip}/32"]
     }
 
@@ -260,15 +260,25 @@ resource "digitalocean_firewall" "default" {
     }
 
 
+    # description = "All ICMP"
+    inbound_rule {
+        protocol         = "icmp"
+        source_addresses = ["0.0.0.0/0", "::/0"]
+    }
+    # description = "All ICMP"
+    outbound_rule {
+        destination_addresses = ["0.0.0.0/0", "::/0"]
+        protocol    = "icmp"
+    }
     # description = "All traffic tcp"
     outbound_rule {
-        port_range   = "1-65535"
+        port_range   = "all"
         destination_addresses = ["0.0.0.0/0"]
         protocol    = "tcp"
     }
     # description = "All traffic udp"
     outbound_rule {
-        port_range   = "1-65535"
+        port_range   = "all"
         destination_addresses = ["0.0.0.0/0"]
         protocol    = "udp"
     }
@@ -326,7 +336,7 @@ resource "digitalocean_firewall" "ext_remote" {
     # description = "All Ports"
     inbound_rule {
         protocol    = "tcp"
-        port_range   = "1-65535"
+        port_range   = "all"
         source_addresses = [
             for OBJ in var.config.station_ips:
             "${OBJ.ip}/32"

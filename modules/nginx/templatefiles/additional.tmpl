@@ -1,0 +1,18 @@
+%{ for subdomain, redirect in subdomains }
+server {
+    listen 80;
+    server_name ${ subdomain == "@" ? root_domain_name : format("%s.%s", subdomain, root_domain_name) };
+
+    location /.well-known/ {
+        root /var/www/html;
+        proxy_pass http://127.0.0.1:${cert_port}$request_uri;
+    }
+
+    location / {
+        ## This redirects to our redirect url currently.
+        ## It will also redirect "A" and "CNAME" records to SSL but that is 
+        ##   not configured outside this template at this time
+        return 302 ${ redirect == "A" || redirect == "CNAME" ? "https://$host:443$request_uri" : redirect };
+    }
+}
+%{ endfor }

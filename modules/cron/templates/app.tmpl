@@ -5,7 +5,7 @@
 MAILTO="root"
 SHELL="/bin/bash"
 HOME="/root"
-${APP.use_custom_backup && allow_cron_backups ? "" : "#"}${APP.backup_frequency} bash $HOME/repos/${APP.repo_name}/${APP.custom_backup_file} -a ${s3alias} -b ${s3bucket} >> /dev/null 2>>$HOME/code/logs/errors.log
+${APP.use_custom_backup && allow_cron_backups ? "" : "#"}${APP.backup_frequency} bash $HOME/repos/${APP.repo_name}/${APP.custom_backup_file} -a ${s3alias} -b ${s3bucket} -c >> /dev/null 2>>$HOME/code/logs/errors.log
 
 #### =========
 

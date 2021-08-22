@@ -4,6 +4,7 @@ terraform {
 variable "server_name_prefix" {}
 variable "active_env_provider" {}
 variable "root_domain_name" {}
+variable "additional_domains" {}
 variable "region" { default = "" }
 variable "aws_ecr_region" { default = "" }
 variable "s3alias" { default = "" }
@@ -21,6 +22,7 @@ variable "run_service_enabled" {}
 variable "send_logs_enabled" {}
 variable "send_jsons_enabled" {}
 variable "import_dbs" {}
+variable "install_unity3d" { default = false }
 
 variable "dbs_to_import" {
     type = list(object({ type=string, s3bucket=string, s3alias=string,

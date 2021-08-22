@@ -33,7 +33,7 @@ data "aws_ami_ids" "latest" {
 
 module "packer" {
     source             = "../packer"
-    build = length(data.aws_ami_ids.latest.id) >= 1 ? false : true
+    build = length(data.aws_ami_ids.latest.ids) >= 1 ? false : true
 
     active_env_provider = var.config.active_env_provider
 
@@ -50,7 +50,7 @@ module "packer" {
     packer_config = var.config.packer_config
 }
 
-data "aws_ami" "latest" {
+data "aws_ami" "new" {
     depends_on = [ module.packer ]
     most_recent = true
 
@@ -91,7 +91,11 @@ resource "aws_instance" "main" {
     count = length(var.config.servers)
     depends_on = [aws_internet_gateway.igw]
     key_name = var.config.aws_key_name
-    ami = var.config.servers[count.index].image == "" ? data.aws_ami.latest.id : var.config.servers[count.index].image
+    #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
+    ami = (var.config.servers[count.index].image != ""
+        ? var.config.servers[count.index].image
+        : (length(data.aws_ami_ids.latest.ids) > 0 ? data.aws_ami_ids.latest.ids[0] : data.aws_ami.new.id)
+    )
     instance_type = var.config.servers[count.index].size["aws"]
 
     tags = {
@@ -189,16 +193,6 @@ resource "aws_instance" "main" {
         }
     }
 
-
-    provisioner "local-exec" {
-        when = destroy
-        command = <<-EOF
-            ssh-keygen -R ${self.public_ip}
-            exit 0;
-        EOF
-        on_failure = continue
-    }
-
     provisioner "remote-exec" {
         when = destroy
         inline = [
@@ -216,6 +210,15 @@ resource "aws_instance" "main" {
             type     = "ssh"
             user     = "root"
         }
+    }
+
+    provisioner "local-exec" {
+        when = destroy
+        command = <<-EOF
+            ssh-keygen -R ${self.public_ip}
+            exit 0;
+        EOF
+        on_failure = continue
     }
 }
 

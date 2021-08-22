@@ -5,6 +5,8 @@ variable "do_region" { default = "nyc3" }
 variable "aws_region_alias" { default = "awseast" }
 variable "aws_region" { default = "us-east-2" }
 variable "aws_ecr_region" { default = "us-east-2" }
+variable "placeholder_hostzone" { default = "" }
+variable "placeholder_reusable_delegationset_id" { default = "" }
 
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
@@ -17,6 +19,7 @@ variable "gitlab_backups_enabled" { default = false }  #auto false if not "defau
 variable "run_service_enabled" { default = false }
 variable "send_logs_enabled" { default = false }
 variable "send_jsons_enabled" { default = false }
+variable "install_unity3d" { default = false }
 
 ########## SOFTWARE VERSIONS ##########
 #######################################
@@ -28,7 +31,9 @@ variable "packer_config" {
         consul_version = "1.10.0"
         redis_version = "5.0.9"
         base_amis = {
-            "us-east-2" = "ami-0d03add87774b12c5"
+            "us-east-2" = "ami-0264425fd74a35f64" #20.04
+            ## TODO: 16.04 reach EOL but do this better for multiple versions
+            #"us-east-2" = "ami-0d03add87774b12c5" #16.04
         }
         digitalocean_image_os = {
             "main" = "ubuntu-20-04-x64"
@@ -138,6 +143,27 @@ variable "db_arecord_aliases" {
 
 variable "leader_arecord_aliases" {
     default = [ ]
+}
+
+variable "offsite_arecord_aliases" {
+    default = [ 
+        #{
+        #    name = "",
+        #    ip = "",
+        #}
+    ]
+}
+
+##NOTE: ATM requires a server with gitlab+nginx+admin role
+variable "additional_domains" {
+    default = {
+        #"domain.com" = {
+        #    "@" = "https://someotherdomain.com"
+        #    "apisubdomain" = "https://externalapi.com"
+        #    #"@" = "A"
+        #    #"www" = "CNAME"
+        #}
+    }
 }
 
 variable "misc_repos" {

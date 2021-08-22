@@ -291,6 +291,21 @@ resource "aws_security_group" "default_ports" {
         protocol    = "tcp"
     }
 
+    ## NOTE: Untested - ICMP for network/ping
+    #ingress {
+    #    description = "All icmp"
+    #    from_port   = 0
+    #    to_port     = 0
+    #    cidr_blocks = ["0.0.0.0/0"]
+    #    protocol    = "icmp"
+    #}
+    #egress {
+    #    description = "All icmp"
+    #    from_port   = 0
+    #    to_port     = 0
+    #    cidr_blocks = ["0.0.0.0/0"]
+    #    protocol    = "icmp"
+    #}
 
     egress {
         description = "All traffic"

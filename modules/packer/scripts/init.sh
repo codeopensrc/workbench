@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-CONSUL_VERSION="1.0.6"
-DOCKER_COMPOSE_VERSION="1.19.0"
-GITLAB_VERSION="13.0.6-ce.0"
+CONSUL_VERSION="1.10.0"
+DOCKER_COMPOSE_VERSION="1.29.2"
+GITLAB_VERSION="13.12.5-ce.0"
 
 while getopts "c:d:g:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
@@ -18,6 +18,10 @@ done
 cat > /root/.gitconfig <<EOF
 [credential]
     helper = store
+[alias]
+    pretty = log --format='%C(auto)%h%d %cd - %s' --date=short
+    mmwps = push -o merge_request.create -o merge_request.target=master -o merge_request.merge_when_pipeline_succeeds
+    dmwps = push -o merge_request.create -o merge_request.target=dev -o merge_request.merge_when_pipeline_succeeds
 EOF
 
 
@@ -49,25 +53,27 @@ timedatectl set-timezone 'America/Los_Angeles'
 #echo -e "deb-src http://mirrors.kernel.org/ubuntu `lsb_release -cs` main" | sudo tee -a /etc/apt/sources.list
 #sleep 5;
 
-sudo apt-get update
-sudo apt-get upgrade -y
-# Base/essentials
-sudo apt-get install build-essential -y
-sudo apt-get install apt-utils -y
-# Misc
-sudo apt-get install openjdk-8-jdk vim git awscli jq -y
-# unzip for consul, rest for gitlab
-sudo apt-get install unzip ca-certificates curl openssh-server -y
-
+sudo apt-get update && apt-get upgrade -y
+sudo apt-get install \
+    build-essential apt-utils openjdk-8-jdk \
+    unzip ca-certificates curl openssh-server \
+    vim git jq \
+    awscli silversearcher-ag -y
 
 # docker-compose
 curl -L https://github.com/docker/compose/releases/download/"$DOCKER_COMPOSE_VERSION"/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
+### According to https://github.com/pypa/get-pip
+### We should be able to `python3 get-pip.py "pip < 21.2.3"` in order to pin
+### When using the edge /get-pip.py it temporarily caused issues
+###   /get-pip.py installs 21.2.3      /pip/3.5/get-pip.py installs 20.3.4
+# pip
+curl -O https://bootstrap.pypa.io/pip/3.5/get-pip.py \
+ && python3 get-pip.py \
+ && rm get-pip.py
 
 # aws
-curl -O https://bootstrap.pypa.io/pip/3.4/get-pip.py
-python3 get-pip.py
 pip3 install awscli --upgrade
 
 
@@ -97,10 +103,9 @@ chmod +x /usr/local/bin/mc
 
 
 # consul
-curl https://releases.hashicorp.com/consul/"$CONSUL_VERSION"/consul_"$CONSUL_VERSION"_linux_amd64.zip -o /tmp/consul.zip
-unzip /tmp/consul.zip -d /tmp
-rm -rf /tmp/consul.zip
-mv /tmp/consul /usr/local/bin
+curl https://releases.hashicorp.com/consul/"$CONSUL_VERSION"/consul_"$CONSUL_VERSION"_linux_amd64.zip -o /tmp/consul.zip \
+ && unzip -o /tmp/consul.zip -d /usr/local/bin \
+ && rm -rf /tmp/consul.zip
 
 
 # gitlab
@@ -120,4 +125,6 @@ sudo apt-get install gitlab-ce="$GITLAB_VERSION";
 
 # Disable gitlab (enable for 1 instance only)
 sudo gitlab-ctl stop
+## TODO: Believe this is incorrect but gitlab isn't starting
+##  up on other machines unless specified so its not *super* important
 sudo systemctl disable gitlab-runsvdir.service || echo 0

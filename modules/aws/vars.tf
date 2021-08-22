@@ -12,6 +12,8 @@
 # variable "admin_arecord_aliases" { type = list }
 # variable "db_arecord_aliases" { type = list }
 # variable "leader_arecord_aliases" { type = list }
+# variable "offsite_arecord_aliases" { type = list }
+# variable "additional_domains" { type = map }
 # variable "app_definitions" {
 #     type = map(object({ pull=string, stable_version=string, use_stable=string,
 #         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
@@ -30,6 +32,8 @@
 # variable "aws_secret_key" {}
 # variable "do_token" {}
 # variable "packer_config" {}
+# variable "placeholder_hostzone" {}
+# variable "placeholder_reusable_delegationset_id" {}
 variable "config" {}
 variable "stun_protos" { default = ["tcp", "udp"] }
 
@@ -59,6 +63,15 @@ locals {
         [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
         if app.create_dev_dns == "true"
     ]
+    cname_additional_aliases = flatten([
+        for domainname, domain in var.config.additional_domains : [
+            for subdomainname, redirect in domain: {
+                domainname = domainname
+                subdomainname = subdomainname
+            }
+            if subdomainname != "@"
+        ]
+    ])
 
     lead_server_ips = tolist([
         for SERVER in aws_instance.main[*]:
@@ -81,4 +94,24 @@ locals {
         if length(regexall("build", SERVER.tags.Roles)) > 0
     ])
 
+    lead_servers = sum(concat([0], tolist([
+        for SERVER in var.config.servers:
+        SERVER.count
+        if contains(SERVER.roles, "lead")
+    ])))
+    admin_servers = sum(concat([0], tolist([
+        for SERVER in var.config.servers:
+        SERVER.count
+        if contains(SERVER.roles, "admin")
+    ])))
+    db_servers = sum(concat([0], tolist([
+        for SERVER in var.config.servers:
+        SERVER.count
+        if contains(SERVER.roles, "db")
+    ])))
+    build_servers = sum(concat([0], tolist([
+        for SERVER in var.config.servers:
+        SERVER.count
+        if contains(SERVER.roles, "build")
+    ])))
 }

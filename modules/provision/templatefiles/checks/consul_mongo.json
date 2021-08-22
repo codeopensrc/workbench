@@ -3,7 +3,7 @@
     "name": "mongo",
     "tags": ["_port=${port}", "_version=${version}"],
     "address": "",
-    "port": "${port}",
+    "port": ${port},
     "enable_tag_override": false,
     "checks": [
       {

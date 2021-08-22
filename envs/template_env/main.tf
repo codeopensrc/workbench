@@ -54,6 +54,7 @@ module "mix" {
     send_logs_enabled   = var.send_logs_enabled
     send_jsons_enabled  = var.send_jsons_enabled
     import_dbs          = var.import_dbs
+    install_unity3d     = var.install_unity3d
 
     dbs_to_import       = var.dbs_to_import
 
@@ -81,6 +82,7 @@ module "mix" {
     contact_email      = var.contact_email
 
     root_domain_name = local.root_domain_name
+    additional_domains = var.additional_domains
 
     # TODO: Dynamically change if using multiple providers/modules
     external_leaderIP = (var.active_env_provider == "digital_ocean"
@@ -96,6 +98,7 @@ module "mix" {
 locals {
     config = {
         root_domain_name = local.root_domain_name
+        additional_domains = var.additional_domains
         server_name_prefix = local.server_name_prefix
         active_env_provider = var.active_env_provider
 
@@ -121,6 +124,7 @@ locals {
         admin_arecord_aliases = var.admin_arecord_aliases
         db_arecord_aliases = var.db_arecord_aliases
         leader_arecord_aliases = var.leader_arecord_aliases
+        offsite_arecord_aliases = var.offsite_arecord_aliases
         app_definitions = var.app_definitions
 
         cidr_block = local.cidr_block
@@ -128,5 +132,8 @@ locals {
         station_ips = var.station_ips
 
         packer_config = var.packer_config
+
+        placeholder_hostzone = var.placeholder_hostzone
+        placeholder_reusable_delegationset_id = var.placeholder_reusable_delegationset_id
     }
 }
