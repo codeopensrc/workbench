@@ -193,6 +193,7 @@ resource "null_resource" "add_proxy_hosts" {
             %{ for APP in var.app_definitions }
 
                 SUBDOMAIN_NAME=${APP["subdomain_name"]};
+                SERVICE_NAME=${APP["service_name"]};
                 GREEN_SERVICE=${APP["green_service"]};
                 BLUE_SERVICE=${APP["blue_service"]};
                 DEFAULT_ACTIVE=${APP["default_active"]};
@@ -200,7 +201,16 @@ resource "null_resource" "add_proxy_hosts" {
                 consul kv put apps/$SUBDOMAIN_NAME/green $GREEN_SERVICE
                 consul kv put apps/$SUBDOMAIN_NAME/blue $BLUE_SERVICE
                 consul kv put apps/$SUBDOMAIN_NAME/active $DEFAULT_ACTIVE
-                consul kv put applist/$SUBDOMAIN_NAME
+                consul kv put applist/$SERVICE_NAME $SUBDOMAIN_NAME
+
+            %{ endfor }
+
+            %{ for APP in var.additional_ssl }
+
+                SUBDOMAIN_NAME=${APP["subdomain_name"]};
+                SERVICE_NAME=${APP["service_name"]};
+
+                consul kv put applist/$SERVICE_NAME $SUBDOMAIN_NAME
 
             %{ endfor }
 
@@ -296,13 +306,12 @@ resource "null_resource" "install_gitlab" {
     # sudo mkdir -p /etc/gitlab/ssl/${var.root_domain_name};
     # sudo chmod 600 /etc/gitlab/ssl/${var.root_domain_name};
 
-    # NOTE: With route53 as DNS over cloudflare, letsencrypt for gitlab cant verify right away
-    #  as the dns change doesn't propagate as fast as cloudflare it appears, wait a min or so before re-running.
-
+    ### Streamlined in 13.9
+    ### sudo gitlab-rake "gitlab:password:reset[root]"
     # Ruby helper cmd: Reset Password
     # gitlab-rails console -e production
     # user = User.where(id: 1).first
-    # user.password = 'secret_pass'
+    # user.password = 'mytemp'
     # user.password_confirmation = 'secret_pass'
     # user.save!
 
@@ -525,6 +534,12 @@ resource "null_resource" "gitlab_plugins" {
                     sudo gitlab-ctl reconfigure;
                 fi
 
+                ### Some good default admin settings
+                OUTBOUND_ARR="chat.${var.root_domain_name},10.0.0.0%2F8"
+                curl --request PUT --header "PRIVATE-TOKEN: $TERRA_UUID" \
+                    "https://gitlab.${var.root_domain_name}/api/v4/application/settings?signup_enabled=false&usage_ping_enabled=false&outbound_local_requests_allowlist_raw=$OUTBOUND_ARR"
+
+
                 sleep 3;
                 sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
 
@@ -728,6 +743,7 @@ module "admin_nginx" {
     root_domain_name = var.root_domain_name
     app_definitions = var.app_definitions
     additional_domains = var.additional_domains
+    additional_ssl = var.additional_ssl
 
     lead_public_ips = var.lead_public_ips
     ## Technically just need to send proxy ip here instead of all private leader ips
@@ -749,6 +765,7 @@ resource "null_resource" "install_dbs" {
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
+        null_resource.restore_gitlab
     ]
 
     provisioner "remote-exec" {
@@ -783,6 +800,7 @@ resource "null_resource" "import_dbs" {
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
+        null_resource.restore_gitlab,
         null_resource.install_dbs
     ]
 
@@ -837,6 +855,7 @@ resource "null_resource" "db_ready" {
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
+        null_resource.restore_gitlab,
         null_resource.install_dbs,
         null_resource.import_dbs,
     ]
@@ -979,6 +998,7 @@ resource "null_resource" "setup_letsencrypt" {
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
+        num_ssl = length(var.additional_ssl)
     }
 
     ## Intially setting up letsencrypt, proxy needs to be setup using http even though we launch it using https
@@ -1027,7 +1047,8 @@ resource "null_resource" "setup_letsencrypt" {
             app_definitions = var.app_definitions,
             fqdn = var.root_domain_name,
             email = var.contact_email,
-            dry_run = false
+            dry_run = false,
+            additional_ssl = var.additional_ssl
         })
         destination = "/root/code/scripts/letsencrypt_vars.sh"
     }
@@ -1065,6 +1086,7 @@ resource "null_resource" "add_keys" {
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
+        num_ssl = length(var.additional_ssl)
     }
 
     provisioner "file" {
@@ -1214,8 +1236,9 @@ resource "null_resource" "register_runner" {
         num_runners = var.num_gitlab_runners
     }
 
-
+    ### TODO: WHOOA, although a nice example of inline exec with EOF, make this a remote file so we can do bash things
     provisioner "remote-exec" {
+        on_failure = continue
         inline = [
             <<-EOF
 
@@ -1224,9 +1247,26 @@ resource "null_resource" "register_runner" {
 
 
                 if [ -z "$REGISTRATION_TOKEN" ]; then
-                    echo "Obtain token and populate `service` key for `gitlab_runner_tokens` var in credentials.tf"
+                    ## Get tmp root password if using fresh instance. Otherwise this fails like it should
+                    if [ -f /etc/gitlab/initial_root_password ]; then
+                        TMP_ROOT_PW=$(sed -rn "s|Password: (.*)|\1|p" /etc/gitlab/initial_root_password)
+                        REGISTRATION_TOKEN=$(bash $HOME/code/scripts/misc/getRunnerToken.sh -u root -p $TMP_ROOT_PW -d ${var.root_domain_name})
+                    else
+                        echo "Waiting 30 for possible consul token";
+                        sleep 30;
+                        REGISTRATION_TOKEN=$(consul kv get gitlab/runner_token)
+                    fi
+                fi
+
+                if [ -z "$REGISTRATION_TOKEN" ]; then
+                    echo "#################################################################################################"
+                    echo "WARNING: REGISTERING RUNNERS FOR ${element(concat(var.lead_names, var.build_names), count.index)} DID NOT FINISH HOWEVER WE ARE CONTINUING"
+                    echo "Obtain token and populate 'service' key for 'gitlab_runner_tokens' var in credentials.tf"
+                    echo "#################################################################################################"
                     exit 1;
                 fi
+
+                consul kv put gitlab/runner_token "$REGISTRATION_TOKEN"
 
                 sleep $((3 + $((${count.index} * 5)) ))
 
@@ -1235,11 +1275,15 @@ resource "null_resource" "register_runner" {
                 ## Due to float arithmetic and how runners are registered/unregistered
                 %{ for NUM in range(1, 1 + (var.num_gitlab_runners / length(concat(var.lead_names, var.build_names)) )) }
 
-                    MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
-                    RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
-                    FULL_NAME="$${RUNNER_NAME}_shell_${NUM}"
-                    FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg")
-                    TAG=""
+                    MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)};
+                    RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$");
+                    FULL_NAME="$${RUNNER_NAME}_shell_${NUM}";
+                    FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg");
+                    TAG="";
+                    ACCESS_LEVEL="not_protected";
+                    RUN_UNTAGGED="true";
+                    LOCKED="false";
+
                     if [ ${NUM} = 1 ]; then
                         case "$MACHINE_NAME" in
                             *build*) TAG=unity ;;
@@ -1247,14 +1291,21 @@ resource "null_resource" "register_runner" {
                             *) TAG="" ;;
                         esac
                     fi
+                    if [ "$TAG" = "prod" ]; then
+                        ACCESS_LEVEL="ref_protected";
+                        RUN_UNTAGGED="false";
+                        #LOCKED="true"; ## When we need to worry about it
+                    fi
+
 
                     if [ -z "$FOUND_NAME" ]; then
                         sudo gitlab-runner register -n \
                           --url "https://gitlab.${var.root_domain_name}" \
                           --registration-token "$REGISTRATION_TOKEN" \
                           --executor shell \
-                          --run-untagged="true" \
-                          --locked="false" \
+                          --run-untagged="$RUN_UNTAGGED" \
+                          --locked="$LOCKED" \
+                          --access-level="$ACCESS_LEVEL" \
                           --name "$FULL_NAME" \
                           --tag-list "$TAG"
                     fi
@@ -1282,6 +1333,7 @@ resource "null_resource" "register_runner" {
     }
 
     provisioner "file" {
+        on_failure = continue
         content = <<-EOF
             MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
             RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
@@ -1314,6 +1366,7 @@ resource "null_resource" "unregister_runner" {
     }
 
     provisioner "file" {
+        on_failure = continue
         content = <<-EOF
             MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
             RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
@@ -1331,6 +1384,7 @@ resource "null_resource" "unregister_runner" {
         destination = "/home/gitlab-runner/rmscripts/unregister.sh"
     }
     provisioner "remote-exec" {
+        on_failure = continue
         inline = [
             "chmod +x /home/gitlab-runner/rmscripts/unregister.sh",
             "bash /home/gitlab-runner/rmscripts/unregister.sh"
@@ -1374,6 +1428,86 @@ resource "null_resource" "install_unity" {
 }
 
 
+resource "null_resource" "kubernetes_admin" {
+    count = local.admin_servers
+    #TODO: module
+    #source = "../kubernetes"
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_runner,
+        null_resource.register_runner,
+        null_resource.unregister_runner,
+        null_resource.install_unity
+    ]
+
+    provisioner "file" {
+        content = <<-EOF
+            KUBE_SCRIPTS=$HOME/code/scripts/kube
+
+            bash $KUBE_SCRIPTS/startKubeCluster.sh -n;
+            ${length(var.servers) == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-" : "echo 0"};
+            bash $KUBE_SCRIPTS/createClusterAccounts.sh -a ${element(var.admin_private_ips, 0)} -u ${var.gitlab_runner_tokens["service"] != "" ? "-t ${var.gitlab_runner_tokens["service"]}" : ""};
+            bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u;
+        EOF
+        destination = "/tmp/init_kubernetes.sh"
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/init_kubernetes.sh",
+            "bash /tmp/init_kubernetes.sh"
+        ]
+    }
+
+    connection {
+        host = element(var.admin_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
+
+resource "null_resource" "kubernetes_worker" {
+    count = local.is_not_admin_count
+    #TODO: module
+    #source = "../kubernetes"
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_runner,
+        null_resource.register_runner,
+        null_resource.unregister_runner,
+        null_resource.install_unity,
+        null_resource.kubernetes_admin
+    ]
+
+    provisioner "file" {
+        content = <<-EOF
+            KUBE_SCRIPTS=$HOME/code/scripts/kube
+            JOIN_COMMAND=$(consul kv get kube/joincmd)
+
+            bash $KUBE_SCRIPTS/joinKubeCluster.sh -j "$JOIN_COMMAND";
+        EOF
+        destination = "/tmp/init_kubernetes.sh"
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/init_kubernetes.sh",
+            "bash /tmp/init_kubernetes.sh"
+        ]
+    }
+
+    connection {
+        host = element(tolist(setsubtract(local.all_public_ips, var.admin_public_ips)), count.index)
+        type = "ssh"
+    }
+}
+
 # Re-enable after everything installed
 resource "null_resource" "enable_autoupgrade" {
     count = length(var.servers)
@@ -1386,7 +1520,9 @@ resource "null_resource" "enable_autoupgrade" {
         null_resource.install_runner,
         null_resource.register_runner,
         null_resource.unregister_runner,
-        null_resource.install_unity
+        null_resource.install_unity,
+        null_resource.kubernetes_admin,
+        null_resource.kubernetes_worker
     ]
 
     provisioner "remote-exec" {

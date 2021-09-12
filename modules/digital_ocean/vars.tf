@@ -23,6 +23,7 @@ terraform {
 # variable "leader_arecord_aliases" { type = list }
 # variable "offsite_arecord_aliases" { type = list }
 # variable "additional_domains" { type = map }
+# variable "additional_ssl" { type = list }
 # variable "app_definitions" {
 #     type = map(object({ pull=string, stable_version=string, use_stable=string,
 #         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
@@ -132,7 +133,7 @@ locals {
     ])))
 }
 
-# Based on app, create .db, .dev, and .dev.db subdomains (not used just yet)
+# Based on app, create .db, .beta, and .beta.db subdomains (not used just yet)
 # TODO: See if we can do locals like this in an envs/vars.tf file with a just declared variable
 locals {
     cname_aliases = [
@@ -142,7 +143,7 @@ locals {
     ]
     cname_dev_aliases = [
         for app in var.config.app_definitions:
-        [format("${app.subdomain_name}.dev"), format("${app.subdomain_name}.dev.db")]
+        [format("${app.subdomain_name}.beta"), format("${app.subdomain_name}.beta.db")]
         if app.create_dev_dns == "true"
     ]
     cname_additional_aliases = flatten([

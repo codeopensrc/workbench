@@ -2,6 +2,7 @@
 variable "admin_servers" {}
 variable "root_domain_name" { default = "" }
 variable "additional_domains" { default = {} }
+variable "additional_ssl" { default = [] }
 variable "admin_public_ips" {
     type = list(string)
     default = []
@@ -41,46 +42,6 @@ resource "null_resource" "proxy_config" {
         ]
     }
 
-    ## Keep in mind, this all has to do with running the docker proxy app as proxy for our docker
-    ##  apps and tieing them to consul. This will be revisted in the future (probably very near)
-
-    ## Given below information is why we currently always proxy nginx to the last leader ip while dns resolves to the first
-    # 10.1.0.0/16:  10.1.0.0  -  10.1.255.255  : Our vpc (for now) - Our security group allows this into db ports
-    # 10.1.2.0/24:  10.1.2.0  -  10.1.2.255    : "Public" subnet - 255ish ips each server gets an ip on
-
-    # What we're doing:
-    # Open 4433 on 10.1.0.0/16 and proxy to last private leader ip (we dont know WHY the admin ip doesnt work
-    #    when its 1admin+lead + 1lead)
-
-    # For some reason when nginx points to admin ip (private, local, or public) and when more than 1 lead, it wont resolve swarm balanced requests to lead ip (to self are fine)
-    #  but if nginx points to lead ip, it will resolve to all docker containers on admin ip just fine (also itself fine). Question is why
-
-
-    ####                             Private IP        Roles                 IP          Roles
-    # Given the 2 server scenario:   10.1.2.151   admin+lead+db    -     10.1.2.165      lead
-
-    # When nginx host proxy is proxying to:
-    # 10.1.2.151  admin ip    only resolves to docker containers on admin ip and NOT lead ip
-
-    # When nginx host proxy is proxying to :
-    # 10.1.2.165  lead ip     resolves to docker containers on both lead ip and admin ip
-
-
-    # With a single server.  When nginx host proxy is proxying to:
-    # 10.1.2.151  admin+lead ip    resolves just fine if its the only lead ip
-
-
-    ## Have looked into changing the docker subnet these services are connected to but did not
-    ##  find a solution given how we already open ports on all network interfaces for swarm and
-    ##  even allowed all connections from all ports for the 10.1.0/16 vpc
-
-    ## Easily something that was missed but this is as far as we got and have a "working" solution
-
-    # TODO: Somehow need to proc changing the nginx proxy before destroying the proxy_ip node
-    # NOTE: For now we do it at destroy time of the instance but its a "good enough" method and not great
-
-    # TODO: Multiple files or all nginx configs in a single file
-
     provisioner "file" {
         content = templatefile("${path.module}/templatefiles/mainproxy.tmpl", {
             root_domain_name = var.root_domain_name
@@ -104,6 +65,20 @@ resource "null_resource" "proxy_config" {
             cert_port = var.cert_port
         })
         destination = "/etc/nginx/conf.d/btcpay.conf"
+    }
+    provisioner "file" {
+        content = templatefile("${path.module}/templatefiles/kube_services.tmpl", {
+            root_domain_name = var.root_domain_name
+            cert_port = var.cert_port
+            kube_nginx_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
+            kube_nginx_port = "31000"  #Hardcoded nginx NodePort service atm
+            subdomains = [
+                for HOST in var.additional_ssl:
+                format("%s.%s", HOST.subdomain_name, var.root_domain_name)
+                if HOST.create_ssl_cert == true
+            ]
+        })
+        destination = "/etc/nginx/conf.d/kube_services.conf"
     }
 
     connection {

@@ -14,3 +14,5 @@ scripts/ignore/*
 a_root/mix/modules/packer/ignore/*
 modules/packer/ignore/*
 *WIP*
+*.vim
+*.swp

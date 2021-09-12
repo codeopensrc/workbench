@@ -25,15 +25,13 @@ variable "install_unity3d" { default = false }
 #######################################
 variable "packer_config" {
     default = {
-        gitlab_version = "13.12.5-ce.0"
+        gitlab_version = "14.2.3-ce.0"
         docker_version = "20.10.7"
         docker_compose_version = "1.29.2"
         consul_version = "1.10.0"
         redis_version = "5.0.9"
         base_amis = {
-            "us-east-2" = "ami-0264425fd74a35f64" #20.04
-            ## TODO: 16.04 reach EOL but do this better for multiple versions
-            #"us-east-2" = "ami-0d03add87774b12c5" #16.04
+            "us-east-2" = "ami-030bd1caa8425dfe8" #20.04
         }
         digitalocean_image_os = {
             "main" = "ubuntu-20-04-x64"
@@ -73,7 +71,7 @@ variable "servers" {
             "roles" = ["admin", "lead", "db"]
             # "roles" = ["admin"]
             "size" = {
-                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][3]
+                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][3]
                 "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][1]
             }
             "aws_volume_size" = 60
@@ -83,7 +81,7 @@ variable "servers" {
         #     "image" = ""
         #     "roles" = ["lead"]
         #     "size" = {
-        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][1]
+        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
         #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
         #     }
         #     "aws_volume_size" = 40
@@ -93,7 +91,7 @@ variable "servers" {
         #     "image" = ""
         #     "roles" = ["db"]
         #     "size" = {
-        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][1]
+        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
         #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
         #     }
         #     "aws_volume_size" = 40
@@ -103,8 +101,8 @@ variable "servers" {
         #     "image" = ""
         #     "roles" = ["build"]
         #     "size" = {
-        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3.large"][1]
-        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][1]
+        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
+        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
         #     }
         #     "aws_volume_size" = 40
         # },
@@ -126,8 +124,8 @@ variable "admin_arecord_aliases" {
         "gitlab",
         "registry",
         "chat",
-        "btcpay"
     ]
+        #"btcpay"
 }
 
 variable "db_arecord_aliases" {
@@ -142,7 +140,18 @@ variable "db_arecord_aliases" {
 }
 
 variable "leader_arecord_aliases" {
-    default = [ ]
+    default = [ "*.dev", "*.beta" ]
+}
+
+variable "additional_ssl" {
+    default = [
+        #{
+        #    create_ssl_cert = true
+        #    create_dev_dns = true
+        #    subdomain_name = ""
+        #    service_name = ""
+        #}
+    ]
 }
 
 variable "offsite_arecord_aliases" {

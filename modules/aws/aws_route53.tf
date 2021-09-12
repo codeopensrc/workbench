@@ -172,3 +172,13 @@ resource "aws_route53_record" "default_a_leader_root" {
     type            = "A"
     records = slice(local.lead_server_ips, 0, 1)
 }
+
+resource "aws_route53_record" "additional_ssl" {
+    count  = local.lead_servers > 0 ? length(var.config.additional_ssl) : 0
+    zone_id = aws_route53_zone.default.zone_id
+    name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
+    allow_overwrite = true
+    type   = "A"
+    ttl    = "300"
+    value  = element(slice(local.lead_server_ips, 0, 1), 0)
+}

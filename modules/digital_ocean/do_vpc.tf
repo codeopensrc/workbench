@@ -114,12 +114,20 @@ resource "digitalocean_firewall" "app" {
         source_addresses = ["172.16.0.0/12"]
     }
 
-    # "btcpay"
+    # description = "kubernetes"
     inbound_rule {
-        protocol    = "tcp"
-        port_range   = 6080
-        source_addresses = [var.config.cidr_block]
+        protocol    = "tcp"                         ## *Used By*  All
+        port_range   = "30000-32767"                ## *Purpose* NodePort Services†
+        source_addresses = [var.config.cidr_block] ## Probably this setting once we setup dns/ingress
+        #source_addresses = ["0.0.0.0/0"]           ## Debugging
     }
+
+    ## "btcpay"
+    #inbound_rule {
+    #    protocol    = "tcp"
+    #    port_range   = 6080
+    #    source_addresses = [var.config.cidr_block]
+    #}
 
     # STUN
     dynamic "inbound_rule" {
@@ -172,6 +180,28 @@ resource "digitalocean_firewall" "admin" {
         protocol    = "tcp"
         port_range   = 3100
         source_addresses = [var.config.cidr_block]
+    }
+
+    # description = "Kubernetes"
+    inbound_rule {
+        protocol    = "tcp"                         ## *Used By* All
+        port_range   = 6443                         ## *Purpose* Kubernetes API server
+        source_addresses = [var.config.cidr_block]  ## Only vpc (most secure, but need individual ip access for kubectl)
+        #source_addresses = ["0.0.0.0/0"]            ## Allow outside private vpc (best in team/group setting or have bastion host)
+    }
+    # description = "Kubernetes"
+    inbound_rule {
+        protocol    = "tcp"                        ## *Used By* kube-apiserver, etcd
+        port_range   = "2379-2380"                 ## *Purpose* etcd server client API
+        source_addresses = [var.config.cidr_block] ## Might be only needed between control nodes
+        #source_addresses = ["0.0.0.0/0"]           ## Debugging
+    }
+    # description = "Kubernetes"
+    inbound_rule {
+        protocol    = "tcp"                        ## *Used By* Self/Control Plane
+        port_range   = "10250-10252"               ## *Purpose* kubelet API,kube-scheduler,kube-controller-manager
+        source_addresses = [var.config.cidr_block] ## Might be only needed between control nodes
+        #source_addresses = ["0.0.0.0/0"]           ## Debugging
     }
 
     lifecycle {
@@ -258,6 +288,22 @@ resource "digitalocean_firewall" "default" {
         port_range   = 9100
         source_addresses = [var.config.cidr_block]
     }
+
+    # description = "kubernetes"
+    inbound_rule {
+        protocol    = "tcp"                         ## *Used By*  Self, Control plane
+        port_range   = 10250                        ## *Purpose* kubelet API - `kubectl exec/logs`
+        source_addresses = [var.config.cidr_block]  ## Nodes "Internal IP" must be in vpc to work
+        #source_addresses = ["0.0.0.0/0"]           ## Debugging or? If "Internal IP" is not set to vpc
+    }
+    # description = "kubernetes"
+    inbound_rule {
+        protocol    = "udp"                         ## *Used By*  worker
+        port_range   = 8472                         ## *Purpose* flannel CNI 
+        source_addresses = [var.config.cidr_block]  ## Needs vpc iface added to flannels DaemonSet args
+        #source_addresses = ["0.0.0.0/0"]           ## Debugging
+    }
+
 
 
     # description = "All ICMP"

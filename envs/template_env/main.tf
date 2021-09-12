@@ -71,7 +71,7 @@ module "mix" {
     gitlab_backups_enabled = var.gitlab_backups_enabled
     import_gitlab = var.import_gitlab
     import_gitlab_version = var.import_gitlab_version
-    gitlab_runner_tokens = var.gitlab_runner_tokens
+    gitlab_runner_tokens = local.gitlab_runner_tokens
     num_gitlab_runners = local.num_gitlab_runners
 
     known_hosts = var.known_hosts
@@ -82,12 +82,13 @@ module "mix" {
     contact_email      = var.contact_email
 
     root_domain_name = local.root_domain_name
-    additional_domains = var.additional_domains
+    additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
+    additional_ssl = var.additional_ssl
 
     # TODO: Dynamically change if using multiple providers/modules
-    external_leaderIP = (var.active_env_provider == "digital_ocean"
-        ? element(concat(module.main.lead_public_ip_addresses, [""]), 0)
-        : element(concat(module.main.lead_public_ip_addresses, [""]), 0))
+    #external_leaderIP = (var.active_env_provider == "digital_ocean"
+    #    ? element(concat(module.main.lead_public_ip_addresses, [""]), 0)
+    #    : element(concat(module.main.lead_public_ip_addresses, [""]), 0))
 
 
     # TODO: Review cross data center communication
@@ -98,7 +99,8 @@ module "mix" {
 locals {
     config = {
         root_domain_name = local.root_domain_name
-        additional_domains = var.additional_domains
+        additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
+        additional_ssl = var.additional_ssl
         server_name_prefix = local.server_name_prefix
         active_env_provider = var.active_env_provider
 

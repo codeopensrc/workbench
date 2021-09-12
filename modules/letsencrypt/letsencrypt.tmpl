@@ -4,7 +4,14 @@ source /root/code/scripts/letsencrypt_vars.sh
 
 sudo apt-get update
 sudo apt-get install software-properties-common -y
-sudo add-apt-repository ppa:certbot/certbot -y
+
+## sudo add-apt-repository ppa:certbot/certbot -y
+## NOTE: This cmd causes problems on focal
+## E: The repository 'http://ppa.launchpad.net/certbot/certbot/ubuntu focal Release' does not have a Release file.
+## N: Updating from such a repository can't be done securely, and is therefore disabled by default.
+## N: See apt-secure(8) manpage for repository creation and user configuration details.
+## culprit ends up in this file   /etc/apt/sources.list.d/certbot-ubuntu-certbot-focal.list
+
 sudo apt-get update
 sudo apt-get install certbot -y
 

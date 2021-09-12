@@ -17,6 +17,7 @@ variable "servers" { default = [] }
 
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
+variable "additional_ssl" {}
 
 variable "run_service_enabled" {}
 variable "send_logs_enabled" {}
@@ -138,6 +139,7 @@ locals {
         SERVER.count
         if contains(SERVER.roles, "build")
     ])))
+    is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
 
 
     redis_dbs = [

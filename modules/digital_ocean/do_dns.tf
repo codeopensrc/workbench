@@ -105,22 +105,7 @@ resource "digitalocean_record" "default_a_leader" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    # If ip matches an admin, go with admin ip or lead ip.
-    # Atm choosing first lead ip due to docker proxy service listening port dependent on where it was originally launched
-    # Make sure this only points to leader ip after it's joined the swarm, if we cant guarantee, dont change
     value  = element(slice(local.lead_server_ips, 0, 1), 0)
-
-    # Get first ip
-    # records = slice([
-    #     for SERVER in aws_instance.main[*]:
-    #     SERVER.public_ip
-    #     if length(regexall("lead", SERVER.tags.Roles)) > 0
-    # ], 0, 1)
-    # If we wanted the last ip
-    # records = slice(local.lead_server_ips,
-    #     (length(local.lead_server_ips) - 1 > 0 ? length(local.lead_server_ips) - 1 : 0),  #start index
-    #     (length(local.lead_server_ips) > 1 ? length(local.lead_server_ips) : 1)   #end index
-    # )
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
@@ -135,4 +120,13 @@ resource "digitalocean_record" "default_a_leader_root" {
     #     SERVER.public_ip
     #     if length(regexall("lead", SERVER.tags.Roles)) > 0
     # ], 0, 1)
+}
+
+resource "digitalocean_record" "additional_ssl" {
+    count  = local.lead_servers > 0 ? length(var.config.additional_ssl) : 0
+    name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
+    domain = digitalocean_domain.default.name
+    type   = "A"
+    ttl    = "300"
+    value  = element(slice(local.lead_server_ips, 0, 1), 0)
 }

@@ -126,13 +126,22 @@ resource "aws_security_group" "app_ports" {
         protocol    = "tcp"
     }
 
-    ingress {
-        description = "btcpay"
-        from_port   = 6080
-        to_port     = 6080
-        cidr_blocks = [var.config.cidr_block]
-        protocol    = "tcp"
+    inbound_rule {
+        description = "Kubernetes"
+        from_port   = 30000                   ## *Purpose* NodePort Services†
+        to_port     = 32767
+        cidr_blocks = [var.config.cidr_block] ## Probably this setting once we setup dns/ingress
+        #cidr_blocks = ["0.0.0.0/0"]           ## Debugging
+        protocol    = "tcp"                   ## *Used By*  All
     }
+
+    #ingress {
+    #    description = "btcpay"
+    #    from_port   = 6080
+    #    to_port     = 6080
+    #    cidr_blocks = [var.config.cidr_block]
+    #    protocol    = "tcp"
+    #}
 
     # STUN
     dynamic "ingress" {
@@ -192,6 +201,31 @@ resource "aws_security_group" "admin_ports" {
         to_port     = 3100
         cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
+    }
+
+    ingress {
+        description = "Kubernetes api"          ## *Purpose* Kubernetes API server
+        from_port   = 6443
+        to_port     = 6443
+        cidr_blocks = [var.config.cidr_block]   ## Only vpc (most secure, but need individual ip access for kubectl)
+        #cidr_blocks = ["0.0.0.0/0"]             ## Allow outside private vpc (best in team/group setting or have bastion host)
+        protocol    = "tcp"                     ## *Used By* All
+    }
+    ingress {
+        description = "Kubernetes etcd"        ## *Purpose* etcd server client API
+        from_port   = 2379
+        to_port     = 2380
+        cidr_blocks = [var.config.cidr_block]  ## Might be only needed between control nodes
+        #cidr_blocks = ["0.0.0.0/0"]            ## Debugging
+        protocol    = "tcp"                    ## *Used By* kube-apiserver, etcd
+    }
+    ingress {
+        description = "Kubernetes controller"  ## *Purpose* kubelet API,kube-scheduler,kube-controller-manager
+        from_port   = 10250
+        to_port     = 10252
+        cidr_blocks = [var.config.cidr_block]  ## Might be only needed between control nodes
+        #cidr_blocks = ["0.0.0.0/0"]            ## Debugging
+        protocol    = "tcp"                    ## *Used By* Self/Control Plane
     }
 
     lifecycle {
@@ -289,6 +323,25 @@ resource "aws_security_group" "default_ports" {
         to_port     = 9100
         cidr_blocks = [var.config.cidr_block]
         protocol    = "tcp"
+    }
+
+
+    #kubernetes
+    ingress {
+        description = "Kubernetes api"          ## *Purpose* Kubernetes API server
+        from_port   = 10250                     ## *Purpose* kubelet API - `kubectl exec/logs`
+        to_port     = 10250
+        cidr_blocks = [var.config.cidr_block]  ## Nodes "Internal IP" must be in vpc to work
+        #cidr_blocks = ["0.0.0.0/0"]            ## Debugging or? If "Internal IP" is not set to vpc
+        protocol    = "tcp"                    ## *Used By*  Self, Control plane
+    }
+    ingress {
+        description = "Kubernetes flannel CNI"
+        from_port   = 8472                     ## *Purpose* flannel CNI 
+        to_port     = 8472
+        cidr_blocks = [var.config.cidr_block]  ## Needs vpc iface added to flannels DaemonSet args
+        #cidr_blocks = ["0.0.0.0/0"]            ## Debugging
+        protocol    = "udp"                    ## *Used By*  worker
     }
 
     ## NOTE: Untested - ICMP for network/ping

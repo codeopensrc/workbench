@@ -14,10 +14,25 @@ if [ "$CREATE_SSL" = "true" ]; then
     RENEW+=(-d ${APP["subdomain_name"]}.${fqdn})
 
     if [ "$CREATE_DEV" = "true" ]; then
-        RENEW+=(-d ${APP["subdomain_name"]}.dev.${fqdn})
+        RENEW+=(-d ${APP["subdomain_name"]}.beta.${fqdn})
     fi
 fi
 %{ endfor }
+
+
+%{ for APP in additional_ssl }
+CREATE_SSL=${APP["create_ssl_cert"]};
+CREATE_DEV=${APP["create_dev_dns"]};
+
+if [ "$CREATE_SSL" = "true" ]; then
+    RENEW+=(-d ${APP["subdomain_name"]}.${fqdn})
+
+    if [ "$CREATE_DEV" = "true" ]; then
+        RENEW+=(-d ${APP["subdomain_name"]}.beta.${fqdn})
+    fi
+fi
+%{ endfor }
+
 
 if [ "$DRY_RUN" = "true" ]; then
     RENEW+=(--dry-run)

@@ -33,12 +33,7 @@ variable "serverkey" { default = ""}
 
 variable "contact_email" { default = "your@email.com" }
 
-variable "gitlab_runner_tokens" {
-    type = map(string)
-    default = {
-        service = "token_value"
-    }
-}
+
 
 locals {
     env = terraform.workspace
@@ -53,8 +48,14 @@ locals {
         "default" = "10.1.0.0/16"
     }
     default_gitlab_runners = {
-        "default" = 0
+        "default" = 2
     }
+    gitlab_runner_tokens_list = {
+        "default" = { service = "" }
+    }
+
+    # Gitlab runner registration token
+    gitlab_runner_tokens = lookup(local.gitlab_runner_tokens_list, local.env)
 
     # This is used for the fqdn
     root_domain_name = lookup(local.root_domain_names, local.env)
@@ -63,7 +64,7 @@ locals {
     server_name_prefix = lookup(local.server_name_prefixes, local.env)
 
     cidr_block = lookup(local.cidr_blocks, local.env)
-    num_gitlab_runners = lookup(local.default_gitlab_runners, local.env, 0)
+    num_gitlab_runners = lookup(local.default_gitlab_runners, local.env, 2)
 }
 
 ###! To use s3 backend for remote state, backup any current .tfstate file.

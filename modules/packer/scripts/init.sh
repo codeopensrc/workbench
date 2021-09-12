@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+sed -i "s|1|0|" /etc/apt/apt.conf.d/20auto-upgrades
+cat /etc/apt/apt.conf.d/20auto-upgrades
+
 CONSUL_VERSION="1.10.0"
 DOCKER_COMPOSE_VERSION="1.29.2"
 GITLAB_VERSION="13.12.5-ce.0"
@@ -25,7 +28,7 @@ cat > /root/.gitconfig <<EOF
 EOF
 
 
-# Dirs/TZ/packages
+#### Dirs/TZ/packages
 mkdir -p /root/repos
 mkdir -p /root/builds
 mkdir -p /root/code
@@ -42,7 +45,6 @@ mkdir -p /etc/nginx/conf.d
 mkdir -p /etc/consul.d
 sudo sed -i "s|\\\u@\\\h|\\\u@\\\H|g" /root/.bashrc
 [ ! -f /root/.ssh/id_rsa ] && (cd /root/.ssh && ssh-keygen -f id_rsa -t rsa -N '')
-[ ! -d /root/.tmux/plugins/tpm ] && git clone https://github.com/tmux-plugins/tpm /root/.tmux/plugins/tpm
 cp /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 timedatectl set-timezone 'America/Los_Angeles'
 
@@ -53,14 +55,27 @@ timedatectl set-timezone 'America/Los_Angeles'
 #echo -e "deb-src http://mirrors.kernel.org/ubuntu `lsb_release -cs` main" | sudo tee -a /etc/apt/sources.list
 #sleep 5;
 
-sudo apt-get update && apt-get upgrade -y
+echo "update & install";
+echo "Idk wait 30 seconds for apt-get update to avoid lock"
+sleep 30;
+sudo apt-get update;
+echo "Idk wait 30 seconds again for apt-get upgrade to avoid lock"
+sleep 30;
+sudo apt-mark hold openssh-server;
+echo "Marked ssh server"
+sleep 15;
+sudo apt-get upgrade -y;
+echo "Idk wait 30 seconds again for apt-get install to avoid lock"
+sleep 30;
 sudo apt-get install \
     build-essential apt-utils openjdk-8-jdk \
-    unzip ca-certificates curl openssh-server \
+    unzip apt-transport-https ca-certificates curl \
     vim git jq \
     awscli silversearcher-ag -y
 
-# docker-compose
+sudo apt-mark unhold openssh-server
+
+#### docker-compose
 curl -L https://github.com/docker/compose/releases/download/"$DOCKER_COMPOSE_VERSION"/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
@@ -68,16 +83,17 @@ chmod +x /usr/local/bin/docker-compose
 ### We should be able to `python3 get-pip.py "pip < 21.2.3"` in order to pin
 ### When using the edge /get-pip.py it temporarily caused issues
 ###   /get-pip.py installs 21.2.3      /pip/3.5/get-pip.py installs 20.3.4
-# pip
+
+#### pip
 curl -O https://bootstrap.pypa.io/pip/3.5/get-pip.py \
  && python3 get-pip.py \
  && rm get-pip.py
 
-# aws
+#### aws
 pip3 install awscli --upgrade
 
 
-# mc (minio client)
+#### mc (minio client)
 curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
 chmod +x /usr/local/bin/mc
 ###! An optional read policy (written as js object)
@@ -102,13 +118,13 @@ chmod +x /usr/local/bin/mc
 ###! }
 
 
-# consul
+#### consul
 curl https://releases.hashicorp.com/consul/"$CONSUL_VERSION"/consul_"$CONSUL_VERSION"_linux_amd64.zip -o /tmp/consul.zip \
  && unzip -o /tmp/consul.zip -d /usr/local/bin \
  && rm -rf /tmp/consul.zip
 
 
-# gitlab
+#### gitlab
 echo postfix postfix/mailname string example.com | sudo debconf-set-selections
 echo postfix postfix/main_mailer_type string 'Internet Site' | sudo debconf-set-selections
 sudo apt-get install --assume-yes postfix;
@@ -128,3 +144,6 @@ sudo gitlab-ctl stop
 ## TODO: Believe this is incorrect but gitlab isn't starting
 ##  up on other machines unless specified so its not *super* important
 sudo systemctl disable gitlab-runsvdir.service || echo 0
+
+sed -i \"s|0|1|\" /etc/apt/apt.conf.d/20auto-upgrades
+cat /etc/apt/apt.conf.d/20auto-upgrades
