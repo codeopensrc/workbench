@@ -22,6 +22,8 @@ variable "app_definitions" {
 
 variable "registry_ready" {}
 
+
+## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "pull_images" {
     count = var.servers
 
@@ -96,6 +98,7 @@ resource "null_resource" "pull_images" {
     }
 }
 
+## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "start_containers" {
     count = var.servers
     depends_on = [null_resource.pull_images]

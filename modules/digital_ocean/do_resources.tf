@@ -62,6 +62,7 @@ data "digitalocean_images" "new" {
     }
 }
 
+## TODO: We're creating 2 separate UUID substrs for name and tag atm
 resource "digitalocean_droplet" "main" {
     count = length(var.config.servers)
     name     = "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
@@ -78,6 +79,7 @@ resource "digitalocean_droplet" "main" {
         "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}",
         var.config.servers[count.index].roles
     ])
+    #"TODO: Tag admin with gitlab.${var.config.root_domain_name}"
 
     lifecycle {
         ignore_changes = [name, tags]
@@ -96,6 +98,8 @@ resource "digitalocean_droplet" "main" {
         }
     }
 
+    ###! TODO: Update to use kubernetes instead of docker swarm
+    ## Runs when `var.config.downsize` is true
     provisioner "file" {
         content = <<-EOF
 
@@ -115,6 +119,7 @@ resource "digitalocean_droplet" "main" {
             private_key = file(var.config.local_ssh_key_file)
         }
     }
+    ## Runs when `var.config.downsize` is true
     provisioner "file" {
         content = <<-EOF
 
@@ -134,6 +139,8 @@ resource "digitalocean_droplet" "main" {
             private_key = file(var.config.local_ssh_key_file)
         }
     }
+    ###! TODO: Update to use kubernetes instead of docker swarm
+    ## Runs when `var.config.downsize` is true
     provisioner "file" {
         content = <<-EOF
 
@@ -178,7 +185,16 @@ resource "digitalocean_droplet" "main" {
     provisioner "local-exec" {
         when = destroy
         command = <<-EOF
-            ssh-keygen -R ${self.ipv4_address}
+            ssh-keygen -R ${self.ipv4_address};
+            WORKSPACE="unknown";
+            ## TODO-Tag admin with var.config.root_domain_name
+
+            if [ "$WORKSPACE" != "default" ]; then
+                ## TODO: Create parsable domain from tag
+                ## "${length( regexall("domain", join(",", self.tags)) ) > 0}"
+                ## ssh-keygen -R "gitlab."
+                echo "Not default"
+            fi
             exit 0;
         EOF
         on_failure = continue
@@ -210,6 +226,7 @@ resource "null_resource" "cleanup_consul" {
         EOF
         destination = "/tmp/update_consul_members.sh"
     }
+    ##! Uses tmux to run in the background and let remaining scripts run to remove nodes
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/update_consul_members.sh",
@@ -224,6 +241,7 @@ resource "null_resource" "cleanup_consul" {
     }
 }
 
+###! TODO: Update to use kubernetes instead of docker swarm
 ###! Run this resource when downsizing from 2 leader servers to 1 in its own apply
 resource "null_resource" "cleanup" {
     count = 1

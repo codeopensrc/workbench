@@ -35,6 +35,7 @@
 # variable "packer_config" {}
 # variable "placeholder_hostzone" {}
 # variable "placeholder_reusable_delegationset_id" {}
+# variable "misc_cname" {}
 variable "config" {}
 variable "stun_protos" { default = ["tcp", "udp"] }
 
@@ -73,6 +74,7 @@ locals {
             if subdomainname != "@"
         ]
     ])
+    cname_misc_aliases = flatten(var.config.misc_cnames)
 
     lead_server_ips = tolist([
         for SERVER in aws_instance.main[*]:

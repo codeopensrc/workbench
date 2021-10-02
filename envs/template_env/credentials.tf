@@ -53,6 +53,23 @@ locals {
     gitlab_runner_tokens_list = {
         "default" = { service = "" }
     }
+    misc_cname_aliases = {
+        "default" = [
+            {
+                subdomainname = ""
+                alias = ""
+            }
+        ]
+    }
+    sendgrid_apikeys = {
+        "default" = ""
+    }
+    sendgrid_domains = {
+        "default" = ""
+    }
+
+    # Additional configurable cname aliases: subdomainname -> alias
+    misc_cnames = lookup(local.misc_cname_aliases, local.env)
 
     # Gitlab runner registration token
     gitlab_runner_tokens = lookup(local.gitlab_runner_tokens_list, local.env)
@@ -65,6 +82,11 @@ locals {
 
     cidr_block = lookup(local.cidr_blocks, local.env)
     num_gitlab_runners = lookup(local.default_gitlab_runners, local.env, 2)
+
+    # Configures sendgrid SMTP for gitlab using verified domain sender identity
+    # TODO: Maybe put in wiki some links to setup and get apikey from sendgrid
+    sendgrid_apikey = lookup(local.sendgrid_apikeys, local.env)
+    sendgrid_domain = lookup(local.sendgrid_domains, local.env)
 }
 
 ###! To use s3 backend for remote state, backup any current .tfstate file.

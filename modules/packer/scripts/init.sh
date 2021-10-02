@@ -125,17 +125,6 @@ curl https://releases.hashicorp.com/consul/"$CONSUL_VERSION"/consul_"$CONSUL_VER
 
 
 #### gitlab
-echo postfix postfix/mailname string example.com | sudo debconf-set-selections
-echo postfix postfix/main_mailer_type string 'Internet Site' | sudo debconf-set-selections
-sudo apt-get install --assume-yes postfix;
-
-###! WIP
-###! sudo apt-get install --assume-yes mailutils;
-###! change to:
-###! mydestination = $myhostname, localhost.$mydomain, $mydomain
-###! maybe   change:  inet_interfaces = all    to:  inet_interfaces = loopback-only
-###! in /etc/postfix/main.cf
-
 curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash;
 sudo apt-get install gitlab-ce="$GITLAB_VERSION";
 
@@ -143,7 +132,6 @@ sudo apt-get install gitlab-ce="$GITLAB_VERSION";
 sudo gitlab-ctl stop
 ## TODO: Believe this is incorrect but gitlab isn't starting
 ##  up on other machines unless specified so its not *super* important
-sudo systemctl disable gitlab-runsvdir.service || echo 0
 
-sed -i \"s|0|1|\" /etc/apt/apt.conf.d/20auto-upgrades
+sed -i "s|0|1|" /etc/apt/apt.conf.d/20auto-upgrades
 cat /etc/apt/apt.conf.d/20auto-upgrades

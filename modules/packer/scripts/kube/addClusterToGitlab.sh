@@ -15,7 +15,7 @@ while getopts "d:n:s:ruc" flag; do
         s) CLUSTER_SCOPE=$OPTARG;;
         c) CREATE_CLUSTER_ACCOUNTS="true";;
         u) USE_DEFAULTS="true";;
-        r) RM_CLUSTER="true";;
+        r) RM_PREV_CLUSTERS="true";;
     esac
 done
 
@@ -23,13 +23,18 @@ if [[ -z "$DOMAIN" ]]; then echo "Domain not provided. Use -d"; exit; fi
 
 GL_API_URL="https://gitlab.${DOMAIN}/api/v4"
 
-## TODO: For importing prev gitlab
-##  We'll need to delete all 99% sure
-##  Loop through deleting until we get an error then proceed
-if [[ $RM_CLUSTER = "true" ]]; then
-    DELETE_ID=$(curl -H "PRIVATE-TOKEN: ${TOKEN_UUID}" "$GL_API_URL" | jq ".[0].id")
-    [[ "$DELETE_ID" != "null" ]] && curl -X DELETE -H "PRIVATE-TOKEN: ${TOKEN_UUID}" "$GL_API_URL/$DELETE_ID"
-    exit
+## NOTE: For importing prev gitlab
+##  Loop through deleting
+if [[ $RM_PREV_CLUSTERS = "true" ]]; then
+
+    DELETE_IDS=( $(curl -H "PRIVATE-TOKEN: ${TOKEN_UUID}" "${GL_API_URL}/admin/clusters" | jq ".[] | .id") )
+    
+    for ID in "${DELETE_IDS[@]}"; do
+        echo "Removing cluster $ID"
+        curl -X DELETE -H "PRIVATE-TOKEN: ${TOKEN_UUID}" "$GL_API_URL/admin/clusters/$ID";
+        echo "Removed"
+        sleep 5;
+    done
 fi
 
 

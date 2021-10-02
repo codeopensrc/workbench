@@ -64,8 +64,9 @@ NAMESPACES=("dev")
 
 RUNNER_TOKEN=""
 KUBE_API_HOST_URL=""
+KUBE_VERSION="latest"
 
-while getopts "a:d:h:i:l:n:t:ru" flag; do
+while getopts "a:d:h:i:l:n:t:v:ru" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) KUBE_API_HOST_URL=$OPTARG;;
@@ -75,6 +76,7 @@ while getopts "a:d:h:i:l:n:t:ru" flag; do
         l) TAG_LIST_EXT=$OPTARG;;
         n) NAMESPACE=$OPTARG;;
         t) RUNNER_TOKEN=$OPTARG;;
+        v) KUBE_VERSION=$OPTARG;;
         r) REGISTER="true";;
         u) USE_NAMESPACES_DEFAULTS="true";;
     esac
@@ -97,7 +99,7 @@ DEFAULT_RUNNER_HOST_URL="https://gitlab.${RUNNER_HOST_DOMAIN}"
 if [[ -n "$RUNNER_HOST_URL" ]]; then DEFAULT_RUNNER_HOST_URL=$RUNNER_HOST_URL; fi
 
 ##  -i causes the image to ignore the -d option
-DEFAULT_KUBE_IMAGE="registry.codeopensrc.com/os/workbench/kube:latest" #ok with this hardcoding atm
+DEFAULT_KUBE_IMAGE="registry.codeopensrc.com/os/workbench/kube:$KUBE_VERSION" #ok with this hardcoding atm
 if [[ -n "$KUBE_IMAGE" ]]; then DEFAULT_KUBE_IMAGE=$KUBE_IMAGE; fi
 
 if [[ -n "$TAG_LIST_EXT" ]]; then TAG_LIST="${TAG_LIST},${TAG_LIST_EXT}"; fi
@@ -296,6 +298,8 @@ for NAMESPACE in ${NAMESPACES[@]}; do
         ### SERVICE ACCOUNT TOKEN
         SERVICE_TOKEN_TXT=$(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME describe secret $(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME get secret | grep $DEPLOY_ACCOUNT_NAME | awk '{print $1}'))
         SERVICE_TOKEN=$(echo "$SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
+
+        sudo gitlab-runner unregister --name "${DEPLOY_ACCOUNT_NAME}-kube-runner"
 
         ## TODO: These will be default - for testing they are shared atm
             #--locked="false" \

@@ -42,6 +42,7 @@ terraform {
 # variable "aws_secret_key" {}
 # variable "do_token" {}
 # variable "packer_config" {}
+# variable "misc_cname" {}
 variable "config" {}
 variable "stun_protos" { default = ["tcp", "udp"] }
 
@@ -155,6 +156,7 @@ locals {
             if subdomainname != "@"
         ]
     ])
+    cname_misc_aliases = flatten(var.config.misc_cnames)
 
     consul = "CN-${var.config.packer_config.consul_version}"
     docker = "DK-${var.config.packer_config.docker_version}"

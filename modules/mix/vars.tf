@@ -18,6 +18,8 @@ variable "servers" { default = [] }
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
 variable "additional_ssl" {}
+variable "sendgrid_apikey" { default = "" }
+variable "sendgrid_domain" { default = "" }
 
 variable "run_service_enabled" {}
 variable "send_logs_enabled" {}

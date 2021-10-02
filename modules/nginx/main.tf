@@ -31,6 +31,7 @@ resource "null_resource" "proxy_config" {
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
+        num_ssl = length(var.additional_ssl)
         num_ips = length(var.lead_private_ips)
     }
 
@@ -87,12 +88,17 @@ resource "null_resource" "proxy_config" {
     }
 }
 
-## TODO: This does not clean up additional config files on server after removing from var.additional_domains
 resource "null_resource" "proxy_additional_config" {
     count = length(keys(var.additional_domains))
     depends_on = [
         null_resource.proxy_config
     ]
+
+    triggers = {
+        subdomains = join(",", keys(element(values(var.additional_domains), count.index)))
+        num_domains = length(keys(var.additional_domains))
+        ip = element(var.admin_public_ips, 0)
+    }
 
     provisioner "file" {
         content = templatefile("${path.module}/templatefiles/additional.tmpl", {
@@ -101,11 +107,21 @@ resource "null_resource" "proxy_additional_config" {
             cert_port = var.cert_port
         })
         destination = "/etc/nginx/conf.d/additional-${count.index}.conf"
+        connection {
+            host = element(var.admin_public_ips, 0)
+            type = "ssh"
+        }
     }
 
-    connection {
-        host = element(var.admin_public_ips, 0)
-        type = "ssh"
+    provisioner "remote-exec" {
+        when = destroy
+        inline = [
+            "rm /etc/nginx/conf.d/additional-${count.index}.conf"
+        ]
+        connection {
+            host = self.triggers.ip
+            type = "ssh"
+        }
     }
 }
 

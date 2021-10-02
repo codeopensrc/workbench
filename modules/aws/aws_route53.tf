@@ -178,7 +178,20 @@ resource "aws_route53_record" "additional_ssl" {
     zone_id = aws_route53_zone.default.zone_id
     name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
     allow_overwrite = true
-    type   = "A"
+    type   = "CNAME"
     ttl    = "300"
-    value  = element(slice(local.lead_server_ips, 0, 1), 0)
+    records = [ var.config.root_domain_name ]
+}
+
+resource "aws_route53_record" "misc_cname" {
+    for_each = {
+        for ind, domain in local.cname_misc_aliases :
+        "${domain.subdomainname}" => domain
+    }
+    name            = each.value.subdomainname
+    zone_id         = aws_route53_zone.default.zone_id
+    allow_overwrite = true
+    type            = "CNAME"
+    ttl             = "300"
+    records = [ each.value.alias ]
 }

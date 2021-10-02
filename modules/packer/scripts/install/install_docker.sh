@@ -1,6 +1,12 @@
 #!/bin/sh
 set -e
 
+### TODO: Multi-arch support using `docker buildx build` and `docker buildx bake -f docker-compose.yml`
+## https://docs.docker.com/buildx/working-with-buildx/
+## https://medium.com/@artur.klauser/building-multi-architecture-docker-images-with-buildx-27d80f7e2408#589b
+##  docker buildx support needs
+## `sudo apt-get install -y qemu-user-static`
+
 DOCKER_VER=""
 DEFAULT_DOCKER_VER="19.03.12"
 

@@ -25,7 +25,7 @@ variable "install_unity3d" { default = false }
 #######################################
 variable "packer_config" {
     default = {
-        gitlab_version = "14.2.3-ce.0"
+        gitlab_version = "14.3.0-ce.0"
         docker_version = "20.10.7"
         docker_compose_version = "1.29.2"
         consul_version = "1.10.0"
@@ -61,6 +61,11 @@ module "main" {
 ###! When downsizing from 2 to 1 leader, set downsize = true, terraform apply. This adjusts app routing.
 ###! Then comment/remove 2nd server, downsize = false, and terraform apply again to remove it
 variable "downsize" { default = false }
+
+###! TODO: Use to lower dns TTL to 60 seconds and perform all backups initially
+###! Anything that is done pre-system/machine migration should be done in a
+###!  run once (backups) or toggleable (dns TTL) fashion with this setting
+variable "migration_prep" { default = false } ## Not in use atm
 
 variable "servers" {
     ### NOTE: Do not add or remove roles from instances after they are launched

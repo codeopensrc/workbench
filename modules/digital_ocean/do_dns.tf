@@ -126,7 +126,19 @@ resource "digitalocean_record" "additional_ssl" {
     count  = local.lead_servers > 0 ? length(var.config.additional_ssl) : 0
     name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
     domain = digitalocean_domain.default.name
-    type   = "A"
+    type   = "CNAME"
     ttl    = "300"
-    value  = element(slice(local.lead_server_ips, 0, 1), 0)
+    value  = "${var.config.root_domain_name}."
+}
+
+resource "digitalocean_record" "misc_cname" {
+    for_each = {
+        for ind, domain in local.cname_misc_aliases :
+        "${domain.subdomainname}" => domain
+    }
+    name   = each.value.subdomainname
+    domain = digitalocean_domain.default.name
+    type   = "CNAME"
+    ttl    = "300"
+    value  = "${each.value.alias}."
 }

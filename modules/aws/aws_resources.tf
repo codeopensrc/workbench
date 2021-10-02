@@ -102,6 +102,7 @@ resource "aws_instance" "main" {
         Name = "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
         Roles = join(",", var.config.servers[count.index].roles)
     }
+    #"TODO: Tag admin with gitlab.${var.config.root_domain_name}"
     lifecycle {
         ignore_changes= [ tags ]
     }
@@ -133,6 +134,8 @@ resource "aws_instance" "main" {
         }
     }
 
+    ###! TODO: Update to use kubernetes instead of docker swarm
+    ## Runs when `var.config.downsize` is true
     provisioner "file" {
         content = <<-EOF
 
@@ -152,6 +155,7 @@ resource "aws_instance" "main" {
             private_key = file(var.config.local_ssh_key_file)
         }
     }
+    ## Runs when `var.config.downsize` is true
     provisioner "file" {
         content = <<-EOF
 
@@ -171,6 +175,8 @@ resource "aws_instance" "main" {
             private_key = file(var.config.local_ssh_key_file)
         }
     }
+    ###! TODO: Update to use kubernetes instead of docker swarm
+    ## Runs when `var.config.downsize` is true
     provisioner "file" {
         content = <<-EOF
 
@@ -215,7 +221,16 @@ resource "aws_instance" "main" {
     provisioner "local-exec" {
         when = destroy
         command = <<-EOF
-            ssh-keygen -R ${self.public_ip}
+            ssh-keygen -R ${self.public_ip};
+            WORKSPACE="unknown";
+            ## TODO-Tag admin with var.config.root_domain_name
+
+            if [ "$WORKSPACE" != "default" ]; then
+                ## TODO: Create parsable domain from tag
+                ## "${length( regexall("domain", join(",", self.tags)) ) > 0}"
+                ## ssh-keygen -R "gitlab."
+                echo "Not default"
+            fi
             exit 0;
         EOF
         on_failure = continue
@@ -247,6 +262,7 @@ resource "null_resource" "cleanup_consul" {
         EOF
         destination = "/tmp/update_consul_members.sh"
     }
+    ##! Uses tmux to run in the background and let remaining scripts run to remove nodes
     provisioner "remote-exec" {
         inline = [
             "chmod +x /tmp/update_consul_members.sh",
@@ -261,6 +277,7 @@ resource "null_resource" "cleanup_consul" {
     }
 }
 
+###! TODO: Update to use kubernetes instead of docker swarm
 ###! Run this resource when downsizing from 2 leader servers to 1 in its own apply
 resource "null_resource" "cleanup" {
     count = 1

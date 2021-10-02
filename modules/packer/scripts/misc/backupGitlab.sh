@@ -93,14 +93,21 @@ mkdir -p $HOME/code/backups/grafana
 
 # The goal is to rsync over the previous days and keep snapshot once a week instead of storing a daily multi gig backup
 /usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_$SUNDAY.tar
 
 UPLOAD_EXIT_CODE=$?
 
 # Dont keep secrets backup on server I guess? Directly upload the single json file
 /usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_$SUNDAY.json
 
+if [[ -n $OPT_VERSION ]]; then
+    /usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
+        $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar
+
+    /usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json \
+        $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json
+fi
 
 # Cleanup every Sunday
 if [[ "$TODAY" == "$SUNDAY" ]]; then

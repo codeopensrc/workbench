@@ -1,5 +1,9 @@
 #!/bin/bash
 
+## TODO: This ONLY handles proxied requests and not configured to receive requests from the internet at ths time
+## The NodePort service needs to bind to port 80 and 443 ONLY on web app servers
+## The nginx service/container also needs to have the SSL certs loaded into it as well
+
 ROOT_DOMAIN=$(consul kv get domainname)
 CONSUL_KV_APPS="applist/"
 PROD_NS="production"
@@ -48,6 +52,7 @@ echo "ROOT_DOMAIN: $ROOT_DOMAIN"
 #exit
 
 ## Our keys are CONSUl_KV_APPS/servicename => subdomain
+## TODO: If any key doesnt have a value the whole thing breaks down with arrays not synced
 KEYS=$(consul kv get -recurse $CONSUL_KV_APPS | sed "s|$CONSUL_KV_APPS||")
 SRV=($(echo "$KEYS" | cut -d ":" -f1))
 DNS=($(echo "$KEYS" | cut -d ":" -f2-))

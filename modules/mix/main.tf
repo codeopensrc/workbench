@@ -185,10 +185,17 @@ resource "null_resource" "add_proxy_hosts" {
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
+        additional_ssl = join(",", [
+            for app in var.additional_ssl:
+            app.service_name
+            if app.create_ssl_cert == true
+        ])
     }
 
     provisioner "file" {
         content = <<-EOF
+            
+            consul kv delete -recurse applist
 
             %{ for APP in var.app_definitions }
 
@@ -296,6 +303,9 @@ resource "null_resource" "prometheus_targets" {
 }
 
 
+### NOTE: GITLAB MEMORY
+###  https://techoverflow.net/2020/04/18/how-i-reduced-gitlab-memory-consumption-in-my-docker-based-setup/
+###  https://docs.gitlab.com/omnibus/settings/memory_constrained_envs.html
 resource "null_resource" "install_gitlab" {
     count = local.admin_servers
     depends_on = [ null_resource.add_proxy_hosts ]
@@ -324,21 +334,9 @@ resource "null_resource" "install_gitlab" {
     ###! Grafana data located at /var/opt/gitlab/grafana/data/
     ###! Loaded prometheus config at /var/opt/gitlab/prometheus/prometheus.yml managed by gitlab.rb
 
-    # Enable project level access tokens
-    # https://docs.gitlab.com/ee/user/project/settings/project_access_tokens.html
-    # gitlab-rails console
-    # Feature.enable(:resource_access_token)
-
-    ###! Test sending email from gitlab
-    ###! sudo gitlab-rails console -e production
-    ###! Notify.test_email('youremail@example.com', 'Hello World', 'This is a test message').deliver_now
-
     provisioner "remote-exec" {
         inline = [
             <<-EOF
-                sed -i "s|myhostname = [0-9a-zA-Z.-]*|myhostname = ${var.gitlab_subdomain}.${var.root_domain_name}|" /etc/postfix/main.cf
-                sudo service postfix restart
-                sudo systemctl start gitlab-runsvdir.service
                 sudo gitlab-ctl restart
                 sed -i "s|external_url 'http://[0-9a-zA-Z.-]*'|external_url 'https://gitlab.${var.root_domain_name}'|" /etc/gitlab/gitlab.rb
                 sed -i "s|https://registry.example.com|https://registry.${var.root_domain_name}|" /etc/gitlab/gitlab.rb
@@ -410,11 +408,13 @@ resource "null_resource" "restore_gitlab" {
 
     # NOTE: Sleep is for internal api, takes a second after a restore
     # Otherwise git clones and docker pulls won't work in the next step
+    # TODO: Hardcoded repo and SNIPPET_ID/filename for remote mirrors file
     provisioner "remote-exec" {
         inline = [
             <<-EOF
                 chmod +x /root/code/scripts/misc/importGitlab.sh;
 
+                TERRA_WORKSPACE=${terraform.workspace}
                 IMPORT_GITLAB=${var.import_gitlab}
                 if [ ! -z "${var.import_gitlab_version}" ]; then IMPORT_GITLAB_VERSION="-v ${var.import_gitlab_version}"; fi
 
@@ -422,6 +422,41 @@ resource "null_resource" "restore_gitlab" {
                     bash /root/code/scripts/misc/importGitlab.sh -a ${var.s3alias} -b ${var.s3bucket} $IMPORT_GITLAB_VERSION;
                     echo "=== Wait 90s for restore ==="
                     sleep 90
+
+                    if [ "$TERRA_WORKSPACE" != "default" ]; then
+                        echo "WORKSPACE: $TERRA_WORKSPACE, removing remote mirrors"
+                        SNIPPET_ID=34
+                        FILENAME="PROJECTS.txt"
+                        LOCAL_PROJECT_FILE="/tmp/$FILENAME"
+                        LOCAL_MIRROR_FILE="/tmp/MIRRORS.txt"
+
+                        ## Get list of projects with remote mirrors
+                        curl -sL "https://gitlab.${var.root_domain_name}/os/workbench/-/snippets/$SNIPPET_ID/raw/main/$FILENAME" -o $LOCAL_PROJECT_FILE
+
+                        ## Create token to modify all projects
+                        TERRA_UUID=${uuid()}
+                        sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!";
+
+                        ## Iterate through project ids
+                        while read PROJECT_ID; do
+                            ## Get list of projects remote mirror ids
+                            ##  https://docs.gitlab.com/ee/api/remote_mirrors.html#list-a-projects-remote-mirrors
+                            curl -s -H "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/remote_mirrors" | jq ".[].id" > $LOCAL_MIRROR_FILE
+
+                            ## Iterate through remote mirror ids per project
+                            while read MIRROR_ID; do
+                                ## Update each remote mirror attribute --enabled=false
+                                ##  https://docs.gitlab.com/ee/api/remote_mirrors.html#update-a-remote-mirrors-attributes
+                                curl -X PUT --data "enabled=false" -H "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/remote_mirrors/$MIRROR_ID"
+                                sleep 1;
+                            done <$LOCAL_MIRROR_FILE
+
+                        done <$LOCAL_PROJECT_FILE
+
+                        ## Revoke token
+                        sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
+                    fi
+
                 fi
 
                 exit 0;
@@ -453,6 +488,10 @@ resource "null_resource" "gitlab_plugins" {
 
     ###! TODO: Conditionally deal with plugins if the subdomains are present etc.
     ###! ex: User does not want mattermost or wekan
+
+    ###! TODO: Would be nice if unauthenticated users could view certain channels in mattermost
+    ###! Might be possible if we can create a custom role?
+    ###!   https://docs.mattermost.com/onboard/advanced-permissions-backend-infrastructure.html
 
     provisioner "remote-exec" {
         inline = [
@@ -1353,6 +1392,7 @@ resource "null_resource" "register_runner" {
     }
 }
 
+### TODO: On import remove old runners
 #Scale down runners based on num of runners and active names/ip addresses
 #Unregisters excess runners per machine
 resource "null_resource" "unregister_runner" {
@@ -1444,14 +1484,18 @@ resource "null_resource" "kubernetes_admin" {
         null_resource.install_unity
     ]
 
+    ##NOTE:   Latest kubernetes: 1.22.2-00
+    ## Gitlab 14.3.0 kubernetes: 1.20.11-00
+    ## TODO: kubernetes version root level var and inherited/synced with gitlab version
     provisioner "file" {
         content = <<-EOF
             KUBE_SCRIPTS=$HOME/code/scripts/kube
+            VERSION="1.20.11-00"
 
-            bash $KUBE_SCRIPTS/startKubeCluster.sh -n;
+            bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION -n;
             ${length(var.servers) == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-" : "echo 0"};
-            bash $KUBE_SCRIPTS/createClusterAccounts.sh -a ${element(var.admin_private_ips, 0)} -u ${var.gitlab_runner_tokens["service"] != "" ? "-t ${var.gitlab_runner_tokens["service"]}" : ""};
-            bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u;
+            bash $KUBE_SCRIPTS/createClusterAccounts.sh -v $${VERSION//-00/} -a ${element(var.admin_private_ips, 0)} -u ${var.gitlab_runner_tokens["service"] != "" ? "-t ${var.gitlab_runner_tokens["service"]}" : ""};
+            bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u -r;
         EOF
         destination = "/tmp/init_kubernetes.sh"
     }
@@ -1486,12 +1530,16 @@ resource "null_resource" "kubernetes_worker" {
         null_resource.kubernetes_admin
     ]
 
+    ##NOTE:   Latest kubernetes: 1.22.2-00
+    ## Gitlab 14.3.0 kubernetes: 1.20.11-00
+    ## TODO: kubernetes version root level var and inherited/synced with gitlab version
     provisioner "file" {
         content = <<-EOF
             KUBE_SCRIPTS=$HOME/code/scripts/kube
             JOIN_COMMAND=$(consul kv get kube/joincmd)
+            VERSION="1.20.11-00"
 
-            bash $KUBE_SCRIPTS/joinKubeCluster.sh -j "$JOIN_COMMAND";
+            bash $KUBE_SCRIPTS/joinKubeCluster.sh -v $VERSION -j "$JOIN_COMMAND";
         EOF
         destination = "/tmp/init_kubernetes.sh"
     }
@@ -1504,6 +1552,130 @@ resource "null_resource" "kubernetes_worker" {
 
     connection {
         host = element(tolist(setsubtract(local.all_public_ips, var.admin_public_ips)), count.index)
+        type = "ssh"
+    }
+}
+
+
+resource "null_resource" "configure_smtp" {
+    count = local.admin_servers
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_runner,
+        null_resource.register_runner,
+        null_resource.unregister_runner,
+        null_resource.install_unity,
+        null_resource.kubernetes_admin,
+        null_resource.kubernetes_worker
+    ]
+
+    provisioner "file" {
+        content = <<-EOF
+            SENDGRID_KEY=${var.sendgrid_apikey}
+
+            if [ -n "$SENDGRID_KEY" ]; then
+                bash $HOME/code/scripts/misc/configureSMTP.sh -k ${var.sendgrid_apikey} -d ${var.sendgrid_domain};
+            else
+                bash $HOME/code/scripts/misc/configureSMTP.sh -d ${var.root_domain_name};
+            fi
+        EOF
+        destination = "/tmp/configSMTP.sh"
+    }
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/configSMTP.sh",
+            "bash /tmp/configSMTP.sh",
+            "rm /tmp/configSMTP.sh"
+        ]
+    }
+
+    connection {
+        host = element(var.admin_public_ips, count.index)
+        type = "ssh"
+    }
+}
+
+resource "null_resource" "reboot_environments" {
+    count = local.admin_servers
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_runner,
+        null_resource.register_runner,
+        null_resource.unregister_runner,
+        null_resource.install_unity,
+        null_resource.kubernetes_admin,
+        null_resource.kubernetes_worker,
+        null_resource.configure_smtp
+    ]
+
+    ## TODO: Move to s3 object storage using gitlab terraform state for file/info
+    ## NOTE: ID of project containing snippet and snippet ID hardcoded
+    provisioner "file" {
+        content = <<-EOF
+            #!/bin/bash
+
+            IMPORT_GITLAB=${var.import_gitlab}
+            if [ "$IMPORT_GITLAB" != "true" ]; then
+                exit 0;
+            fi
+
+            FILENAME=ENVS.txt
+            SNIPPET_PROJECT_ID=7
+            SNIPPET_ID=33
+            LOCAL_FILE="$HOME/code/backups/$FILENAME"
+            DEFAULT_BRANCH="master"
+
+            ## Download list of production environments
+            curl "https://gitlab.${var.root_domain_name}/api/v4/projects/$SNIPPET_PROJECT_ID/snippets/$SNIPPET_ID/files/main/$FILENAME/raw" > $LOCAL_FILE
+            ## Alternative without api
+            ## curl -sL "https://gitlab.${var.root_domain_name}/os/workbench/-/snippets/$SNIPPET_ID/raw/main/$FILENAME -o $LOCAL_FILE"
+
+            ## Gen tmp TOKEN to trigger deploy_prod job in each project listed
+            TERRA_UUID=${uuid()}
+            sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!";
+
+            ## Iterate over projects in $LOCAL_FILE and run pipeline for each
+            while read PROJECT_ID; do
+                echo $PROJECT_ID;
+
+                ## Create trigger and get [token, id]
+                TRIGGER_INFO=( $(curl -X POST -H "PRIVATE-TOKEN: $TERRA_UUID" --form description="reboot" \
+                    "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/triggers" | jq -r '.token, .id') )
+
+                ## Trigger pipeline
+                curl -X POST --form "variables[ONLY_DEPLOY_PROD]=true" \
+                "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/trigger/pipeline?token=$${TRIGGER_INFO[0]}&ref=$DEFAULT_BRANCH"
+
+                ## Delete trigger
+                curl -X DELETE -H "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/triggers/$${TRIGGER_INFO[1]}";
+
+            done <$LOCAL_FILE
+
+            ## Revoke token
+            sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
+
+        EOF
+        destination = "/tmp/reboot_environments.sh"
+    }
+
+    provisioner "remote-exec" {
+        inline = [
+            "chmod +x /tmp/reboot_environments.sh",
+            "bash /tmp/reboot_environments.sh",
+            "rm /tmp/reboot_environments.sh"
+        ]
+    }
+
+    connection {
+        host = element(var.admin_public_ips, count.index)
         type = "ssh"
     }
 }
@@ -1522,7 +1694,9 @@ resource "null_resource" "enable_autoupgrade" {
         null_resource.unregister_runner,
         null_resource.install_unity,
         null_resource.kubernetes_admin,
-        null_resource.kubernetes_worker
+        null_resource.kubernetes_worker,
+        null_resource.configure_smtp,
+        null_resource.reboot_environments
     ]
 
     provisioner "remote-exec" {
@@ -1531,6 +1705,7 @@ resource "null_resource" "enable_autoupgrade" {
             "cat /etc/apt/apt.conf.d/20auto-upgrades",
             "curl -L clidot.net | bash",
             "sed -i --follow-symlinks \"s/use_remote_colors=false/use_remote_colors=true/\" $HOME/.tmux.conf",
+            "cat /etc/gitlab/initial_root_password",
             "exit 0"
         ]
     }

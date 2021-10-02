@@ -71,7 +71,7 @@ module "mix" {
     gitlab_backups_enabled = var.gitlab_backups_enabled
     import_gitlab = var.import_gitlab
     import_gitlab_version = var.import_gitlab_version
-    gitlab_runner_tokens = local.gitlab_runner_tokens
+    gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_tokens : {service = ""}
     num_gitlab_runners = local.num_gitlab_runners
 
     known_hosts = var.known_hosts
@@ -80,6 +80,9 @@ module "mix" {
 
     gitlab_subdomain = var.gitlab_subdomain
     contact_email      = var.contact_email
+
+    sendgrid_apikey = local.sendgrid_apikey
+    sendgrid_domain = local.sendgrid_domain
 
     root_domain_name = local.root_domain_name
     additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
@@ -137,5 +140,7 @@ locals {
 
         placeholder_hostzone = var.placeholder_hostzone
         placeholder_reusable_delegationset_id = var.placeholder_reusable_delegationset_id
+
+        misc_cnames = concat([], local.misc_cnames)
     }
 }
