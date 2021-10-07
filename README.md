@@ -1,144 +1,44 @@
-## NOTES
-* Under active development
-* Lot of unused code/old comments
-* Even this README is a little old as it now uses old dns configuration
+## Temporary WIP Wiki
 
-## NOTE: README out of date
+### [Wiki Link](https://gitlab.codeopensrc.com/os/workbench/-/wikis/home)  
 
-## Personal use
+An external Wiki will be available initially with all relevant information to get started. One goal is to integrate/migrate the Wiki into DOCS that will live and grow within the repository.  
 
-Most of configurable functionality of terraform has been extracted down to the variables below and are in the `main.tf` file in order for very easy configuration and DRY code.
+Wiki will provide a step-by-step guide and information on how to setup a single node or cluster for cloud providers with various pre-installed and pre-configured software for effortless development and deployment.  
 
-### Providers
-- DO
-```
-token = #Your DO api token here
-```
+## Project Description  
+Cloud infrastructure provisioning project using Terraform and Packer.  
+Provides ability to create, update, maintain, and migrate cloud infrastructure.  
 
+#### Semi-exhaustive list of software provisioned/provisionable  
+- GitLab, Docker, Kubernetes  
+- Grafana, Prometheus, Consul  
+- Mongo, Redis, Postgres  
+- Unity, Mattermost, Nginx, Wekan  
 
-- AWS
-```
-alias = #Alias to use to associate to certain region
-region = #AWS region
-access_key = #Your aws key
-secret_key = #Your aws secret_key
-```
+#### Cloud providers currently supported  
+- Digital Ocean  
+- AWS  
 
-### Variables
-Below are configurable variables
+#### Common operations supported  
+- DNS, Firewalls, Automatic Backups, Import/Export, S3 Object storage  
+- OS/Image snapshots, Service Discovery, System and Application monitoring  
+- ChatOps, HTTPS Certificates, GitLab CI/CD, Unity game builds  
 
-This needs to be unique per terraform machine per Digital Ocean/AWS acc/org   
-`variable "server_name_prefix" { default = "" }`
+#### Forewarning
+- Not intended for mission/security critical infrastructure  
 
-These variables are the number of servers you wish to have up  
-NOTE: \*\_db servers are \*\_mongo and \*\_pg combined.
-```
-#AWS
-variable "aws_leader" { default = 0 }
-variable "aws_db" { default = 0 }
+Due to the rapid development that will introduce breaking changes with each commit it is **not** recommended for production use **unless**  
 
-variable "aws_web" { default = 0 }
-variable "aws_dev" { default = 0 }
-variable "aws_build" { default = 0 }
-variable "aws_mongo" { default = 0 }
-variable "aws_pg" { default = 0 }
+- Intended purely to bootstrap cluster(s) or node(s)  
+- Not intending to pull upstream changes (not recommended long-term)  
+- **Very** familiar with Terraform  
+- Familiar with software it provisions  
+- Software to run is not mission/security critical (banks, hospitals etc)  
 
+For current public usage, this is intended for development/homelab use to quickly spin up a few nodes and host a test/hobby cluster, website(s), self-hosted git repository, unity build server etc, that is non-critical.  
 
-#DO
-variable "do_leader" { default = 1 }
-variable "do_db" { default = 1 }
+That being said, it is currently and will actively continue being used to provision, update, maintain, and migrate a number of _production_ **personal** infrastructure and services.  
 
-variable "do_web" { default = 2 }
-variable "do_dev" { default = 0 }
-variable "do_build" { default = 0 }
-variable "do_mongo" { default = 0 }
-variable "do_pg" { default = 0 }
-```
+[Personal Website](https://www.codeopensrc.om), [Personal GitLab](https://gitlab.codeopensrc.com/explore?sort=latest_activity_desc), [(Private) Mattermost](https://chat.codeopensrc.com/), [(Private) Wekan](https://wekan.codeopensrc.com/)  
 
-
-### Module specific
-There is an AWS and DO module. **If you aren't planning on using one, you must comment it out.**
-
-##### SPECIAL VARS
-###### AWS
-```
-variable "aws_key_name" { default = "" } // Ex: "id_rsa"
-variable "aws_region" { default = "" } // Ex: "awseast"
-```
-
-###### DO
-```
-//You can find the ssh fingerprint in the security section of DO where you enter
-//  your SSH key.
-variable "do_ssh_fingerprint" { default = "" } // Your ssh fingerprint
-variable "do_region" { default = "" } // Ex: "nyc1"
-```
-### Cloudflare / DNS
-
-Cloudflare gives the ability to modify it's DNS settings via their API.  
-This allows us to modify the DNS on cloudflare on new servers coming up/going down.
-
-##### Cloudflare credentials
-```
-variable "cloudflare_email" { default = "YourEmail@Address.com" }
-variable "cloudflare_auth_key" { default = "Cloudflare_auth_key" }
-```
-
-##### Cloudflare DNS
-
-* Each root level domain has a `zone_id`  
-* Each subdomain (including the root level) has a `dns_id`  
-
-We define the DNS settings for our main `leader` instances using the `*_site_dns` list variable.  
-We define the DNS settings for our `db` instances using the `*_db_dns` list variable.  
-
-`zone_id` is found on the main page for each root level domain on cloudflare.  
-
-`dns_id` is unique for each subdomain on cloudflare.
-
->To get the `dns_id` for each domain/subdomain:  
->- GET https://api.cloudflare.com/client/v4/zones/:zone_identifier/dns_records  
->
->EX:  
-```
-curl -X GET "https://api.cloudflare.com/client/v4/zones/${var.zone_id}/dns_records" \
--H "X-Auth-Email: ${var.cloudflare_email}" \
--H "X-Auth-Key: ${var.cloudflare_auth_key}" \
--H "Content-Type: application/json"
-```
->    
-
-Each variable is a `list` and is defined as such:
-
-```
-variable "*_site_dns" {
-    type = "list"
-    default = [
-        {},
-        {}
-    ]
-}
-```
-
-Each `{}` object inside the list is in the form of:
-```
-{
-    "url" = "site domain"
-    "dns_id" = "dns_id from cloudflare"
-    "zone_id" = "zone_id from cloudflare"
-}
-```
-
-
-
-### Misc
-The instance types/sizes are fairly self explanatory.  
-
-##### If you are combining AWS and DO  
-
-You can have consul communicate across the data centers.
-You should have a preference for which is the "main" data center and the other is more of a backup.
-
-Uncomment only one of the following depending on which is your "main" data center:  
-`do_leaderIP = "${module.do.do_ip}"` uncomment if you are using AWS  
-`aws_leaderIP = "${module.aws.aws_ip}"` uncomment if you are using DO  
