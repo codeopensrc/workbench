@@ -4,7 +4,7 @@
 # Name: Backup '${DB.name}' Mongo DB
 SHELL="/bin/bash"
 HOME="/root"
-${DB.backups_enabled && allow_cron_backups ? "" : "#"}0 22 * * * bash $HOME/code/scripts/db/backupMongo.sh -a ${s3alias} -b ${s3bucket} -d ${DB.name} -h ${host} -c >> /dev/null 2>>$HOME/code/logs/errors.log
+${DB.backups_enabled && allow_cron_backups ? "" : "#"}0 22 * * * bash $HOME/code/scripts/db/backupMongo.sh -a ${s3alias} -b ${s3bucket} -d ${DB.name} -h ${host} -c ${use_gpg ? "-e" : ""} >> /dev/null 2>>$HOME/code/logs/errors.log
 
 # Name: Remove '${DB.name}' Mongo Backups
 SHELL="/bin/bash"

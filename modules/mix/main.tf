@@ -67,6 +67,13 @@ module "provisioners" {
     consul_db_adv_addresses = local.consul_db_adv_addresses
     consul_build_adv_addresses = local.consul_build_adv_addresses
     datacenter_has_admin = length(var.admin_public_ips) > 0
+
+    s3alias = var.s3alias
+    s3bucket = var.s3bucket
+
+    use_gpg = var.use_gpg
+    bot_gpg_name = var.bot_gpg_name
+    bot_gpg_passphrase = var.bot_gpg_passphrase
 }
 
 module "hostname" {
@@ -91,6 +98,7 @@ module "cron" {
 
     s3alias = var.s3alias
     s3bucket = var.s3bucket
+    use_gpg = var.use_gpg
 
     servers = length(var.servers)
 
@@ -416,10 +424,11 @@ resource "null_resource" "restore_gitlab" {
 
                 TERRA_WORKSPACE=${terraform.workspace}
                 IMPORT_GITLAB=${var.import_gitlab}
+                PASSPHRASE_FILE=${var.use_gpg ? "-p $HOME/${var.bot_gpg_name}" : "" }
                 if [ ! -z "${var.import_gitlab_version}" ]; then IMPORT_GITLAB_VERSION="-v ${var.import_gitlab_version}"; fi
 
                 if [ "$IMPORT_GITLAB" = "true" ]; then
-                    bash /root/code/scripts/misc/importGitlab.sh -a ${var.s3alias} -b ${var.s3bucket} $IMPORT_GITLAB_VERSION;
+                    bash /root/code/scripts/misc/importGitlab.sh -a ${var.s3alias} -b ${var.s3bucket} $PASSPHRASE_FILE $IMPORT_GITLAB_VERSION;
                     echo "=== Wait 90s for restore ==="
                     sleep 90
 
@@ -851,19 +860,20 @@ resource "null_resource" "import_dbs" {
             S3_ALIAS=${var.dbs_to_import[count.index]["s3alias"]};
             DB_NAME=${var.dbs_to_import[count.index]["dbname"]};
             HOST=${element(var.db_private_ips, count.index)}
+            PASSPHRASE_FILE=${var.use_gpg ? "-p $HOME/${var.bot_gpg_name}" : "" }
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
-                bash /root/code/scripts/db/import_mongo_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME -h $HOST;
+                bash /root/code/scripts/db/import_mongo_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME -h $HOST $PASSPHRASE_FILE;
                 cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
-                bash /root/code/scripts/db/import_pg_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME;
+                bash /root/code/scripts/db/import_pg_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME $PASSPHRASE_FILE;
                 cp /etc/consul.d/templates/pg.json /etc/consul.d/conf.d/pg.json
             fi
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
-                bash /root/code/scripts/db/import_redis_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME;
+                bash /root/code/scripts/db/import_redis_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME $PASSPHRASE_FILE;
                 cp /etc/consul.d/templates/redis.json /etc/consul.d/conf.d/redis.json
             fi
         EOF
@@ -1015,6 +1025,37 @@ resource "null_resource" "docker_ready" {
     }
 }
 
+resource "null_resource" "gpg_remove_key" {
+    ## Only admin and DB should need it atm
+    count = var.use_gpg ? sum([local.admin_servers, local.is_only_db_count]) : 0
+    depends_on = [
+        module.provisioners,
+        module.hostname,
+        module.cron,
+        module.provision_files,
+        null_resource.add_proxy_hosts,
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab,
+        module.admin_nginx,
+        null_resource.install_dbs,
+        null_resource.import_dbs,
+        module.docker,
+        null_resource.docker_ready
+    ]
+    provisioner "remote-exec" {
+        inline = [
+            <<-EOF
+                BOT_FPR=$(gpg --list-keys | grep -1 ${var.bot_gpg_name} | sed -n -r "1 s/\s+([0-9A-Z]{10,})/\1/p")
+                gpg --batch --yes --delete-secret-key $BOT_FPR || echo 0
+                rm $HOME/${var.bot_gpg_name}
+            EOF
+        ]
+    }
+    connection {
+        host = element(distinct(concat(var.admin_public_ips, var.db_public_ips)), count.index)
+        type = "ssh"
+    }
+}
 
 # Currently have a combination of proxies to get required result.
 #  *Leader docker proxy requires a docker.compose.yml change/restart once we get certs

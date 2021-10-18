@@ -1,6 +1,6 @@
 #!/bin/bash
 
-while getopts "a:b:d:h:c" flag; do
+while getopts "a:b:d:h:ce" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) S3_ALIAS=$OPTARG;;
@@ -8,6 +8,7 @@ while getopts "a:b:d:h:c" flag; do
         c) USE_CONSUL=true;;
         d) DB_NAME=$OPTARG;;
         h) HOST=$OPTARG;;
+        e) ENCRYPT="-e";;
     esac
 done
 
@@ -18,10 +19,10 @@ if [ -n "$HOST" ]; then HOST_OPT="-h $HOST"; fi
 TODAY=$(date +"%F")
 YEAR_MONTH=$(date +"%Y-%m")
 
-bash $HOME/code/scripts/db/dumpmongo.sh -d $DB_NAME $HOST_OPT
+bash $HOME/code/scripts/db/dumpmongo.sh -d $DB_NAME $HOST_OPT $ENCRYPT
 
-/usr/local/bin/mc cp $HOME/code/backups/"$DB_NAME"_backups/"$DB_NAME"_$TODAY \
-    $S3_ALIAS/$S3_BUCKET_NAME/"$DB_NAME"_backups/$YEAR_MONTH --recursive
+/usr/local/bin/mc cp $HOME/code/backups/${DB_NAME}_backups/${DB_NAME}_${TODAY} \
+    ${S3_ALIAS}/${S3_BUCKET_NAME}/${DB_NAME}_backups/${YEAR_MONTH} --recursive
 
 UPLOAD_EXIT_CODE=$?
 

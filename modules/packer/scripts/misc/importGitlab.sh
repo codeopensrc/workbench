@@ -7,13 +7,14 @@
 
 OPT_VERSION=""
 
-while getopts "a:b:v:f" flag; do
+while getopts "a:b:v:f:p:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) S3_ALIAS=$OPTARG;;
         b) S3_BUCKET_NAME=$OPTARG;;
         f) FILE_NAME=$OPTARG;;
         v) OPT_VERSION=${OPTARG}_;;
+        p) PASSPHRASE_FILE=$OPTARG;;
     esac
 done
 
@@ -25,14 +26,16 @@ if [[ -z $S3_BUCKET_NAME ]]; then echo "Please provide s3 bucket name using -b S
 # TODO: Implement a way to change the date in the string we're looking for befor we can have this more generalized
 # if [[ -z $FILE_NAME ]]; then echo "Please provide FULL file location  using -f FILE_LOCATION"; exit ; fi
 
+GPG_EXT=""
+if [[ -n $PASSPHRASE_FILE ]]; then GPG_EXT=".gpg"; fi
 
 ### SSL
 for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/letsencrypt_backups/${YEAR_MONTH}/letsencrypt_${DATE}.tar.gz"
-    LOCAL_FILE="$HOME/code/backups/letsencrypt/letsencrypt_$DATE.tar.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/letsencrypt_backups/${YEAR_MONTH}/letsencrypt_${DATE}.tar.gz${GPG_EXT}"
+    LOCAL_FILE="$HOME/code/backups/letsencrypt/letsencrypt_$DATE.tar.gz${GPG_EXT}"
 
     echo "Checking $REMOTE_FILE";
     /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
@@ -43,6 +46,13 @@ for i in {0..15}; do
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
         /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
+        if [[ -n $PASSPHRASE_FILE ]]; then
+            ENCRYPTED_FILE=$LOCAL_FILE
+            LOCAL_FILE=${ENCRYPTED_FILE//$GPG_EXT/}
+            echo "Decrypting $ENCRYPTED_FILE to $LOCAL_FILE"
+            gpg --output $LOCAL_FILE --passphrase-fd 0 --pinentry-mode loopback --batch --decrypt $ENCRYPTED_FILE < $PASSPHRASE_FILE
+            rm $ENCRYPTED_FILE
+        fi
         ### I dont think we do this unless its the same domain name
         # rm -rf /etc/letsencrypt/
         # tar -xzvf $LOCAL_FILE -C /etc/letsencrypt
@@ -60,8 +70,8 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/ssh_keys_backups/${YEAR_MONTH}/ssh_keys_${DATE}.tar.gz"
-    LOCAL_FILE="$HOME/code/backups/ssh_keys/ssh_keys_$DATE.tar.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/ssh_keys_backups/${YEAR_MONTH}/ssh_keys_${DATE}.tar.gz${GPG_EXT}"
+    LOCAL_FILE="$HOME/code/backups/ssh_keys/ssh_keys_$DATE.tar.gz${GPG_EXT}"
 
     echo "Checking $REMOTE_FILE";
     /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
@@ -71,11 +81,20 @@ for i in {0..15}; do
         echo "Downloading $REMOTE_FILE to $LOCAL_FILE";
         /usr/local/bin/mc cp $REMOTE_FILE $LOCAL_FILE;
 
+        if [[ -n $PASSPHRASE_FILE ]]; then
+            ENCRYPTED_FILE=$LOCAL_FILE
+            LOCAL_FILE=${ENCRYPTED_FILE//$GPG_EXT/}
+            echo "Decrypting $ENCRYPTED_FILE to $LOCAL_FILE"
+            gpg --output $LOCAL_FILE --passphrase-fd 0 --pinentry-mode loopback --batch --decrypt $ENCRYPTED_FILE < $PASSPHRASE_FILE
+            rm $ENCRYPTED_FILE
+        fi
+
         TODAY=$(date +"%F")
         (cd /etc/ssh/ && tar -czvf /etc/ssh/ssh_keys_$TODAY.tar.gz ssh_host_*_key*)
         # Really is/should be done at bootup as well
         tar -xzvf $LOCAL_FILE -C /etc/ssh && chown root:root /etc/ssh/ssh_host_*_key*
 
+        rm $LOCAL_FILE
         ### TODO: Restart sshd service, this will probably cause issues
         # service sshd restart
 
@@ -89,8 +108,8 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/dump_gitlab_backup_${OPT_VERSION}${DATE}.tar"
-    LOCAL_FILE="/var/opt/gitlab/backups/dump_gitlab_backup_${DATE}.tar"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/dump_gitlab_backup_${OPT_VERSION}${DATE}.tar${GPG_EXT}"
+    LOCAL_FILE="/var/opt/gitlab/backups/dump_gitlab_backup_${DATE}.tar${GPG_EXT}"
 
     echo "Checking $REMOTE_FILE";
     /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
@@ -114,6 +133,14 @@ for i in {0..15}; do
         rm -rf $GITLAB_BACKUP_FILE.bak
         mv $GITLAB_BACKUP_FILE $GITLAB_BACKUP_FILE.bak
 
+        if [[ -n $PASSPHRASE_FILE ]]; then
+            ENCRYPTED_FILE=$LOCAL_FILE
+            LOCAL_FILE=${ENCRYPTED_FILE//$GPG_EXT/}
+            echo "Decrypting $ENCRYPTED_FILE to $LOCAL_FILE"
+            gpg --output $LOCAL_FILE --passphrase-fd 0 --pinentry-mode loopback --batch --decrypt $ENCRYPTED_FILE < $PASSPHRASE_FILE
+            rm $ENCRYPTED_FILE
+        fi
+
         # Move imported backup to previous backup's location
         mv $LOCAL_FILE $GITLAB_BACKUP_FILE
 
@@ -136,8 +163,8 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/gitlab-secrets_${OPT_VERSION}${DATE}.json"
-    LOCAL_FILE="/etc/gitlab/gitlab-secrets_${DATE}.json"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/gitlab_backups/${YEAR_MONTH}/gitlab-secrets_${OPT_VERSION}${DATE}.json${GPG_EXT}"
+    LOCAL_FILE="/etc/gitlab/gitlab-secrets_${DATE}.json${GPG_EXT}"
 
     echo "Checking $REMOTE_FILE";
     /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
@@ -151,12 +178,23 @@ for i in {0..15}; do
         # Move current backup to .bak
         rm $GITLAB_SECRETS_FILE.bak
         mv $GITLAB_SECRETS_FILE $GITLAB_SECRETS_FILE.bak
+
+        if [[ -n $PASSPHRASE_FILE ]]; then
+            ENCRYPTED_FILE=$LOCAL_FILE
+            LOCAL_FILE=${ENCRYPTED_FILE//$GPG_EXT/}
+            echo "Decrypting $ENCRYPTED_FILE to $LOCAL_FILE"
+            gpg --output $LOCAL_FILE --passphrase-fd 0 --pinentry-mode loopback --batch --decrypt $ENCRYPTED_FILE < $PASSPHRASE_FILE
+            rm $ENCRYPTED_FILE
+        fi
+
         # Move imported backup to previous backup's location
         mv $LOCAL_FILE $GITLAB_SECRETS_FILE
 
         sudo gitlab-ctl reconfigure
         sudo gitlab-ctl restart
         sudo gitlab-rake gitlab:check SANITIZE=true
+
+        rm /var/opt/gitlab/backups/dump_gitlab_backup.tar
 
         break
     fi
@@ -168,8 +206,8 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_data_${DATE}.tar.gz"
-    LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_data_${DATE}.tar.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_data_${DATE}.tar.gz${GPG_EXT}"
+    LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_data_${DATE}.tar.gz${GPG_EXT}"
 
     echo "Checking $REMOTE_FILE";
     /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
@@ -181,9 +219,18 @@ for i in {0..15}; do
         TODAY=$(date +"%F")
         MATTERMOST_DIR=/var/opt/gitlab/mattermost
 
+        if [[ -n $PASSPHRASE_FILE ]]; then
+            ENCRYPTED_FILE=$LOCAL_FILE
+            LOCAL_FILE=${ENCRYPTED_FILE//$GPG_EXT/}
+            echo "Decrypting $ENCRYPTED_FILE to $LOCAL_FILE"
+            gpg --output $LOCAL_FILE --passphrase-fd 0 --pinentry-mode loopback --batch --decrypt $ENCRYPTED_FILE < $PASSPHRASE_FILE
+            rm $ENCRYPTED_FILE
+        fi
+
         (cd $MATTERMOST_DIR/ && tar -czvf $MATTERMOST_DIR/mattermost_data_$TODAY.tar.gz *)
         tar -xzvf $LOCAL_FILE -C $MATTERMOST_DIR
 
+        rm $LOCAL_FILE
 
         break
     fi
@@ -194,8 +241,8 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_dbdump_${DATE}.sql.gz"
-    LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_dbdump_${DATE}.sql.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/mattermost_backups/${YEAR_MONTH}/mattermost_dbdump_${DATE}.sql.gz${GPG_EXT}"
+    LOCAL_FILE="$HOME/code/backups/mattermost/mattermost_dbdump_${DATE}.sql.gz${GPG_EXT}"
 
     echo "Checking $REMOTE_FILE";
     /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
@@ -211,8 +258,17 @@ for i in {0..15}; do
         sudo gitlab-ctl stop mattermost
         sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/dropdb -h /var/opt/gitlab/postgresql mattermost_production
         sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/createdb -h /var/opt/gitlab/postgresql mattermost_production
+        if [[ -n $PASSPHRASE_FILE ]]; then
+            ENCRYPTED_FILE=$LOCAL_FILE
+            LOCAL_FILE=${ENCRYPTED_FILE//$GPG_EXT/}
+            echo "Decrypting $ENCRYPTED_FILE to $LOCAL_FILE"
+            gpg --output $LOCAL_FILE --passphrase-fd 0 --pinentry-mode loopback --batch --decrypt $ENCRYPTED_FILE < $PASSPHRASE_FILE
+            rm $ENCRYPTED_FILE
+        fi
         gunzip -c $LOCAL_FILE | sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/psql -h /var/opt/gitlab/postgresql -d mattermost_production
         sudo gitlab-ctl start mattermost
+
+        rm $LOCAL_FILE
 
         break
     fi
@@ -224,8 +280,8 @@ for i in {0..15}; do
     DATE=$(date --date="$i days ago" +"%Y-%m-%d");
     YEAR_MONTH=$(date --date="$i days ago" +"%Y-%m")
 
-    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/grafana_backups/${YEAR_MONTH}/grafana_data_${DATE}.tar.gz"
-    LOCAL_FILE="$HOME/code/backups/grafana/grafana_data_${DATE}.tar.gz"
+    REMOTE_FILE="${S3_ALIAS}/${S3_BUCKET_NAME}/admin_backups/grafana_backups/${YEAR_MONTH}/grafana_data_${DATE}.tar.gz${GPG_EXT}"
+    LOCAL_FILE="$HOME/code/backups/grafana/grafana_data_${DATE}.tar.gz${GPG_EXT}"
 
     echo "Checking $REMOTE_FILE";
     /usr/local/bin/mc find $REMOTE_FILE > /dev/null;
@@ -237,10 +293,20 @@ for i in {0..15}; do
         TODAY=$(date +"%F")
         GRAFANA_DIR=/var/opt/gitlab/grafana
 
+        if [[ -n $PASSPHRASE_FILE ]]; then
+            ENCRYPTED_FILE=$LOCAL_FILE
+            LOCAL_FILE=${ENCRYPTED_FILE//$GPG_EXT/}
+            echo "Decrypting $ENCRYPTED_FILE to $LOCAL_FILE"
+            gpg --output $LOCAL_FILE --passphrase-fd 0 --pinentry-mode loopback --batch --decrypt $ENCRYPTED_FILE < $PASSPHRASE_FILE
+            rm $ENCRYPTED_FILE
+        fi
+
         (cd $GRAFANA_DIR/ && tar -czvf $GRAFANA_DIR/grafana_data_$TODAY.tar.gz data)
         tar -xzvf $LOCAL_FILE -C $GRAFANA_DIR
         chown -R gitlab-prometheus:gitlab-prometheus $GRAFANA_DIR/data
         sudo gitlab-ctl restart grafana
+
+        rm $LOCAL_FILE
 
         break
     fi

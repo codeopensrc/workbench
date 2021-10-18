@@ -33,6 +33,12 @@ variable "serverkey" { default = ""}
 
 variable "contact_email" { default = "your@email.com" }
 
+variable "use_gpg" { default = false }
+variable "bot_gpg_name" { default = "" }
+variable "bot_gpg_passphrase" {
+    default = ""
+    sensitive = true
+}
 
 
 locals {

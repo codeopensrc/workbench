@@ -70,7 +70,9 @@ variable "misc_repos" {
 
 variable "gitlab_subdomain" { default = "" }
 variable "contact_email" { default = "" }
-
+variable "use_gpg" { default = false }
+variable "bot_gpg_name" { default = "" }
+variable "bot_gpg_passphrase" { default = "" }
 
 variable "admin_private_ips" { type = list(string) }
 variable "lead_private_ips" { type = list(string) }

@@ -10,6 +10,6 @@ HOME="/root"
 MAILTO="root"
 SHELL="/bin/bash"
 HOME="/root"
-${gitlab_backups_enabled ? "" : "#"}0 2 * * 0,3,5 bash /root/code/scripts/misc/backupGitlab.sh -a ${s3alias} -b ${s3bucket} -c -g
+${gitlab_backups_enabled ? "" : "#"}0 2 * * 0,3,5 bash /root/code/scripts/misc/backupGitlab.sh -a ${s3alias} -b ${s3bucket} -c -g ${use_gpg ? "-e" : ""}
 
 #### ==========

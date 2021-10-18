@@ -10,7 +10,7 @@
 
 OPT_VERSION=""
 
-while getopts "a:b:v:cg" flag; do
+while getopts "a:b:v:ceg" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) S3_ALIAS=$OPTARG;;
@@ -18,6 +18,7 @@ while getopts "a:b:v:cg" flag; do
         c) USE_CONSUL=true;;
         g) GC_DOCKER_REGISTRY=true;;
         v) OPT_VERSION=${OPTARG}_;;
+        e) ENCRYPT=true;;
     esac
 done
 
@@ -74,39 +75,59 @@ sudo -i -u gitlab-psql -- /opt/gitlab/embedded/bin/pg_dump -h /var/opt/gitlab/po
 mkdir -p $HOME/code/backups/grafana
 (cd /var/opt/gitlab/grafana && tar -czvf $HOME/code/backups/grafana/grafana_data_$TODAY.tar.gz data)
 
+GPG_EXT=""
+if [[ -n $ENCRYPT ]]; then
+    GPG_EXT=".gpg"
+    bash $HOME/code/scripts/misc/encrypt.sh -f $HOME/code/backups/letsencrypt/letsencrypt_$TODAY.tar.gz
+    bash $HOME/code/scripts/misc/encrypt.sh -f $HOME/code/backups/ssh_keys/ssh_keys_$TODAY.tar.gz
+    bash $HOME/code/scripts/misc/encrypt.sh -f $HOME/code/backups/mattermost/mattermost_data_$TODAY.tar.gz
+    bash $HOME/code/scripts/misc/encrypt.sh -f $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz
+    bash $HOME/code/scripts/misc/encrypt.sh -f $HOME/code/backups/grafana/grafana_data_$TODAY.tar.gz
+    bash $HOME/code/scripts/misc/encrypt.sh -f /var/opt/gitlab/backups/dump_gitlab_backup.tar
+    bash $HOME/code/scripts/misc/encrypt.sh -f /etc/gitlab/gitlab-secrets.json
+fi
 
 # Upload
-/usr/local/bin/mc cp $HOME/code/backups/letsencrypt/letsencrypt_$TODAY.tar.gz \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/letsencrypt_backups/$YEAR_MONTH/letsencrypt_$TODAY.tar.gz
+/usr/local/bin/mc cp $HOME/code/backups/letsencrypt/letsencrypt_$TODAY.tar.gz${GPG_EXT} \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/letsencrypt_backups/$YEAR_MONTH/letsencrypt_$TODAY.tar.gz${GPG_EXT}
 
-/usr/local/bin/mc cp $HOME/code/backups/ssh_keys/ssh_keys_$TODAY.tar.gz \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/ssh_keys_backups/$YEAR_MONTH/ssh_keys_$TODAY.tar.gz
+/usr/local/bin/mc cp $HOME/code/backups/ssh_keys/ssh_keys_$TODAY.tar.gz${GPG_EXT} \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/ssh_keys_backups/$YEAR_MONTH/ssh_keys_$TODAY.tar.gz${GPG_EXT}
 
-/usr/local/bin/mc cp $HOME/code/backups/mattermost/mattermost_data_$TODAY.tar.gz \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_data_$TODAY.tar.gz
+/usr/local/bin/mc cp $HOME/code/backups/mattermost/mattermost_data_$TODAY.tar.gz${GPG_EXT} \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_data_$TODAY.tar.gz${GPG_EXT}
 
-/usr/local/bin/mc cp $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_dbdump_$TODAY.sql.gz
+/usr/local/bin/mc cp $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz${GPG_EXT} \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/mattermost_backups/$YEAR_MONTH/mattermost_dbdump_$TODAY.sql.gz${GPG_EXT}
 
-/usr/local/bin/mc cp $HOME/code/backups/grafana/grafana_data_$TODAY.tar.gz \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/grafana_backups/$YEAR_MONTH/grafana_data_$TODAY.tar.gz
+/usr/local/bin/mc cp $HOME/code/backups/grafana/grafana_data_$TODAY.tar.gz${GPG_EXT} \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/grafana_backups/$YEAR_MONTH/grafana_data_$TODAY.tar.gz${GPG_EXT}
 
 # The goal is to rsync over the previous days and keep snapshot once a week instead of storing a daily multi gig backup
-/usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_$SUNDAY.tar
+/usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar${GPG_EXT} \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_$SUNDAY.tar${GPG_EXT}
 
 UPLOAD_EXIT_CODE=$?
 
 # Dont keep secrets backup on server I guess? Directly upload the single json file
-/usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json \
-    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_$SUNDAY.json
+/usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json${GPG_EXT} \
+    $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_$SUNDAY.json${GPG_EXT}
 
 if [[ -n $OPT_VERSION ]]; then
-    /usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar \
-        $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar
+    /usr/local/bin/mc cp /var/opt/gitlab/backups/dump_gitlab_backup.tar${GPG_EXT} \
+        $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/dump_gitlab_backup_${OPT_VERSION}$SUNDAY.tar${GPG_EXT}
 
-    /usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json \
-        $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json
+    /usr/local/bin/mc cp /etc/gitlab/gitlab-secrets.json${GPG_EXT} \
+        $S3_ALIAS/$S3_BUCKET_NAME/admin_backups/gitlab_backups/$SUNDAY_YEAR_MONTH/gitlab-secrets_${OPT_VERSION}$SUNDAY.json${GPG_EXT}
+fi
+
+if [[ -n $ENCRYPT ]]; then
+    rm $HOME/code/backups/letsencrypt/letsencrypt_$TODAY.tar.gz
+    rm $HOME/code/backups/ssh_keys/ssh_keys_$TODAY.tar.gz
+    rm $HOME/code/backups/mattermost/mattermost_data_$TODAY.tar.gz
+    rm $HOME/code/backups/mattermost/mattermost_dbdump_$TODAY.sql.gz
+    rm $HOME/code/backups/grafana/grafana_data_$TODAY.tar.gz
+    rm /var/opt/gitlab/backups/dump_gitlab_backup.tar
 fi
 
 # Cleanup every Sunday

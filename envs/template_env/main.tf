@@ -88,6 +88,10 @@ module "mix" {
     additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
     additional_ssl = var.additional_ssl
 
+    use_gpg = var.use_gpg
+    bot_gpg_name = var.bot_gpg_name
+    bot_gpg_passphrase = var.bot_gpg_passphrase
+
     # TODO: Dynamically change if using multiple providers/modules
     #external_leaderIP = (var.active_env_provider == "digital_ocean"
     #    ? element(concat(module.main.lead_public_ip_addresses, [""]), 0)

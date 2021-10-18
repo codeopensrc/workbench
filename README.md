@@ -38,7 +38,7 @@ Due to the rapid development that will introduce breaking changes with each comm
 
 For current public usage, this is intended for development/homelab use to quickly spin up a few nodes and host a test/hobby cluster, website(s), self-hosted git repository, unity build server etc, that is non-critical.  
 
-That being said, it is currently and will actively continue being used to provision, update, maintain, and migrate a number of _production_ **personal** infrastructure and services.  
+That being said, it is currently and will actively continue being used to provision, update, maintain, and migrate a number of **personal** _production_ services and infrastructure.  
 
 [Personal Website](https://www.codeopensrc.om), [Personal GitLab](https://gitlab.codeopensrc.com/explore?sort=latest_activity_desc), [(Private) Mattermost](https://chat.codeopensrc.com/), [(Private) Wekan](https://wekan.codeopensrc.com/)  
 

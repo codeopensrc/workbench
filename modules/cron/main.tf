@@ -5,6 +5,7 @@ variable "templates" { default = [] }
 variable "destinations" { default = [] }
 variable "s3alias" { default = "" }
 variable "s3bucket" { default = "" }
+variable "use_gpg" { default = false }
 
 variable "admin_servers" { default = 0 }
 variable "lead_servers" { default = 0 }
@@ -63,6 +64,7 @@ resource "null_resource" "admin" {
             gitlab_backups_enabled = var.gitlab_backups_enabled && local.allow_cron_backups
             s3alias = var.s3alias
             s3bucket = var.s3bucket
+            use_gpg = var.use_gpg
         }) : ""
         destination = var.destinations["admin"]
     }
@@ -97,6 +99,7 @@ resource "null_resource" "db" {
             s3bucket = var.s3bucket
             redis_dbs = length(var.redis_dbs) > 0 ? var.redis_dbs : []
             allow_cron_backups = local.allow_cron_backups
+            use_gpg = var.use_gpg
         }) : ""
         destination = var.destinations["redisdb"]
     }
@@ -108,6 +111,7 @@ resource "null_resource" "db" {
             mongo_dbs = length(var.mongo_dbs) > 0 ? var.mongo_dbs : []
             host = "vpc.my_private_ip"  # TODO: Add ability to specific host/hostnames/ip
             allow_cron_backups = local.allow_cron_backups
+            use_gpg = var.use_gpg
         }) : ""
         destination = var.destinations["mongodb"]
     }
@@ -118,6 +122,7 @@ resource "null_resource" "db" {
             s3bucket = var.s3bucket
             pg_dbs = length(var.pg_dbs) > 0 ? var.pg_dbs : []
             allow_cron_backups = local.allow_cron_backups
+            use_gpg = var.use_gpg
         }) : ""
         destination = var.destinations["pgdb"]
     }
