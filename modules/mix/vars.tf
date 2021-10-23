@@ -93,10 +93,11 @@ variable "db_ids" { type = list(string) }
 
 locals {
     # TODO: Turn these into maps to reference by key
-    # servers = {
-    #     for SERVER in var.servers:
-    #     # reduce count attribute if roles contains same key
-    # }
+    # reduce count attribute if roles contains same key
+    server_count = sum(tolist([
+        for SERVER in var.servers:
+        SERVER.count
+    ]))
     lead_servers = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count

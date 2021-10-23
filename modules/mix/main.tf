@@ -7,7 +7,7 @@
 
 # Temporarily disable for initial install - can lock dkpg file if enabled
 resource "null_resource" "disable_autoupgrade" {
-    count = length(var.servers)
+    count = local.server_count
     provisioner "remote-exec" {
         inline = [
             "sed -i \"s|1|0|\" /etc/apt/apt.conf.d/20auto-upgrades",
@@ -24,7 +24,7 @@ resource "null_resource" "disable_autoupgrade" {
 module "provisioners" {
     source      = "../misc"
 
-    servers = var.servers
+    servers = local.server_count
 
     # TODO: Refactor docker and consul resources inside module
     is_only_leader_count = local.is_only_leader_count
@@ -83,7 +83,7 @@ module "hostname" {
     region = var.region
 
     hostname = "${var.gitlab_subdomain}.${var.root_domain_name}"
-    servers = length(var.servers)
+    servers = local.server_count
 
     names       = local.all_names
     public_ips  = local.all_public_ips
@@ -100,7 +100,7 @@ module "cron" {
     s3bucket = var.s3bucket
     use_gpg = var.use_gpg
 
-    servers = length(var.servers)
+    servers = local.server_count
 
     lead_servers = local.lead_servers
     db_servers = local.db_servers
@@ -155,7 +155,7 @@ module "cron" {
 module "provision_files" {
     source = "../provision"
 
-    servers = length(var.servers)
+    servers = local.server_count
 
     public_ips  = local.all_public_ips
     private_ips = local.all_private_ips
@@ -410,6 +410,7 @@ resource "null_resource" "install_gitlab" {
 resource "null_resource" "restore_gitlab" {
     count = local.admin_servers
     depends_on = [
+        module.provisioners,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
     ]
@@ -424,7 +425,7 @@ resource "null_resource" "restore_gitlab" {
 
                 TERRA_WORKSPACE=${terraform.workspace}
                 IMPORT_GITLAB=${var.import_gitlab}
-                PASSPHRASE_FILE=${var.use_gpg ? "-p $HOME/${var.bot_gpg_name}" : "" }
+                PASSPHRASE_FILE="${var.use_gpg ? "-p $HOME/${var.bot_gpg_name}" : "" }"
                 if [ ! -z "${var.import_gitlab_version}" ]; then IMPORT_GITLAB_VERSION="-v ${var.import_gitlab_version}"; fi
 
                 if [ "$IMPORT_GITLAB" = "true" ]; then
@@ -502,6 +503,8 @@ resource "null_resource" "gitlab_plugins" {
     ###! Might be possible if we can create a custom role?
     ###!   https://docs.mattermost.com/onboard/advanced-permissions-backend-infrastructure.html
 
+    ###! TODO: If we run plugins, then run import again, plugins are messed up
+    ###!  We also need to be able to correctly sed replace grafana (its not rerunnable atm)
     provisioner "remote-exec" {
         inline = [
             <<-EOF
@@ -653,7 +656,7 @@ resource "null_resource" "reauthorize_mattermost" {
 
 
 resource "null_resource" "node_exporter" {
-    count = local.admin_servers > 0 ? length(var.servers) : 0
+    count = local.admin_servers > 0 ? local.server_count : 0
     depends_on = [
         module.provisioners,
         module.hostname,
@@ -860,7 +863,7 @@ resource "null_resource" "import_dbs" {
             S3_ALIAS=${var.dbs_to_import[count.index]["s3alias"]};
             DB_NAME=${var.dbs_to_import[count.index]["dbname"]};
             HOST=${element(var.db_private_ips, count.index)}
-            PASSPHRASE_FILE=${var.use_gpg ? "-p $HOME/${var.bot_gpg_name}" : "" }
+            PASSPHRASE_FILE="${var.use_gpg ? "-p $HOME/${var.bot_gpg_name}" : "" }"
 
             if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
                 bash /root/code/scripts/db/import_mongo_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME -h $HOST $PASSPHRASE_FILE;
@@ -1555,7 +1558,8 @@ resource "null_resource" "kubernetes_admin" {
 
 
 resource "null_resource" "kubernetes_worker" {
-    count = local.is_not_admin_count
+    #TODO: Get kubernetes to work without an admin server
+    count = local.admin_servers > 0 ? local.is_not_admin_count : 0
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
@@ -1723,7 +1727,7 @@ resource "null_resource" "reboot_environments" {
 
 # Re-enable after everything installed
 resource "null_resource" "enable_autoupgrade" {
-    count = length(var.servers)
+    count = local.server_count
     depends_on = [
         module.provisioners,
         module.hostname,

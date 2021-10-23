@@ -8,9 +8,10 @@ CONSUL_VERSION="1.10.0"
 DOCKER_COMPOSE_VERSION="1.29.2"
 GITLAB_VERSION="13.12.5-ce.0"
 
-while getopts "c:d:g:" flag; do
+while getopts "c:d:g:a" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
+        a) IS_ADMIN=true;;
         c) CONSUL_VERSION=$OPTARG;;
         d) DOCKER_COMPOSE_VERSION=$OPTARG;;
         g) GITLAB_VERSION=$OPTARG;;
@@ -125,13 +126,13 @@ curl https://releases.hashicorp.com/consul/"$CONSUL_VERSION"/consul_"$CONSUL_VER
 
 
 #### gitlab
-curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash;
-sudo apt-get install gitlab-ce="$GITLAB_VERSION";
+if [[ -n $IS_ADMIN ]]; then
+    curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash;
+    sudo apt-get install gitlab-ce="$GITLAB_VERSION";
 
-# Disable gitlab (enable for 1 instance only)
-sudo gitlab-ctl stop
-## TODO: Believe this is incorrect but gitlab isn't starting
-##  up on other machines unless specified so its not *super* important
+    # Disable gitlab (enable for 1 instance only)
+    sudo gitlab-ctl stop
+fi
 
 sed -i "s|0|1|" /etc/apt/apt.conf.d/20auto-upgrades
 cat /etc/apt/apt.conf.d/20auto-upgrades

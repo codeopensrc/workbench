@@ -16,7 +16,7 @@
         "gitlab_version": "",
         "redis_version": "",
         "aws_key_name": "",
-        "packer_dir": "{{env `CUR_DIR`}}"
+        "packer_dir": ""
     },
     "builders": [
         {

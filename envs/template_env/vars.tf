@@ -56,7 +56,6 @@ module "main" {
 # Currently supports 1 server with all 3 roles or 3 servers each with a single role
 # Supports admin+lead+db and 1 server as lead as well
 # Believe it also supports 1 server as admin+lead and 1 server as db but untested
-# NOTE: Count attribute currently only supports 1 until we can scale more dynamically
 
 ###! When downsizing from 2 to 1 leader, set downsize = true, terraform apply. This adjusts app routing.
 ###! Then comment/remove 2nd server, downsize = false, and terraform apply again to remove it
@@ -87,7 +86,7 @@ variable "servers" {
         #     "roles" = ["lead"]
         #     "size" = {
         #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
         #     }
         #     "aws_volume_size" = 40
         # },
@@ -97,7 +96,7 @@ variable "servers" {
         #     "roles" = ["db"]
         #     "size" = {
         #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
         #     }
         #     "aws_volume_size" = 40
         # },
@@ -107,7 +106,7 @@ variable "servers" {
         #     "roles" = ["build"]
         #     "size" = {
         #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #         "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
         #     }
         #     "aws_volume_size" = 40
         # },

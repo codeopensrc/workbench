@@ -119,7 +119,7 @@ resource "null_resource" "docker_leader" {
 
 
 resource "null_resource" "update_s3" {
-    count = length(var.servers)
+    count = var.servers
     depends_on = [
         null_resource.docker_leader,
     ]
@@ -326,7 +326,7 @@ resource "null_resource" "consul_file_build" {
 }
 
 resource "null_resource" "consul_service" {
-    count = length(var.servers)
+    count = var.servers
     depends_on = [
         null_resource.docker_leader,
         null_resource.update_s3,
@@ -422,6 +422,7 @@ resource "null_resource" "gpg_download" {
         command = <<-EOF
             ### Copy from remote server to local machine
             IP=${element(distinct(concat(var.admin_public_ips, var.db_public_ips)), count.index)}
+            ssh-keyscan -H $IP >> ~/.ssh/known_hosts
             scp root@$IP:~/${var.bot_gpg_name}.asc.gpg .
 
             ### Prompt user to decrypt file using command to continue, loop X times until done or exit

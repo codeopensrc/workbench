@@ -7,6 +7,7 @@ terraform {
     required_version = ">=0.13"
 }
 
+### All in config{}
 # variable "root_domain_name" {}
 # variable "local_ssh_key_file" {}
 # variable "active_env_provider" {}
@@ -51,66 +52,27 @@ provider "digitalocean" {
 }
 
 locals {
-    ## Loop through servers and change name if it does not contain admin
-    ## TODO: Better handling how the role based name is added to machine name
-
-    all_server_ids = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.id
-        if length(join(",", SERVER.tags)) > 0
-    ])
-
     server_names = [
         for app in var.config.servers:
         element(app.roles, 0)
     ]
-
-    lead_server_ips = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.ipv4_address
-        if length(regexall("lead", join(",", SERVER.tags))) > 0
-    ])
-    db_server_ips = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.ipv4_address
-        if length(regexall("db", join(",", SERVER.tags))) > 0
-    ])
-    admin_server_ips = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.ipv4_address
-        if length(regexall("admin", join(",", SERVER.tags))) > 0
-    ])
-    build_server_ips = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.ipv4_address
-        if length(regexall("build", join(",", SERVER.tags))) > 0
-    ])
-
-
-
-    admin_server_ids = [
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.id
-        if length(regexall("admin", join(",", SERVER.tags))) > 0
-    ]
-
-    lead_server_ids = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.id
-        if length(regexall("lead", join(",", SERVER.tags))) > 0
-    ])
-
-    db_server_ids = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.id
-        if length(regexall("db", join(",", SERVER.tags))) > 0
-    ])
-
-    build_server_ids = tolist([
-        for SERVER in digitalocean_droplet.main[*]:
-        SERVER.id
-        if length(regexall("build", join(",", SERVER.tags))) > 0
-    ])
+    is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
+    ## Allows db with lead
+    is_only_leader_count = sum(concat([0], tolist([
+        for SERVER in var.config.servers:
+        SERVER.count
+        if contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
+    ])))
+    is_only_db_count = sum(concat([0], tolist([
+        for SERVER in var.config.servers:
+        SERVER.count
+        if contains(SERVER.roles, "db") && length(SERVER.roles) == 1
+    ])))
+    is_only_build_count = sum(concat([0], tolist([
+        for SERVER in var.config.servers:
+        SERVER.count
+        if contains(SERVER.roles, "build") && length(SERVER.roles) == 1
+    ])))
 
     lead_servers = sum(concat([0], tolist([
         for SERVER in var.config.servers:
@@ -132,6 +94,86 @@ locals {
         SERVER.count
         if contains(SERVER.roles, "build")
     ])))
+
+
+    admin_cfg_servers = tolist([
+        for SERVER in var.config.servers:
+        SERVER
+        if SERVER.roles[0] == "admin"
+    ])
+    lead_cfg_servers = tolist([
+        for SERVER in var.config.servers:
+        SERVER
+        if SERVER.roles[0] == "lead"
+    ])
+    db_cfg_servers = tolist([
+        for SERVER in var.config.servers:
+        SERVER
+        if SERVER.roles[0] == "db"
+    ])
+    build_cfg_servers = tolist([
+        for SERVER in var.config.servers:
+        SERVER
+        if SERVER.roles[0] == "build"
+    ])
+
+}
+
+locals {
+    ## The "l" and "d" using _extra, is to allow lead and db on the admin allowing
+    ##  a single server to use admin + lead + db.
+    ## TODO: Hmm lightbulb moment:
+    ##   If no lead, use admin. If no db, use lead or admin
+    ## Entire infra depends on at a minimum lead + db roles so if they are NOT there
+    ##  then they MUST be attached to admin. Inverse is not true, we're attempting to
+    ##  have admin NOT be mandatory
+    admin_private_ips = flatten(module.admin[*].ipv4_addresses_private)
+    admin_l_private_ips = flatten(module.admin[*].ipv4_addresses_private_extra_lead)
+    admin_d_private_ips = flatten(module.admin[*].ipv4_addresses_private_extra_db)
+    lead_private_ips = flatten(module.lead[*].ipv4_addresses_private)
+    db_private_ips = flatten(module.db[*].ipv4_addresses_private)
+    build_private_ips = flatten(module.build[*].ipv4_addresses_private)
+
+    admin_public_ips = flatten(module.admin[*].ipv4_addresses)
+    admin_l_public_ips = flatten(module.admin[*].ipv4_addresses_extra_lead)
+    admin_d_public_ips = flatten(module.admin[*].ipv4_addresses_extra_db)
+    lead_public_ips = flatten(module.lead[*].ipv4_addresses)
+    db_public_ips = flatten(module.db[*].ipv4_addresses)
+    build_public_ips = flatten(module.build[*].ipv4_addresses)
+
+    admin_names = flatten(module.admin[*].names)
+    admin_l_names = flatten(module.admin[*].names_extra_lead)
+    admin_d_names = flatten(module.admin[*].names_extra_db)
+    lead_names = flatten(module.lead[*].names)
+    db_names = flatten(module.db[*].names)
+    build_names = flatten(module.build[*].names)
+
+    admin_server_ids = flatten(module.admin[*].ids)
+    admin_l_server_ids = flatten(module.admin[*].ids_extra_lead)
+    admin_d_server_ids = flatten(module.admin[*].ids_extra_db)
+    lead_server_ids = flatten(module.lead[*].ids)
+    db_server_ids = flatten(module.db[*].ids)
+    build_server_ids = flatten(module.build[*].ids)
+
+    admin_server_instances = flatten(module.admin[*].instances)
+    lead_server_instances = flatten(module.lead[*].instances)
+    db_server_instances = flatten(module.db[*].instances)
+    build_server_instances = flatten(module.build[*].instances)
+
+    all_lead_private_ips = concat(local.admin_l_private_ips, local.lead_private_ips)
+    all_lead_public_ips = concat(local.admin_l_public_ips, local.lead_public_ips)
+    all_lead_names = concat(local.admin_l_names, local.lead_names)
+    all_lead_server_ids = concat(local.admin_l_server_ids, local.lead_server_ids)
+
+    all_db_private_ips = concat(local.admin_d_private_ips, local.db_private_ips)
+    all_db_public_ips = concat(local.admin_d_public_ips, local.db_public_ips)
+    all_db_names = concat(local.admin_d_names, local.db_names)
+    all_db_server_ids = concat(local.admin_d_server_ids, local.db_server_ids)
+
+    all_public_ips = distinct(concat(local.admin_public_ips, local.all_lead_public_ips, local.all_db_public_ips, local.build_public_ips))
+    all_names = distinct(concat(local.admin_names, local.all_lead_names, local.all_db_names, local.build_names))
+    all_server_ids = distinct(concat(local.admin_server_ids, local.all_lead_server_ids, local.all_db_server_ids, local.build_server_ids))
+    all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
 }
 
 # Based on app, create .db, .beta, and .beta.db subdomains (not used just yet)
@@ -163,5 +205,20 @@ locals {
     dockerc = "DKC-${var.config.packer_config.docker_compose_version}"
     gitlab = "GL-${var.config.packer_config.gitlab_version}"
     redis = "R-${var.config.packer_config.redis_version}"
-    do_image_name = "${local.consul}_${local.docker}_${local.dockerc}_${local.gitlab}_${local.redis}"
+    do_image_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.gitlab}_${local.redis}")
+    do_image_small_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.redis}")
+
+    do_tags = [
+        "${replace(local.consul, ".", "-")}",
+        "${replace(local.docker, ".", "-")}",
+        "${replace(local.dockerc, ".", "-")}",
+        "${replace(local.gitlab, ".", "-")}",
+        "${replace(local.redis, ".", "-")}"
+    ]
+    do_small_tags = [
+        "${replace(local.consul, ".", "-")}",
+        "${replace(local.docker, ".", "-")}",
+        "${replace(local.dockerc, ".", "-")}",
+        "${replace(local.redis, ".", "-")}"
+    ]
 }

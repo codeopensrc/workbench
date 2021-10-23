@@ -17,6 +17,7 @@ data "aws_ami_ids" "latest" {
         name   = "tag:docker_compose_version"
         values = [ var.config.packer_config.docker_compose_version ]
     }
+    ## TODO: Dynamically look for this tag on refactor
     filter {
         name   = "tag:gitlab_version"
         values = [ var.config.packer_config.gitlab_version ]
@@ -46,6 +47,7 @@ module "packer" {
     do_token = var.config.do_token
     digitalocean_region = var.config.do_region
     digitalocean_image_size = "s-2vcpu-4gb"
+    digitalocean_image_name = ""
 
     packer_config = var.config.packer_config
 }
@@ -72,6 +74,7 @@ data "aws_ami" "new" {
         name   = "tag:docker_compose_version"
         values = [ var.config.packer_config.docker_compose_version ]
     }
+    ## TODO: Dynamically look for this tag on refactor
     filter {
         name   = "tag:gitlab_version"
         values = [ var.config.packer_config.gitlab_version ]

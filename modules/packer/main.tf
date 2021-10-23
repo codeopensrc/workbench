@@ -8,20 +8,13 @@ variable "aws_instance_type" { default = "" }
 variable "do_token" { default = "" }
 variable "digitalocean_region" { default = "" }
 variable "digitalocean_image_size" { default = "" }
+variable "digitalocean_image_name" { default = "" }
 
 variable "active_env_provider" {}
 
 variable "packer_config" {}
 variable "build" {}
 
-locals {
-    consul = "CN-${var.packer_config.consul_version}"
-    docker = "DK-${var.packer_config.docker_version}"
-    dockerc = "DKC-${var.packer_config.docker_compose_version}"
-    gitlab = "GL-${var.packer_config.gitlab_version}"
-    redis = "R-${var.packer_config.redis_version}"
-    do_image_name = "${local.consul}_${local.docker}_${local.dockerc}_${local.gitlab}_${local.redis}"
-}
 
 
 resource "null_resource" "build" {
@@ -42,7 +35,7 @@ resource "null_resource" "build" {
 
         command = <<-EOF
 
-            export PACKER_FILE=${var.active_env_provider == "aws" ? "aws.json" : "digitalocean.json" }
+            export PACKER_FILE=${var.active_env_provider == "aws" ? "aws.json" : "digitalocean.pkr.hcl" }
             export CUR_DIR=$(realpath ${path.module})
 
             packer validate \
@@ -61,7 +54,8 @@ resource "null_resource" "build" {
                 --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os["main"]}' \
                 --var 'digitalocean_region=${var.digitalocean_region}' \
                 --var 'digitalocean_image_size=${var.digitalocean_image_size}' \
-                --var 'digitalocean_image_name=${local.do_image_name}' \
+                --var 'digitalocean_image_name=${var.digitalocean_image_name}' \
+                --var packer_dir=$CUR_DIR \
                 $CUR_DIR/$PACKER_FILE
 
 
@@ -81,7 +75,8 @@ resource "null_resource" "build" {
                 --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os["main"]}' \
                 --var 'digitalocean_region=${var.digitalocean_region}' \
                 --var 'digitalocean_image_size=${var.digitalocean_image_size}' \
-                --var 'digitalocean_image_name=${local.do_image_name}' \
+                --var 'digitalocean_image_name=${var.digitalocean_image_name}' \
+                --var packer_dir=$CUR_DIR \
                 $CUR_DIR/$PACKER_FILE
         EOF
     }

@@ -1,212 +1,62 @@
-data "digitalocean_images" "latest" {
-    filter {
-        key    = "name"
-        values = [ local.do_image_name ]
-        all = true
-    }
-    filter {
-        key    = "regions"
-        values = [ var.config.do_region ]
-        all = true
-    }
-    filter {
-        key    = "private"
-        values = ["true"]
-        all = true
-    }
-    sort {
-        key       = "created"
-        direction = "desc"
-    }
-}
+module "admin" {
+    source = "./droplets"
+    count = local.admin_servers > 0 ? 1 : 0
 
-module "packer" {
-    source             = "../packer"
-    build = length(data.digitalocean_images.latest.images) >= 1 ? false : true
-
-    active_env_provider = var.config.active_env_provider
-
-    aws_access_key = var.config.aws_access_key
-    aws_secret_key = var.config.aws_secret_key
-    aws_region = var.config.aws_region
-    aws_key_name = var.config.aws_key_name
-    aws_instance_type = "t2.medium"
-
-    do_token = var.config.do_token
-    digitalocean_region = var.config.do_region
-    digitalocean_image_size = "s-2vcpu-4gb"
-
-    packer_config = var.config.packer_config
-}
-
-data "digitalocean_images" "new" {
-    depends_on = [ module.packer ]
-    filter {
-        key    = "name"
-        values = [ local.do_image_name ]
-        all = true
-    }
-    filter {
-        key    = "regions"
-        values = [ var.config.do_region ]
-        all = true
-    }
-    filter {
-        key    = "private"
-        values = ["true"]
-        all = true
-    }
-    sort {
-        key       = "created"
-        direction = "desc"
-    }
-}
-
-## TODO: We're creating 2 separate UUID substrs for name and tag atm
-resource "digitalocean_droplet" "main" {
-    count = length(var.config.servers)
-    name     = "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
-    #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
-    image = (var.config.servers[count.index].image != ""
-        ? var.config.servers[count.index].image
-        : (length(data.digitalocean_images.latest.images) > 0
-            ? data.digitalocean_images.latest.images[0].id : data.digitalocean_images.new.images[0].id)
-    )
-    region   = var.config.region
-    size     = var.config.servers[count.index].size["digital_ocean"]
-    ssh_keys = [var.config.do_ssh_fingerprint]
-    tags = flatten([
-        "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}",
-        var.config.servers[count.index].roles
-    ])
-    #"TODO: Tag admin with gitlab.${var.config.root_domain_name}"
-
-    lifecycle {
-        ignore_changes = [name, tags]
-    }
-
+    servers = local.admin_cfg_servers[0]
+    config = var.config
+    image_name = local.do_image_name
+    image_size = "s-2vcpu-4gb"
+    tags = local.do_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
-
-
-    provisioner "remote-exec" {
-        inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
-        connection {
-            host     = self.ipv4_address
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
-
-            if [ "$IS_LEAD" = "true" ]; then
-                docker service update --constraint-add "node.hostname!=${self.name}" proxy_main
-                docker service update --constraint-rm "node.hostname!=${self.name}" proxy_main
-            fi
-
-        EOF
-        destination = "/tmp/dockerconstraint.sh"
-        connection {
-            host     = self.ipv4_address
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
-
-            if [ "$IS_LEAD" = "true" ]; then
-                sed -i "s|${self.ipv4_address_private}|${digitalocean_droplet.main[0].ipv4_address_private}|" /etc/nginx/conf.d/proxy.conf
-                gitlab-ctl reconfigure
-            fi
-
-        EOF
-        destination = "/tmp/changeip-${self.name}.sh"
-        connection {
-            host     = digitalocean_droplet.main[0].ipv4_address
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            if [ "${length( regexall("lead", join(",", self.tags)) ) > 0}" = "true" ]; then
-               docker node update --availability="drain" ${self.name}
-               sleep 20;
-               docker node demote ${self.name}
-               sleep 5
-               docker swarm leave
-               docker swarm leave --force;
-               exit 0
-           fi
-        EOF
-        destination = "/tmp/remove.sh"
-        connection {
-            host     = self.ipv4_address
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
-    provisioner "remote-exec" {
-        when = destroy
-        inline = [
-            <<-EOF
-                consul leave;
-                if [ "${length( regexall("build", join(",", self.tags)) ) > 0}" = "true" ]; then
-                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
-                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
-                fi
-            EOF
-        ]
-        on_failure = continue
-        connection {
-            host     = self.ipv4_address
-            type     = "ssh"
-            user     = "root"
-        }
-    }
-
-    provisioner "local-exec" {
-        when = destroy
-        command = <<-EOF
-            ssh-keygen -R ${self.ipv4_address};
-            WORKSPACE="unknown";
-            ## TODO-Tag admin with var.config.root_domain_name
-
-            if [ "$WORKSPACE" != "default" ]; then
-                ## TODO: Create parsable domain from tag
-                ## "${length( regexall("domain", join(",", self.tags)) ) > 0}"
-                ## ssh-keygen -R "gitlab."
-                echo "Not default"
-            fi
-            exit 0;
-        EOF
-        on_failure = continue
-    }
 }
+module "lead" {
+    source = "./droplets"
+    count = local.is_only_leader_count > 0 ? 1 : 0
+
+    servers = local.lead_cfg_servers[0]
+    config = var.config
+    image_name = local.do_image_small_name
+    image_size = "s-1vcpu-1gb"
+    tags = local.do_small_tags
+    vpc_uuid = digitalocean_vpc.terraform_vpc.id
+    admin_ip_public = local.admin_servers > 0 ? element(local.admin_public_ips, 0) : ""
+    admin_ip_private = local.admin_servers > 0 ? element(local.admin_private_ips, 0) : ""
+}
+module "db" {
+    source = "./droplets"
+    count = local.is_only_db_count > 0 ? 1 : 0
+
+    servers = local.db_cfg_servers[0]
+    config = var.config
+    image_name = local.do_image_small_name
+    image_size = "s-1vcpu-1gb"
+    tags = local.do_small_tags
+    vpc_uuid = digitalocean_vpc.terraform_vpc.id
+}
+module "build" {
+    source = "./droplets"
+    count = local.is_only_build_count > 0 ? 1 : 0
+
+    servers = local.build_cfg_servers[0]
+    config = var.config
+    image_name = local.do_image_small_name
+    image_size = "s-1vcpu-1gb"
+    tags = local.do_small_tags
+    vpc_uuid = digitalocean_vpc.terraform_vpc.id
+}
+
 
 resource "null_resource" "cleanup_consul" {
     count = 1
-    depends_on = [ digitalocean_droplet.main ]
+    depends_on = [
+        module.admin,
+        module.lead,
+        module.db,
+        module.build,
+    ]
 
     triggers = {
-        machine_ids = join(",", digitalocean_droplet.main[*].id)
+        machine_ids = join(",", local.all_server_ids)
     }
 
     provisioner "file" {
@@ -236,7 +86,7 @@ resource "null_resource" "cleanup_consul" {
     }
 
     connection {
-        host = element(digitalocean_droplet.main[*].ipv4_address, 0)
+        host = element(local.all_public_ips, 0)
         type = "ssh"
     }
 }
@@ -260,7 +110,7 @@ resource "null_resource" "cleanup" {
             var.config.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
         ]
         connection {
-            host     = element(digitalocean_droplet.main[*].ipv4_address, length(digitalocean_droplet.main[*].ipv4_address) - 1 )
+            host = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
@@ -268,11 +118,11 @@ resource "null_resource" "cleanup" {
     }
     provisioner "remote-exec" {
         inline = [
-            "chmod +x /tmp/changeip-${element(digitalocean_droplet.main[*].name, length(digitalocean_droplet.main[*].name) - 1)}.sh",
-            var.config.downsize ? "/tmp/changeip-${element(digitalocean_droplet.main[*].name, length(digitalocean_droplet.main[*].name) - 1)}.sh" : "echo 0",
+            "chmod +x /tmp/changeip-${element(local.lead_names, length(local.lead_names) - 1)}.sh",
+            var.config.downsize ? "/tmp/changeip-${element(local.lead_names, length(local.lead_names) - 1)}.sh" : "echo 0",
         ]
         connection {
-            host     = element(digitalocean_droplet.main[*].ipv4_address, 0)
+            host = element(local.all_public_ips, 0)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
@@ -284,7 +134,7 @@ resource "null_resource" "cleanup" {
             var.config.downsize ? "/tmp/remove.sh" : "echo 0",
         ]
         connection {
-            host     = element(digitalocean_droplet.main[*].ipv4_address, length(digitalocean_droplet.main[*].ipv4_address) - 1 )
+            host = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)

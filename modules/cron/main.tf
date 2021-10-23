@@ -189,7 +189,7 @@ resource "null_resource" "leader" {
 
 
 resource "null_resource" "cron_exec" {
-    count      = var.servers
+    count = sum([var.admin_servers, var.lead_servers, var.db_servers])
 
     triggers = {
         # TODO: Only trigger update on certain servers

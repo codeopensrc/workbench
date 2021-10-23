@@ -13,7 +13,7 @@ resource "digitalocean_vpc" "terraform_vpc" {
 resource "digitalocean_firewall" "db" {
     name = "${local.vpc_name}-db"
 
-    droplet_ids = local.db_server_ids
+    droplet_ids = local.all_db_server_ids
 
     # "postgresql"
     inbound_rule  {
@@ -47,7 +47,7 @@ resource "digitalocean_firewall" "db" {
 resource "digitalocean_firewall" "app" {
     name = "${local.vpc_name}-app"
 
-    droplet_ids = local.lead_server_ids
+    droplet_ids = local.all_lead_server_ids
 
     # If we ever seperate 80/443 to external load balancers we can move to diff group
     # "http"
@@ -337,7 +337,7 @@ resource "digitalocean_firewall" "default" {
 resource "digitalocean_firewall" "ext_db" {
     name = "${local.vpc_name}-ext-db"
 
-    droplet_ids = local.db_server_ids
+    droplet_ids = local.all_db_server_ids
 
     # description = "postgresql"
     inbound_rule {
