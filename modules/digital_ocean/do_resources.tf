@@ -19,6 +19,7 @@ module "lead" {
     image_size = "s-1vcpu-1gb"
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
+
     admin_ip_public = local.admin_servers > 0 ? element(local.admin_public_ips, 0) : ""
     admin_ip_private = local.admin_servers > 0 ? element(local.admin_private_ips, 0) : ""
 }
@@ -32,6 +33,10 @@ module "db" {
     image_size = "s-1vcpu-1gb"
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
+
+    admin_ip_public = local.admin_servers > 0 ? element(local.admin_public_ips, 0) : ""
+    admin_ip_private = local.admin_servers > 0 ? element(local.admin_private_ips, 0) : ""
+    consul_lan_leader_ip = element(concat(local.admin_private_ips, local.lead_private_ips), 0)
 }
 module "build" {
     source = "./droplets"
@@ -43,6 +48,10 @@ module "build" {
     image_size = "s-1vcpu-1gb"
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
+
+    admin_ip_public = local.admin_servers > 0 ? element(local.admin_public_ips, 0) : ""
+    admin_ip_private = local.admin_servers > 0 ? element(local.admin_private_ips, 0) : ""
+    consul_lan_leader_ip = element(concat(local.admin_private_ips, local.lead_private_ips), 0)
 }
 
 

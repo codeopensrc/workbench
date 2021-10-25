@@ -5,96 +5,38 @@
 ###  Another can have 1 server with all roles and scale out aditional servers as leader servers
 ###  Simplicity/Flexibility/Adaptability
 
-# Temporarily disable for initial install - can lock dkpg file if enabled
-resource "null_resource" "disable_autoupgrade" {
-    count = local.server_count
-    provisioner "remote-exec" {
-        inline = [
-            "sed -i \"s|1|0|\" /etc/apt/apt.conf.d/20auto-upgrades",
-            "cat /etc/apt/apt.conf.d/20auto-upgrades"
-        ]
-    }
-    connection {
-        host = element(local.all_public_ips, count.index)
-        type = "ssh"
-    }
-}
 
-
-module "provisioners" {
-    source      = "../misc"
-
-    servers = local.server_count
-
-    # TODO: Refactor docker and consul resources inside module
-    is_only_leader_count = local.is_only_leader_count
-    is_only_db_count = local.is_only_db_count
-    is_only_build_count = local.is_only_build_count
-
-    admin_servers = local.admin_servers
-    admin_names       = var.admin_names
-    admin_public_ips  = var.admin_public_ips
-    admin_private_ips = var.admin_private_ips
+module "swarm" {
+    source = "../swarm"
 
     lead_servers = local.lead_servers
-    lead_names       = var.lead_names
     lead_public_ips  = var.lead_public_ips
-    lead_private_ips = var.lead_private_ips
-
-    db_servers = local.db_servers
-    db_names       = var.db_names
-    db_public_ips  = var.db_public_ips
-    db_private_ips = var.db_private_ips
-
-    build_servers = local.build_servers
-    build_names       = var.build_names
-    build_public_ips  = var.build_public_ips
-    build_private_ips = var.build_private_ips
-
+    lead_names       = var.lead_names
     region      = var.region
-    do_spaces_region = var.do_spaces_region
-    do_spaces_access_key = var.do_spaces_access_key
-    do_spaces_secret_key = var.do_spaces_secret_key
+}
 
-    aws_bot_access_key = var.aws_bot_access_key
-    aws_bot_secret_key = var.aws_bot_secret_key
-
-    # TODO: This might cause a problem when launching the 2nd admin server when swapping
-    #consul_wan_leader_ip = var.external_leaderIP
-    consul_lan_leader_ip = local.consul_lan_leader_ip
-    consul_admin_adv_addresses = local.consul_admin_adv_addresses
-    consul_lead_adv_addresses = local.consul_lead_adv_addresses
-    consul_db_adv_addresses = local.consul_db_adv_addresses
-    consul_build_adv_addresses = local.consul_build_adv_addresses
-    datacenter_has_admin = length(var.admin_public_ips) > 0
+module "gpg" {
+    source = "../gpg"
+    count = var.use_gpg ? 1 : 0
+    depends_on = [module.swarm]
 
     s3alias = var.s3alias
     s3bucket = var.s3bucket
 
-    use_gpg = var.use_gpg
     bot_gpg_name = var.bot_gpg_name
     bot_gpg_passphrase = var.bot_gpg_passphrase
-}
 
-module "hostname" {
-    source = "../hostname"
+    admin_public_ips = var.admin_public_ips
+    db_public_ips = var.db_public_ips
 
-    server_name_prefix = var.server_name_prefix
-    region = var.region
+    admin_servers = local.admin_servers
+    is_only_db_count = local.is_only_db_count
 
-    hostname = "${var.gitlab_subdomain}.${var.root_domain_name}"
-    servers = local.server_count
-
-    names       = local.all_names
-    public_ips  = local.all_public_ips
-    private_ips = local.all_private_ips
-
-    root_domain_name = var.root_domain_name
-    prev_module_output = module.provisioners.output
 }
 
 module "cron" {
     source = "../cron"
+    depends_on = [module.gpg]
 
     s3alias = var.s3alias
     s3bucket = var.s3bucket
@@ -148,8 +90,6 @@ module "cron" {
 
     # Admin specific
     gitlab_backups_enabled = var.gitlab_backups_enabled
-
-    prev_module_output = module.provisioners.output
 }
 
 module "provision_files" {
@@ -178,8 +118,6 @@ module "provision_files" {
 resource "null_resource" "add_proxy_hosts" {
     count      = 1
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files
     ]
@@ -258,8 +196,6 @@ resource "null_resource" "add_proxy_hosts" {
 resource "null_resource" "prometheus_targets" {
     count = local.admin_servers
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -414,7 +350,6 @@ resource "null_resource" "install_gitlab" {
 resource "null_resource" "restore_gitlab" {
     count = local.admin_servers
     depends_on = [
-        module.provisioners,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
     ]
@@ -662,8 +597,6 @@ resource "null_resource" "reauthorize_mattermost" {
 resource "null_resource" "node_exporter" {
     count = local.admin_servers > 0 ? local.server_count : 0
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -731,8 +664,6 @@ resource "null_resource" "node_exporter" {
 resource "null_resource" "install_loki" {
     count = local.admin_servers
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -783,8 +714,6 @@ module "admin_nginx" {
     count = local.lead_servers > 0 ? local.admin_servers : 0
     source = "../nginx"
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -814,8 +743,6 @@ module "admin_nginx" {
 resource "null_resource" "install_dbs" {
     count      = local.db_servers > 0 ? local.db_servers : 0
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -849,8 +776,6 @@ resource "null_resource" "install_dbs" {
 resource "null_resource" "import_dbs" {
     count = var.import_dbs && local.db_servers > 0 ? length(var.dbs_to_import) : 0
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -905,8 +830,6 @@ resource "null_resource" "import_dbs" {
 resource "null_resource" "db_ready" {
     count = local.db_servers
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -957,8 +880,6 @@ resource "null_resource" "db_ready" {
 module "docker" {
     source = "../docker"
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -987,8 +908,6 @@ module "docker" {
 resource "null_resource" "docker_ready" {
     count = local.lead_servers > 0 ? 1 : 0
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -1036,8 +955,6 @@ resource "null_resource" "gpg_remove_key" {
     ## Only admin and DB should need it atm
     count = var.use_gpg ? sum([local.admin_servers, local.is_only_db_count]) : 0
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -1224,8 +1141,6 @@ resource "null_resource" "add_keys" {
 resource "null_resource" "install_runner" {
     count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -1524,8 +1439,6 @@ resource "null_resource" "kubernetes_admin" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -1553,7 +1466,7 @@ resource "null_resource" "kubernetes_admin" {
 
             bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION;
             bash $KUBE_SCRIPTS/nginxKubeProxy.sh -r ${var.root_domain_name} $NGINX_ARGS
-            ${local.server_count == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-" : ""};
+            ${local.server_count == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-;" : ""}
             if [[ ${local.admin_servers} -gt 0 ]]; then
                 bash $KUBE_SCRIPTS/createClusterAccounts.sh -v $${VERSION//-00/} -a $ADMIN_IP $RUNNER_ARGS -u;
                 bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u -r;
@@ -1580,8 +1493,6 @@ resource "null_resource" "kubernetes_worker" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -1624,8 +1535,6 @@ resource "null_resource" "kubernetes_worker" {
 resource "null_resource" "configure_smtp" {
     count = local.admin_servers
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -1666,8 +1575,6 @@ resource "null_resource" "configure_smtp" {
 resource "null_resource" "reboot_environments" {
     count = local.admin_servers
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
@@ -1748,8 +1655,6 @@ resource "null_resource" "reboot_environments" {
 resource "null_resource" "enable_autoupgrade" {
     count = local.server_count
     depends_on = [
-        module.provisioners,
-        module.hostname,
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,

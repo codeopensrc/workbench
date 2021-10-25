@@ -9,6 +9,7 @@ terraform {
 
 ### All in config{}
 # variable "root_domain_name" {}
+# variable "gitlab_subdomain" {}
 # variable "local_ssh_key_file" {}
 # variable "active_env_provider" {}
 # variable "server_name_prefix" {}
@@ -42,6 +43,9 @@ terraform {
 # variable "aws_access_key" {}
 # variable "aws_secret_key" {}
 # variable "do_token" {}
+# variable "do_spaces_region" { default = "" }
+# variable "do_spaces_access_key" { default = "" }
+# variable "do_spaces_secret_key" { default = "" }
 # variable "packer_config" {}
 # variable "misc_cname" {}
 variable "config" {}

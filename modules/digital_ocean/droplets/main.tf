@@ -202,3 +202,45 @@ resource "digitalocean_droplet" "main" {
     }
 }
 
+
+
+module "init" {
+    source = "../../init"
+    count = var.servers.count
+
+    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+    do_spaces_region = var.config.do_spaces_region
+    do_spaces_access_key = var.config.do_spaces_access_key
+    do_spaces_secret_key = var.config.do_spaces_secret_key
+}
+
+module "consul" {
+    source = "../../consul"
+    count = var.servers.count
+    depends_on = [module.init]
+
+    role = var.servers.roles[0]
+    region = var.config.region
+    datacenter_has_admin = var.admin_ip_public != "" ? true : false
+    consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : digitalocean_droplet.main[0].ipv4_address
+    #consul_wan_leader_ip = var.consul_wan_leader_ip
+
+    name = digitalocean_droplet.main[count.index].name
+    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+    private_ip = digitalocean_droplet.main[count.index].ipv4_address_private
+}
+
+module "hostname" {
+    source = "../../hostname"
+    count = var.servers.count
+    depends_on = [module.init, module.consul]
+
+    region = var.config.region
+    server_name_prefix = var.config.server_name_prefix
+    root_domain_name = var.config.root_domain_name
+    hostname = "${var.config.gitlab_subdomain}.${var.config.root_domain_name}"
+
+    name = digitalocean_droplet.main[count.index].name
+    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+    private_ip = digitalocean_droplet.main[count.index].ipv4_address_private
+}

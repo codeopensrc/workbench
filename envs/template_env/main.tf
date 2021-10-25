@@ -106,6 +106,7 @@ module "mix" {
 locals {
     config = {
         root_domain_name = local.root_domain_name
+        gitlab_subdomain = var.gitlab_subdomain
         additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
         additional_ssl = var.additional_ssl
         server_name_prefix = local.server_name_prefix
@@ -116,6 +117,9 @@ locals {
         do_token = var.do_token
         do_region = var.do_region
         do_ssh_fingerprint = var.do_ssh_fingerprint
+        do_spaces_region = var.do_spaces_region
+        do_spaces_access_key = var.do_spaces_access_key
+        do_spaces_access_key = var.do_spaces_access_key
 
         aws_key_name = var.aws_key_name
         aws_access_key = var.aws_access_key

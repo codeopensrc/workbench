@@ -43,7 +43,6 @@ variable "logs_prefix" { default = "" }
 variable "email_image" { default = "" }
 variable "service_repo_name" { default = "" }
 
-variable "prev_module_output" {}
 
 locals {
     allow_cron_backups = terraform.workspace == "default"
@@ -55,7 +54,6 @@ resource "null_resource" "admin" {
     provisioner "remote-exec" {
         inline = [
             "mkdir -p /root/code/cron",
-            "echo ${join(",", var.prev_module_output)}"
         ]
     }
 
@@ -89,7 +87,6 @@ resource "null_resource" "db" {
     provisioner "remote-exec" {
         inline = [
             "mkdir -p /root/code/cron",
-            "echo ${join(",", var.prev_module_output)}"
         ]
     }
 
@@ -141,7 +138,6 @@ resource "null_resource" "leader" {
     provisioner "remote-exec" {
         inline = [
             "mkdir -p /root/code/cron",
-            "echo ${join(",", var.prev_module_output)}"
         ]
     }
 

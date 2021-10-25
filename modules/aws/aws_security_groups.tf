@@ -126,7 +126,7 @@ resource "aws_security_group" "app_ports" {
         protocol    = "tcp"
     }
 
-    inbound_rule {
+    ingress {
         description = "Kubernetes"
         from_port   = 30000                   ## *Purpose* NodePort Services†
         to_port     = 32767

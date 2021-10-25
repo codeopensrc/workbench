@@ -40,5 +40,5 @@ For current public usage, this is intended for development/homelab use to quickl
 
 That being said, it is currently and will actively continue being used to provision, update, maintain, and migrate a number of **personal** _production_ services and infrastructure.  
 
-[Personal Website](https://www.codeopensrc.om), [Personal GitLab](https://gitlab.codeopensrc.com/explore?sort=latest_activity_desc), [(Private) Mattermost](https://chat.codeopensrc.com/), [(Private) Wekan](https://wekan.codeopensrc.com/)  
+[Personal Website](https://www.codeopensrc.com), [Personal GitLab](https://gitlab.codeopensrc.com/explore?sort=latest_activity_desc), [(Private) Mattermost](https://chat.codeopensrc.com/), [(Private) Wekan](https://wekan.codeopensrc.com/)  
 
