@@ -168,8 +168,8 @@ resource "null_resource" "start_containers" {
                         fi
 
                         ### IF OUR IP IS ALSO AN ADMIN IP, THEN IT WILL HAVE GITLAB (for now) SO DO THIS
-                        IS_ADMIN_IP=${contains(var.admin_ips, element(var.public_ips, count.index)) ? "true" : "false"}
-                        if [ "$SERVICE_NAME" = "proxy" ] && [ "$IS_ADMIN_IP" = "true" ]; then
+                        USE_NON_DEFAULT_PORTS=${length(var.admin_ips) == 0 || contains(var.admin_ips, element(var.public_ips, count.index)) ? "true" : "false"}
+                        if [ "$SERVICE_NAME" = "proxy" ] && [ "$USE_NON_DEFAULT_PORTS" = "true" ]; then
                             HTTP_PORT=${var.http_port};
                             HTTPS_PORT=${var.https_port};
                             sed -i "s|80:80|$HTTP_PORT:80|" /root/repos/$REPO_NAME/docker-compose.yml;

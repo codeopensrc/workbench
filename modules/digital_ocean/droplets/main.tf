@@ -138,8 +138,7 @@ resource "digitalocean_droplet" "main" {
         EOF
         destination = "/tmp/changeip-${self.name}.sh"
         connection {
-            ## TODO: How does this work if its empty?
-            host     = var.admin_ip_public ? var.admin_ip_public : self.ipv4_address
+            host     = var.admin_ip_public != "" ? var.admin_ip_public : self.ipv4_address
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)

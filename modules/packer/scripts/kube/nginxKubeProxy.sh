@@ -1,9 +1,5 @@
 #!/bin/bash
 
-## TODO: This ONLY handles proxied requests and not configured to receive requests from the internet at ths time
-## The NodePort service needs to bind to port 80 and 443 ONLY on web app servers
-## The nginx service/container also needs to have the SSL certs loaded into it as well
-
 ROOT_DOMAIN=$(consul kv get domainname)
 CONSUL_KV_APPS="applist/"
 PROD_NS="production"
@@ -17,7 +13,7 @@ OPT_VERSION="stable"
 ##   even doing doing it before running the entrypoint
 ##  https://github.com/gliderlabs/docker-alpine/issues/539#issuecomment-856066068
 
-while getopts "a:b:d:p:r:v:" flag; do
+while getopts "a:b:d:p:r:v:n:i:c:s" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) CONSUL_KV_APPS=${OPTARG};;
@@ -26,11 +22,18 @@ while getopts "a:b:d:p:r:v:" flag; do
         p) PROD_NS=${OPTARG};;
         r) ROOT_DOMAIN=${OPTARG};;
         v) OPT_VERSION=${OPTARG};;
+        n) OPT_NODEPORT=${OPTARG};;
+        i) EXTERNAL_IPS=${OPTARG};;
+        c) SSL_CERTS=${OPTARG};;
+        s) SSL=true;;
     esac
 done
 
 if [[ -z $ROOT_DOMAIN ]]; then echo "Domain empty. Use -r to provide root_domain (not fqdn)."; exit; fi
 
+echo "Starting the nginxKubeProxy service"
+echo "Make sure any apps you wish to be routed are in consuls KV store"
+echo "applist/SERVICE => SUBDOMAIN   (not the fqdn) -> 'app' .domain.com"
 
 ## Why we need it -
 ## https://stackoverflow.com/questions/43326913/nginx-proxy-pass-directive-string-interpolation/43341304#43341304
@@ -39,15 +42,18 @@ SERVICE_BASE_DNS="svc.cluster.local"
 
 IMAGE=nginx
 TAG=${OPT_VERSION}
-IMAGE_PORT=80
+HTTP_PORT=80
+HTTPS_PORT=443
 APPNAME=nginx-proxy
 NODEPORT=31000
+CERTPORT=7080
 
+if [[ -n $OPT_NODEPORT ]]; then NODEPORT=$OPT_NODEPORT; fi
 
 echo "APPNAME: $APPNAME"
 echo "IMAGE: $IMAGE"
 echo "TAG: $TAG"
-echo "IMAGE_PORT: $IMAGE_PORT"
+echo "NODEPORT: $NODEPORT"
 echo "ROOT_DOMAIN: $ROOT_DOMAIN"
 #exit
 
@@ -58,7 +64,51 @@ SRV=($(echo "$KEYS" | cut -d ":" -f1))
 DNS=($(echo "$KEYS" | cut -d ":" -f2-))
 
 
-#exit
+
+if [[ -z $SSL ]]; then
+    COMMENT_IF_NO_SSL="#"
+    SERVICE_NODEPORT="nodePort: $NODEPORT"
+else
+    COMMENT_IF_SSL="#"
+    SERVICE_NODEPORT=""
+    SSL_SERVICE=$(cat <<-EOF | sed -r "s/  (.+)/      \1/g"
+	- name: https
+	  protocol: TCP
+	  port: $HTTPS_PORT
+	  targetPort: 443
+	EOF
+	)
+
+    if [[ -z $EXTERNAL_IPS ]]; then
+        echo "Using -s for SSL requires external IPs using the -i flag. -i IP1,IP2 etc. Exiting"
+        exit
+    fi
+
+    SPLIT_IPS=( $(echo "$EXTERNAL_IPS" | tr "," "\n") )
+    IPS=$(for IP in "${SPLIT_IPS[@]}"; do echo "- $IP"; done)
+    SERVICE_EXTERNAL_IP=$(cat <<-EOF | sed -r "s/-(.+)/    -\1/g"
+	externalIPs:
+	${IPS[@]}
+	EOF
+	)
+
+    ## Kubernetes does not like args wth strings containing dashes, so we base64 encode it then later decode
+    SSL_FULLCHAIN=$(consul kv get ssl/fullchain | base64)
+    SSL_PRIVKEY=$(consul kv get ssl/privkey | base64)
+
+    if [[ -z $SSL_FULLCHAIN || -z $SSL_PRIVKEY ]]; then
+        echo "Could not find SSL certs in consul"
+
+        if [[ -z $SSL_CERTS ]]; then
+            echo "Using -s for SSL requires certs in consul kv ssl/fullchain and ssl/privkey"
+            echo "or specifying certs dir using -c CERT_DIR. Exiting"
+            exit
+        fi
+
+        SSL_FULLCHAIN=$(base64 < $SSL_CERTS/fullchain.pem)
+        SSL_PRIVKEY=$(base64 < $SSL_CERTS/privkey.pem)
+    fi
+fi
 
 ## $http_host is host:port
 ## $host is just host
@@ -76,11 +126,24 @@ map \$host \$x {
 }
 \n
 server {
-    listen *:80;
-    server_name *.'${ROOT_DOMAIN}';
-    location / {
-        proxy_pass "http://\$x";
-    }
+    \n listen *:80;
+    \n server_name *.'${ROOT_DOMAIN}';
+    \n location /.well-known/ { return 302 "http://cert.'${ROOT_DOMAIN}':'${CERTPORT}'\$request_uri"; }
+    \n '${COMMENT_IF_NO_SSL}'location / { return 302 https://\$host:443\$request_uri; }
+    \n '${COMMENT_IF_SSL}'location / { proxy_pass "http://\$x"; }
+    \n
+}
+\n
+server {
+    \n '${COMMENT_IF_NO_SSL}'listen *:443 ssl;
+    \n server_name *.'${ROOT_DOMAIN}';
+    \n ssl_ciphers ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4;
+    \n server_tokens off; 
+    \n ssl_prefer_server_ciphers on;
+    \n '${COMMENT_IF_NO_SSL}'ssl_certificate     /etc/ssl/'${ROOT_DOMAIN}'/fullchain.pem;
+    \n '${COMMENT_IF_NO_SSL}'ssl_certificate_key /etc/ssl/'${ROOT_DOMAIN}'/privkey.pem;
+    \n location / { proxy_pass "http://\$x"; }
+    \n
 }\n'
 
 ## Create a kubernetes service
@@ -95,10 +158,13 @@ spec:
   selector:
     app: $APPNAME
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: $IMAGE_PORT
-      nodePort: $NODEPORT
+    - name: http
+      protocol: TCP
+      port: $HTTP_PORT
+      targetPort: 80
+      $SERVICE_NODEPORT
+    $SSL_SERVICE
+  $SERVICE_EXTERNAL_IP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -120,21 +186,34 @@ spec:
       - name: $APPNAME
         image: $IMAGE:$TAG
         ports:
-        - containerPort: $IMAGE_PORT
+        - containerPort: 80
+        - containerPort: 443
         volumeMounts:
         - mountPath: /etc/nginx/templates
           name: conf-volume
+        - mountPath: /etc/ssl/${ROOT_DOMAIN}
+          name: ssl-volume
       initContainers:
       - name: ${APPNAME}-init
         image: $IMAGE:$TAG
-        command: ['sh', '-c', 'printf "$NGINX_FILE" | tee /etc/nginx/templates/services.conf.template'] 
+        command: ['/bin/sh', '-c']
+        args:
+          - 'printf "$NGINX_FILE" | tee /etc/nginx/templates/services.conf.template;
+            printf "${SSL_PRIVKEY}" | base64 -d -i > /etc/ssl/${ROOT_DOMAIN}/privkey.pem;
+            printf "${SSL_FULLCHAIN}" | base64 -d -i > /etc/ssl/${ROOT_DOMAIN}/fullchain.pem;'
         volumeMounts:
         - mountPath: /etc/nginx/templates
           name: conf-volume
+        - mountPath: /etc/ssl/${ROOT_DOMAIN}
+          name: ssl-volume
       volumes:
       - name: conf-volume
         emptyDir:
           medium: Memory
-          sizeLimit: "3M"
+          sizeLimit: "2M"
+      - name: ssl-volume
+        emptyDir:
+          medium: Memory
+          sizeLimit: "2M"
 EOF
 

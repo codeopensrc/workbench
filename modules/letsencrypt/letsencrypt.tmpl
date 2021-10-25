@@ -1,5 +1,14 @@
 #!/bin/bash
 
+CERT_PORT=7080
+
+while getopts "p:" flag; do
+    # These become set during 'getopts'  --- $OPTIND $OPTARG
+    case "$flag" in
+        p) CERT_PORT=${OPTARG};;
+    esac
+done
+
 source /root/code/scripts/letsencrypt_vars.sh
 
 sudo apt-get update
@@ -23,7 +32,7 @@ if [[ ! -d $LETSENCRYPT_DIR ]] || [[ $RUN_FROM_CRON ]]; then
 
     docker run --name le_nginx \
         -v $WEBROOT:/usr/share/nginx/html:ro \
-        -p 7080:80 \
+        -p $CERT_PORT:80 \
         --rm \
         -d nginx
 

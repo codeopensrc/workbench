@@ -153,7 +153,7 @@ resource "digitalocean_firewall" "app" {
 resource "digitalocean_firewall" "admin" {
     name = "${local.vpc_name}-admin"
 
-    droplet_ids = local.admin_server_ids
+    droplet_ids = local.admin_servers > 0 ? local.admin_server_ids : local.all_lead_server_ids
 
     # description = "http"
     inbound_rule {

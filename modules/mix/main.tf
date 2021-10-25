@@ -100,7 +100,7 @@ module "cron" {
     s3bucket = var.s3bucket
     use_gpg = var.use_gpg
 
-    servers = local.server_count
+    servers = local.server_count - local.is_only_build_count
 
     lead_servers = local.lead_servers
     db_servers = local.db_servers
@@ -227,6 +227,10 @@ resource "null_resource" "add_proxy_hosts" {
 
                 consul kv put applist/$SERVICE_NAME $SUBDOMAIN_NAME
 
+                ### This is temporary
+                consul kv put apps/$SUBDOMAIN_NAME/green _main
+                consul kv put apps/$SUBDOMAIN_NAME/blue _dev
+                consul kv put apps/$SUBDOMAIN_NAME/active green
             %{ endfor }
 
             consul kv put domainname ${var.root_domain_name}
@@ -1144,7 +1148,7 @@ resource "null_resource" "setup_letsencrypt" {
     provisioner "remote-exec" {
         inline = [
             "chmod +x /root/code/scripts/letsencrypt.sh",
-            "export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh",
+            "export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh ${local.admin_servers == 0 ? "-p 80" : ""}",
             "sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
             "sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
             (local.admin_servers > 0 ? "gitlab-ctl reconfigure" : "echo 0"),
@@ -1512,8 +1516,11 @@ resource "null_resource" "install_unity" {
 }
 
 
+## NOTE: Kubernetes requires 2 cores and 2 GB of ram
 resource "null_resource" "kubernetes_admin" {
-    count = local.admin_servers
+    ## TODO: Now that this works with or without admin role server, have this 
+    ##  depend on container orchestrator choice or simply `use_kubernetes`
+    count = 1
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
@@ -1522,6 +1529,9 @@ resource "null_resource" "kubernetes_admin" {
         module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
+        null_resource.docker_ready,
+        null_resource.setup_letsencrypt,
+        null_resource.add_keys,
         null_resource.install_runner,
         null_resource.register_runner,
         null_resource.unregister_runner,
@@ -1535,11 +1545,19 @@ resource "null_resource" "kubernetes_admin" {
         content = <<-EOF
             KUBE_SCRIPTS=$HOME/code/scripts/kube
             VERSION="1.20.11-00"
+            LEAD_IPS="${join(",", var.lead_public_ips)}"
+            ADMIN_IP="${local.admin_servers > 0 ? element(var.admin_private_ips, 0) : ""}"
+            RUNNER_ARGS="${var.gitlab_runner_tokens["service"] != "" ? "-t ${var.gitlab_runner_tokens["service"]}" : ""}"
+            ## For now if no admin, use 'default' as production namespace
+            NGINX_ARGS="${local.admin_servers == 0 ? "-s -i $LEAD_IPS -p default" : ""}"
 
-            bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION -n;
-            ${length(var.servers) == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-" : "echo 0"};
-            bash $KUBE_SCRIPTS/createClusterAccounts.sh -v $${VERSION//-00/} -a ${element(var.admin_private_ips, 0)} -u ${var.gitlab_runner_tokens["service"] != "" ? "-t ${var.gitlab_runner_tokens["service"]}" : ""};
-            bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u -r;
+            bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION;
+            bash $KUBE_SCRIPTS/nginxKubeProxy.sh -r ${var.root_domain_name} $NGINX_ARGS
+            ${local.server_count == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-" : ""};
+            if [[ ${local.admin_servers} -gt 0 ]]; then
+                bash $KUBE_SCRIPTS/createClusterAccounts.sh -v $${VERSION//-00/} -a $ADMIN_IP $RUNNER_ARGS -u;
+                bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u -r;
+            fi
         EOF
         destination = "/tmp/init_kubernetes.sh"
     }
@@ -1551,15 +1569,14 @@ resource "null_resource" "kubernetes_admin" {
     }
 
     connection {
-        host = element(var.admin_public_ips, count.index)
+        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
         type = "ssh"
     }
 }
 
 
 resource "null_resource" "kubernetes_worker" {
-    #TODO: Get kubernetes to work without an admin server
-    count = local.admin_servers > 0 ? local.is_not_admin_count : 0
+    count = local.admin_servers > 0 ? local.is_not_admin_count : local.server_count - 1
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
@@ -1596,7 +1613,9 @@ resource "null_resource" "kubernetes_worker" {
     }
 
     connection {
-        host = element(tolist(setsubtract(local.all_public_ips, var.admin_public_ips)), count.index)
+        ## TODO: Till refactor, this has an issue where it may reprovision the 
+        ##  wrong ip (ips can get reordered) if we scale AFTER the initial bootstrapping
+        host = element(tolist(setsubtract(local.all_public_ips, [local.admin_servers > 0 ? var.admin_public_ips[0] : var.lead_public_ips[0]] )), count.index)
         type = "ssh"
     }
 }

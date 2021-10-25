@@ -128,7 +128,7 @@ locals {
 
     all_names = distinct(concat(var.admin_names, var.lead_names, var.db_names, var.build_names))
 
-    ### TODO: Holy moly fix these 2
+    ## Allows db with lead
     is_only_leader_count = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
@@ -137,12 +137,12 @@ locals {
     is_only_db_count = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
-        if contains(SERVER.roles, "db") && !contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
+        if contains(SERVER.roles, "db") && length(SERVER.roles) == 1
     ])))
     is_only_build_count = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
-        if contains(SERVER.roles, "build")
+        if contains(SERVER.roles, "build") && length(SERVER.roles) == 1
     ])))
     is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
 

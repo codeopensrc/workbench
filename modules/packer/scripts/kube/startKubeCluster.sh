@@ -6,14 +6,13 @@ VERSION="1.22.1-00"
 ## TODO: Predict interface, eth1 if available otherwise eth0 
 NET_IFACE=eth1
 
-while getopts "i:v:grn" flag; do
+while getopts "i:v:gr" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         i) NET_IFACE=$OPTARG;;
         v) VERSION=$OPTARG;;
         g) GET_JOIN="true";;
         r) RESET="true";;
-        n) NON_INTERACTIVE="true";;
     esac
 done
 
@@ -155,21 +154,6 @@ sleep 30
 ## To verify 
 ## ps -ax | grep iface
 
-
-echo "Starting the nginxKubeProxy service"
-echo "Make sure any apps you wish to be routed are in consuls KV store"
-echo "applist/SERVICE => SUBDOMAIN   (not the fqdn) -> 'app' .domain.com"
-echo ""
-echo "The service can be re-run at anytime using the following command:"
-echo "bash \$HOME/code/scripts/kube/nginxKubeProxy.sh -r \$(hostname -d)"
-echo ""
-
-if [[ -z $NON_INTERACTIVE ]]; then
-    read -p 'Press any key to continue' uservar
-fi
-
-## TODO: Relative to file location by not where we run it from
-bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r $(hostname -d)
 
 echo "===================================="
 echo "Command to join workers to this cluster:"
