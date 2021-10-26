@@ -1,23 +1,14 @@
 
-variable "servers" { default = 0 }
-variable "public_ips" { default = "" }
-variable "db_private_ips" { default = "" }
-variable "db_public_ips" { default = "" }
-
+variable "public_ip" { default = "" }
 variable "known_hosts" { default = [] }
-variable "active_env_provider" { default = "" }
 variable "root_domain_name" { default = "" }
 variable "deploy_key_location" {}
 
+variable "private_ip" { default = "" }
 variable "pg_read_only_pw" { default = "" }
-variable "private_ips" {
-    type = list(string)
-    default = []
-}
 
 
 resource "null_resource" "access" {
-    count = var.servers
 
     provisioner "remote-exec" {
         inline = [
@@ -61,13 +52,12 @@ resource "null_resource" "access" {
     }
 
     connection {
-        host = element(var.public_ips, count.index)
+        host = var.public_ip
         type = "ssh"
     }
 }
 
 resource "null_resource" "reprovision_scripts" {
-    count = var.servers
     depends_on = [
         null_resource.access,
     ]
@@ -79,14 +69,13 @@ resource "null_resource" "reprovision_scripts" {
     }
 
     connection {
-        host = element(var.public_ips, count.index)
+        host = var.public_ip
         type = "ssh"
     }
 }
 
 # TODO: This is temporary until we switch over db urls being application specific
 resource "null_resource" "consul_checks" {
-    count = var.servers
 
     depends_on = [
         null_resource.access,
@@ -104,7 +93,7 @@ resource "null_resource" "consul_checks" {
         # TODO: Configurable user/pass per DB for a readonly user check
         content = templatefile("${path.module}/templatefiles/checks/consul_pg.json", {
             read_only_pw = var.pg_read_only_pw
-            ip_address = element(var.db_private_ips, count.index)
+            ip_address = var.private_ip
             port = "5432"
             version = "9.5"
         })
@@ -114,7 +103,7 @@ resource "null_resource" "consul_checks" {
     provisioner "file" {
         # TODO: Un-hardcode version/port
         content = templatefile("${path.module}/templatefiles/checks/consul_mongo.json", {
-            ip_address = element(var.db_private_ips, count.index)
+            ip_address = var.private_ip
             port = "27017"
             version = "4.4.6"
         })
@@ -144,16 +133,8 @@ resource "null_resource" "consul_checks" {
     }
 
     connection {
-        host = element(var.public_ips, count.index)
+        host = var.public_ip
         type = "ssh"
     }
 }
 
-output "output" {
-    depends_on = [
-        null_resource.access,
-        null_resource.reprovision_scripts,
-        null_resource.consul_checks,
-    ]
-    value = null_resource.consul_checks.*.id
-}

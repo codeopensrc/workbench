@@ -38,17 +38,12 @@ variable "dev_pg_password" {}
 
 variable "aws_bot_access_key" { default = "" }
 variable "aws_bot_secret_key" { default = "" }
-variable "pg_read_only_pw" { default = "" }
-
-variable "deploy_key_location" {}
 
 variable "gitlab_backups_enabled" { default = "" }
 variable "import_gitlab" { default = "" }
 variable "import_gitlab_version" { default = "" }
 variable "gitlab_runner_tokens" { type = map(string) }
 variable "num_gitlab_runners" { default = 0 }
-
-variable "known_hosts" { default = [] }
 
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
@@ -68,7 +63,6 @@ variable "misc_repos" {
     }))
 }
 
-variable "gitlab_subdomain" { default = "" }
 variable "contact_email" { default = "" }
 variable "use_gpg" { default = false }
 variable "bot_gpg_name" { default = "" }
@@ -146,14 +140,6 @@ locals {
     ])))
     is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
 
-
-    # Simple logic for now. One datacenter/provider per env. Eventually something like AWS east coast and DO west coast connected would be cool
-    consul_lan_leader_ip = element(concat(var.admin_private_ips, var.lead_private_ips), 0)
-
-    consul_admin_adv_addresses = var.admin_private_ips
-    consul_lead_adv_addresses = var.lead_private_ips
-    consul_db_adv_addresses = var.db_private_ips
-    consul_build_adv_addresses = var.build_private_ips
 }
 
 ## for_each example

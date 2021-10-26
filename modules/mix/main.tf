@@ -34,32 +34,11 @@ module "gpg" {
 
 }
 
-module "provision_files" {
-    source = "../provision"
-    depends_on = [module.gpg]
-
-    servers = local.server_count
-
-    public_ips  = local.all_public_ips
-    private_ips = local.all_private_ips
-
-    known_hosts = var.known_hosts
-    deploy_key_location = var.deploy_key_location
-    root_domain_name = var.root_domain_name
-
-    # DB checks
-    db_private_ips = var.db_private_ips
-    db_public_ips = var.db_public_ips
-    active_env_provider = var.active_env_provider
-    pg_read_only_pw = var.pg_read_only_pw
-}
-
-
 ### NOTE: Only thing for this is consul needs to be installed
 resource "null_resource" "add_proxy_hosts" {
     count      = 1
     depends_on = [
-        module.provision_files
+        module.gpg
     ]
 
     #### TODO: Find a way to gradually migrate from blue -> green and vice versa vs
@@ -136,7 +115,6 @@ resource "null_resource" "add_proxy_hosts" {
 resource "null_resource" "prometheus_targets" {
     count = local.admin_servers
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
     ]
 
@@ -535,7 +513,6 @@ resource "null_resource" "reauthorize_mattermost" {
 resource "null_resource" "node_exporter" {
     count = local.admin_servers > 0 ? local.server_count : 0
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab
@@ -601,7 +578,6 @@ resource "null_resource" "node_exporter" {
 resource "null_resource" "install_loki" {
     count = local.admin_servers
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab
@@ -650,7 +626,6 @@ module "admin_nginx" {
     count = local.lead_servers > 0 ? local.admin_servers : 0
     source = "../nginx"
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab
@@ -678,7 +653,6 @@ module "admin_nginx" {
 resource "null_resource" "install_dbs" {
     count      = local.db_servers > 0 ? local.db_servers : 0
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab
@@ -710,7 +684,6 @@ resource "null_resource" "install_dbs" {
 resource "null_resource" "import_dbs" {
     count = var.import_dbs && local.db_servers > 0 ? length(var.dbs_to_import) : 0
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
@@ -763,7 +736,6 @@ resource "null_resource" "import_dbs" {
 resource "null_resource" "db_ready" {
     count = local.db_servers
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
@@ -812,7 +784,6 @@ resource "null_resource" "db_ready" {
 module "docker" {
     source = "../docker"
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
@@ -839,7 +810,6 @@ module "docker" {
 resource "null_resource" "docker_ready" {
     count = local.lead_servers > 0 ? 1 : 0
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
@@ -885,7 +855,6 @@ resource "null_resource" "gpg_remove_key" {
     ## Only admin and DB should need it atm
     count = var.use_gpg ? sum([local.admin_servers, local.is_only_db_count]) : 0
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
@@ -1070,7 +1039,6 @@ resource "null_resource" "add_keys" {
 resource "null_resource" "install_runner" {
     count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.setup_letsencrypt,
         null_resource.add_keys
@@ -1367,7 +1335,6 @@ resource "null_resource" "kubernetes_admin" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.docker_ready,
         null_resource.setup_letsencrypt,
@@ -1420,7 +1387,6 @@ resource "null_resource" "kubernetes_worker" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,
         null_resource.register_runner,
@@ -1461,7 +1427,6 @@ resource "null_resource" "kubernetes_worker" {
 resource "null_resource" "configure_smtp" {
     count = local.admin_servers
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,
         null_resource.register_runner,
@@ -1500,7 +1465,6 @@ resource "null_resource" "configure_smtp" {
 resource "null_resource" "reboot_environments" {
     count = local.admin_servers
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,
         null_resource.register_runner,
@@ -1579,7 +1543,6 @@ resource "null_resource" "reboot_environments" {
 resource "null_resource" "enable_autoupgrade" {
     count = local.server_count
     depends_on = [
-        module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,
         null_resource.register_runner,

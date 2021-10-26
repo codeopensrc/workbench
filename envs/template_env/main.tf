@@ -64,9 +64,6 @@ module "mix" {
 
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
-    pg_read_only_pw = var.pg_read_only_pw
-
-    deploy_key_location = var.deploy_key_location
 
     gitlab_backups_enabled = var.gitlab_backups_enabled
     import_gitlab = var.import_gitlab
@@ -74,11 +71,9 @@ module "mix" {
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_tokens : {service = ""}
     num_gitlab_runners = local.num_gitlab_runners
 
-    known_hosts = var.known_hosts
     app_definitions = var.app_definitions
     misc_repos = var.misc_repos
 
-    gitlab_subdomain = var.gitlab_subdomain
     contact_email      = var.contact_email
 
     sendgrid_apikey = local.sendgrid_apikey
@@ -179,5 +174,9 @@ locals {
         redis_dbs = local.redis_dbs
         pg_dbs = local.pg_dbs
         mongo_dbs = local.mongo_dbs
+
+        known_hosts = var.known_hosts
+        deploy_key_location = var.deploy_key_location
+        pg_read_only_pw = var.pg_read_only_pw
     }
 }

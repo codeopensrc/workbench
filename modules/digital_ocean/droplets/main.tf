@@ -248,8 +248,8 @@ module "hostname" {
 
 module "cron" {
     source = "../../cron"
-    depends_on = [module.init, module.consul, module.hostname]
     count = var.servers.count
+    depends_on = [module.init, module.consul, module.hostname]
 
     public_ip = digitalocean_droplet.main[count.index].ipv4_address
     roles = var.servers.roles
@@ -269,3 +269,18 @@ module "cron" {
     pg_dbs = length(var.config.pg_dbs) > 0 ? var.config.pg_dbs : []
 }
 
+module "provision" {
+    source = "../../provision"
+    count = var.servers.count
+    depends_on = [module.init, module.consul, module.hostname, module.cron]
+
+    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+
+    known_hosts = var.config.known_hosts
+    root_domain_name = var.config.root_domain_name
+    deploy_key_location = var.config.deploy_key_location
+
+    # DB checks
+    pg_read_only_pw = var.config.pg_read_only_pw
+    private_ip = digitalocean_droplet.main[count.index].ipv4_address_private
+}
