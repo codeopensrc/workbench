@@ -1,29 +1,5 @@
 #### ===== Leader =====
 
-# Name: Run Service
-MAILTO="root"
-SHELL="/bin/bash"
-HOME="/root"
-${run_service ? "" : "#"}0,20,40 4,5,6,7,8,9,10,11,12,13,14,15,16,17 * * 1-4 bash $HOME/code/scripts/misc/runService.sh -s ${docker_service_name} -f ${folder_location} -r ${service_repo_name} >> /dev/null 2>>$HOME/code/logs/errors.log
-
-# Name: Email Log
-MAILTO="root"
-SHELL="/bin/bash"
-HOME="/root"
-${send_logs ? "" : "#"}30 4 * * 2-5 bash $HOME/code/scripts/misc/sendLog.sh -s ${consul_service_name} -l ${logs_prefix} -i "${email_image}" >> /dev/null 2>>$HOME/code/logs/errors.log
-
-# Name: Send JSONs
-MAILTO="root"
-SHELL="/bin/bash"
-HOME="/root"
-${send_jsons ? "" : "#"}30 22 * * 0 bash $HOME/code/scripts/misc/sendJsons.sh -a ${s3alias} -b ${s3bucket} >> /dev/null 2>>$HOME/code/logs/errors.log
-
-# Name: Cleanup Docker Containers
-MAILTO="root"
-SHELL="/bin/bash"
-HOME="/root"
-${run_service ? "" : "#"}45 4 * * 2-5 /usr/bin/docker rm $(/usr/bin/docker ps -aq -f status=exited)
-
 # Name: Cleanup Minio Temp Object Storage
 MAILTO="root"
 SHELL="/bin/bash"

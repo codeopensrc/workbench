@@ -21,9 +21,6 @@ variable "additional_ssl" {}
 variable "sendgrid_apikey" { default = "" }
 variable "sendgrid_domain" { default = "" }
 
-variable "run_service_enabled" {}
-variable "send_logs_enabled" {}
-variable "send_jsons_enabled" {}
 variable "import_dbs" {}
 variable "install_unity3d" { default = false }
 
@@ -31,6 +28,9 @@ variable "dbs_to_import" {
     type = list(object({ type=string, s3bucket=string, s3alias=string,
         dbname=string, import=string, backups_enabled=string, fn=string }))
 }
+variable "redis_dbs" { default = [] }
+variable "pg_dbs" { default = [] }
+variable "mongo_dbs" { default = [] }
 
 variable "serverkey" {}
 variable "pg_password" {}
@@ -146,29 +146,6 @@ locals {
     ])))
     is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
 
-
-    redis_dbs = [
-        for db in var.dbs_to_import:
-        {name = db.dbname, backups_enabled = db.backups_enabled}
-        if db.type == "redis" && ( db.import == "true" || db.backups_enabled == "true" )
-    ]
-    pg_dbs = [
-        for db in var.dbs_to_import:
-        {name = db.dbname, backups_enabled = db.backups_enabled}
-        if db.type == "pg" && ( db.import == "true" || db.backups_enabled == "true" )
-    ]
-    mongo_dbs = [
-        for db in var.dbs_to_import:
-        {name = db.dbname, backups_enabled = db.backups_enabled}
-        if db.type == "mongo" && ( db.import == "true" || db.backups_enabled == "true" )
-    ]
-
-    docker_service_name   = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_service_name" ) : ""
-    consul_service_name   = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "consul_service_name" ) : ""
-    folder_location       = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "folder_location" ) : ""
-    logs_prefix           = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "logs_prefix" ) : ""
-    email_image           = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "email_image" ) : ""
-    service_repo_name     = contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : ""
 
     # Simple logic for now. One datacenter/provider per env. Eventually something like AWS east coast and DO west coast connected would be cool
     consul_lan_leader_ip = element(concat(var.admin_private_ips, var.lead_private_ips), 0)

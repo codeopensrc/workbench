@@ -1,32 +1,41 @@
 
 # All
-variable "servers" { default = 0 }
-variable "templates" { default = [] }
-variable "destinations" { default = [] }
+variable "public_ip" { default = "" }
+variable "roles" { default = [] }
 variable "s3alias" { default = "" }
 variable "s3bucket" { default = "" }
 variable "use_gpg" { default = false }
 
-variable "admin_servers" { default = 0 }
-variable "lead_servers" { default = 0 }
-variable "db_servers" { default = 0 }
-variable "admin_public_ips" { default = [] }
-variable "lead_public_ips" { default = [] }
-variable "db_public_ips" { default = [] }
+variable "templates" {
+    default = {
+        admin = "admin.tmpl"
+        leader = "leader.tmpl"
+        app = "app.tmpl"
+        redisdb = "redisdb.tmpl"
+        mongodb = "mongodb.tmpl"
+        pgdb = "pgdb.tmpl"
+    }
+}
+variable "destinations" {
+    default = {
+        admin = "/root/code/cron/admin.cron"
+        leader = "/root/code/cron/leader.cron"
+        app = "/root/code/cron/app.cron"
+        redisdb = "/root/code/cron/redisdb.cron"
+        mongodb = "/root/code/cron/mongodb.cron"
+        pgdb = "/root/code/cron/pgdb.cron"
+    }
+}
 
 #Admin
 variable "gitlab_backups_enabled" { default = false }
 
 #DB
-variable "num_dbs" { default = 0 }
 variable "redis_dbs" { default = [] }
 variable "mongo_dbs" { default = [] }
 variable "pg_dbs" { default = [] }
 
 #Leader
-variable "run_service" { default = false }
-variable "send_logs" { default = false }
-variable "send_jsons" { default = false }
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
@@ -35,26 +44,19 @@ variable "app_definitions" {
         use_custom_backup=string, custom_backup_file=string, backup_frequency=string
     }))
 }
-# TempLeader
-variable "docker_service_name" { default = "" }
-variable "consul_service_name" { default = "" }
-variable "folder_location" { default = "" }
-variable "logs_prefix" { default = "" }
-variable "email_image" { default = "" }
-variable "service_repo_name" { default = "" }
 
 
 locals {
     allow_cron_backups = terraform.workspace == "default"
 }
 
+
+
 resource "null_resource" "admin" {
-    count = var.admin_servers
+    count = contains(var.roles, "admin") ? 1 : 0
 
     provisioner "remote-exec" {
-        inline = [
-            "mkdir -p /root/code/cron",
-        ]
+        inline = [ "mkdir -p /root/code/cron", ]
     }
 
     provisioner "file" {
@@ -68,7 +70,7 @@ resource "null_resource" "admin" {
     }
 
     connection {
-        host = element(var.admin_public_ips, count.index)
+        host = var.public_ip
         type = "ssh"
     }
 }
@@ -78,16 +80,14 @@ resource "null_resource" "admin" {
 #  the files into a single crontab (this can be said for this entire module as illustrated
 #  by their similarities, but for now 1 module with several specific resources. Steps)
 resource "null_resource" "db" {
-    count = var.db_servers
+    count = contains(var.roles, "db") ? 1 : 0
 
     triggers = {
-        num_dbs = var.num_dbs
+        num_dbs = sum([length(var.redis_dbs), length(var.mongo_dbs), length(var.pg_dbs)])
     }
 
     provisioner "remote-exec" {
-        inline = [
-            "mkdir -p /root/code/cron",
-        ]
+        inline = [ "mkdir -p /root/code/cron" ]
     }
 
     provisioner "file" {
@@ -125,7 +125,7 @@ resource "null_resource" "db" {
     }
 
     connection {
-        host = element(var.db_public_ips, count.index)
+        host = var.public_ip
         type = "ssh"
     }
 }
@@ -133,31 +133,15 @@ resource "null_resource" "db" {
 
 
 resource "null_resource" "leader" {
-    count = var.lead_servers
+    count = contains(var.roles, "lead") ? 1 : 0
 
     provisioner "remote-exec" {
-        inline = [
-            "mkdir -p /root/code/cron",
-        ]
+        inline = [ "mkdir -p /root/code/cron" ]
     }
 
     provisioner "file" {
         content = fileexists("${path.module}/templates/${var.templates["leader"]}") ? templatefile("${path.module}/templates/${var.templates["leader"]}", {
-            run_service = var.run_service
-            send_logs = var.send_logs
-            send_jsons = var.send_jsons
-            s3alias = var.s3alias
-            s3bucket = var.s3bucket
             check_ssl = count.index == 0 ? true : false
-
-            # Temp
-            docker_service_name = var.docker_service_name
-            consul_service_name = var.consul_service_name
-            folder_location = var.folder_location
-            logs_prefix = var.logs_prefix
-            email_image = var.email_image
-            service_repo_name = var.service_repo_name
-
         }) : ""
         destination = var.destinations["leader"]
     }
@@ -178,14 +162,14 @@ resource "null_resource" "leader" {
     }
 
     connection {
-        host = element(var.lead_public_ips, count.index)
+        host = var.public_ip
         type = "ssh"
     }
 }
 
 
 resource "null_resource" "cron_exec" {
-    count = var.servers
+    count = contains(var.roles, "admin") || contains(var.roles, "lead") || contains(var.roles, "db") ? 1 : 0
 
     triggers = {
         # TODO: Only trigger update on certain servers
@@ -207,18 +191,7 @@ resource "null_resource" "cron_exec" {
     }
 
     connection {
-        host = element(distinct(concat(var.admin_public_ips, var.lead_public_ips, var.db_public_ips)), count.index)
+        host = var.public_ip
         type = "ssh"
     }
-}
-
-
-output "output" {
-    depends_on = [
-        null_resource.admin,
-        null_resource.db,
-        null_resource.leader,
-        null_resource.cron_exec,
-    ]
-    value = concat(null_resource.admin.*.id, null_resource.db.*.id, null_resource.leader.*.id, null_resource.cron_exec.*.id)
 }

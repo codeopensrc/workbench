@@ -4,8 +4,6 @@ variable "public_ips" { default = "" }
 variable "db_private_ips" { default = "" }
 variable "db_public_ips" { default = "" }
 
-variable "prev_module_output" {}
-
 variable "known_hosts" { default = [] }
 variable "active_env_provider" { default = "" }
 variable "root_domain_name" { default = "" }
@@ -23,7 +21,6 @@ resource "null_resource" "access" {
 
     provisioner "remote-exec" {
         inline = [
-            "echo ${join(",", var.prev_module_output)}",
             "rm /root/.ssh/known_hosts",
             "rm /root/.ssh/config",
             "rm /root/.ssh/deploy.key",

@@ -34,66 +34,9 @@ module "gpg" {
 
 }
 
-module "cron" {
-    source = "../cron"
-    depends_on = [module.gpg]
-
-    s3alias = var.s3alias
-    s3bucket = var.s3bucket
-    use_gpg = var.use_gpg
-
-    servers = local.server_count - local.is_only_build_count
-
-    lead_servers = local.lead_servers
-    db_servers = local.db_servers
-    admin_servers = local.admin_servers
-    admin_public_ips = var.admin_public_ips
-    lead_public_ips = var.lead_public_ips
-    db_public_ips = var.db_public_ips
-
-    templates = {
-        admin = "admin.tmpl"
-        leader = "leader.tmpl"
-        app = "app.tmpl"
-        redisdb = "redisdb.tmpl"
-        mongodb = "mongodb.tmpl"
-        pgdb = "pgdb.tmpl"
-    }
-    destinations = {
-        admin = "/root/code/cron/admin.cron"
-        leader = "/root/code/cron/leader.cron"
-        app = "/root/code/cron/app.cron"
-        redisdb = "/root/code/cron/redisdb.cron"
-        mongodb = "/root/code/cron/mongodb.cron"
-        pgdb = "/root/code/cron/pgdb.cron"
-    }
-
-    # DB specific
-    num_dbs = length(var.dbs_to_import)
-    redis_dbs = length(local.redis_dbs) > 0 ? local.redis_dbs : []
-    mongo_dbs = length(local.mongo_dbs) > 0 ? local.mongo_dbs : []
-    pg_dbs = length(local.pg_dbs) > 0 ? local.pg_dbs : []
-
-    # Leader specific
-    run_service = var.run_service_enabled
-    send_logs = var.send_logs_enabled
-    send_jsons = var.send_jsons_enabled
-    app_definitions = var.app_definitions
-
-    # Temp Leader specific
-    docker_service_name = local.docker_service_name
-    consul_service_name = local.consul_service_name
-    folder_location = local.folder_location
-    logs_prefix = local.logs_prefix
-    email_image = local.email_image
-    service_repo_name = local.service_repo_name
-
-    # Admin specific
-    gitlab_backups_enabled = var.gitlab_backups_enabled
-}
-
 module "provision_files" {
     source = "../provision"
+    depends_on = [module.gpg]
 
     servers = local.server_count
 
@@ -109,8 +52,6 @@ module "provision_files" {
     db_public_ips = var.db_public_ips
     active_env_provider = var.active_env_provider
     pg_read_only_pw = var.pg_read_only_pw
-
-    prev_module_output = module.cron.output
 }
 
 
@@ -118,7 +59,6 @@ module "provision_files" {
 resource "null_resource" "add_proxy_hosts" {
     count      = 1
     depends_on = [
-        module.cron,
         module.provision_files
     ]
 
@@ -196,7 +136,6 @@ resource "null_resource" "add_proxy_hosts" {
 resource "null_resource" "prometheus_targets" {
     count = local.admin_servers
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
     ]
@@ -593,11 +532,9 @@ resource "null_resource" "reauthorize_mattermost" {
 }
 
 
-
 resource "null_resource" "node_exporter" {
     count = local.admin_servers > 0 ? local.server_count : 0
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -664,7 +601,6 @@ resource "null_resource" "node_exporter" {
 resource "null_resource" "install_loki" {
     count = local.admin_servers
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -714,7 +650,6 @@ module "admin_nginx" {
     count = local.lead_servers > 0 ? local.admin_servers : 0
     source = "../nginx"
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -743,7 +678,6 @@ module "admin_nginx" {
 resource "null_resource" "install_dbs" {
     count      = local.db_servers > 0 ? local.db_servers : 0
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -756,12 +690,12 @@ resource "null_resource" "install_dbs" {
             "chmod +x /root/code/scripts/install/install_redis.sh",
             "chmod +x /root/code/scripts/install/install_mongo.sh",
             "chmod +x /root/code/scripts/install/install_pg.sh",
-            (length(local.redis_dbs) > 0 ? "sudo service redis_6379 start;" : "echo 0;"),
-            (length(local.redis_dbs) > 0 ? "sudo systemctl enable redis_6379" : "echo 0;"),
-            (length(local.mongo_dbs) > 0
+            (length(var.redis_dbs) > 0 ? "sudo service redis_6379 start;" : "echo 0;"),
+            (length(var.redis_dbs) > 0 ? "sudo systemctl enable redis_6379" : "echo 0;"),
+            (length(var.mongo_dbs) > 0
                 ? "bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i ${element(var.db_private_ips, count.index)};"
                 : "echo 0;"),
-            (length(local.pg_dbs) > 0
+            (length(var.pg_dbs) > 0
                 ? "bash /root/code/scripts/install/install_pg.sh -v 9.5;"
                 : "echo 0;"),
             "exit 0;"
@@ -776,7 +710,6 @@ resource "null_resource" "install_dbs" {
 resource "null_resource" "import_dbs" {
     count = var.import_dbs && local.db_servers > 0 ? length(var.dbs_to_import) : 0
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -830,7 +763,6 @@ resource "null_resource" "import_dbs" {
 resource "null_resource" "db_ready" {
     count = local.db_servers
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -880,7 +812,6 @@ resource "null_resource" "db_ready" {
 module "docker" {
     source = "../docker"
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -908,7 +839,6 @@ module "docker" {
 resource "null_resource" "docker_ready" {
     count = local.lead_servers > 0 ? 1 : 0
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -955,7 +885,6 @@ resource "null_resource" "gpg_remove_key" {
     ## Only admin and DB should need it atm
     count = var.use_gpg ? sum([local.admin_servers, local.is_only_db_count]) : 0
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
@@ -1141,7 +1070,6 @@ resource "null_resource" "add_keys" {
 resource "null_resource" "install_runner" {
     count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.setup_letsencrypt,
@@ -1439,7 +1367,6 @@ resource "null_resource" "kubernetes_admin" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.docker_ready,
@@ -1493,7 +1420,6 @@ resource "null_resource" "kubernetes_worker" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,
@@ -1535,7 +1461,6 @@ resource "null_resource" "kubernetes_worker" {
 resource "null_resource" "configure_smtp" {
     count = local.admin_servers
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,
@@ -1575,7 +1500,6 @@ resource "null_resource" "configure_smtp" {
 resource "null_resource" "reboot_environments" {
     count = local.admin_servers
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,
@@ -1655,7 +1579,6 @@ resource "null_resource" "reboot_environments" {
 resource "null_resource" "enable_autoupgrade" {
     count = local.server_count
     depends_on = [
-        module.cron,
         module.provision_files,
         null_resource.add_proxy_hosts,
         null_resource.install_runner,

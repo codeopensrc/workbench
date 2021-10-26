@@ -202,7 +202,8 @@ resource "digitalocean_droplet" "main" {
     }
 }
 
-
+### TODO: Most or all of the modules will not have a count attribute
+## once we scale machines one level higher at the module level
 
 module "init" {
     source = "../../init"
@@ -244,3 +245,27 @@ module "hostname" {
     public_ip = digitalocean_droplet.main[count.index].ipv4_address
     private_ip = digitalocean_droplet.main[count.index].ipv4_address_private
 }
+
+module "cron" {
+    source = "../../cron"
+    depends_on = [module.init, module.consul, module.hostname]
+    count = var.servers.count
+
+    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+    roles = var.servers.roles
+    s3alias = var.config.s3alias
+    s3bucket = var.config.s3bucket
+    use_gpg = var.config.use_gpg
+
+    # Leader specific
+    app_definitions = var.config.app_definitions
+
+    # Admin specific
+    gitlab_backups_enabled = var.config.gitlab_backups_enabled
+
+    # DB specific
+    redis_dbs = length(var.config.redis_dbs) > 0 ? var.config.redis_dbs : []
+    mongo_dbs = length(var.config.mongo_dbs) > 0 ? var.config.mongo_dbs : []
+    pg_dbs = length(var.config.pg_dbs) > 0 ? var.config.pg_dbs : []
+}
+

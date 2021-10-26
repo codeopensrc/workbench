@@ -16,9 +16,6 @@ variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }
 
 variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
-variable "run_service_enabled" { default = false }
-variable "send_logs_enabled" { default = false }
-variable "send_jsons_enabled" { default = false }
 variable "install_unity3d" { default = false }
 
 ########## SOFTWARE VERSIONS ##########

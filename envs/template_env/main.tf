@@ -50,13 +50,13 @@ module "mix" {
     mattermost_subdomain = var.mattermost_subdomain
     wekan_subdomain = var.wekan_subdomain
 
-    run_service_enabled = var.run_service_enabled
-    send_logs_enabled   = var.send_logs_enabled
-    send_jsons_enabled  = var.send_jsons_enabled
     import_dbs          = var.import_dbs
     install_unity3d     = var.install_unity3d
 
     dbs_to_import       = var.dbs_to_import
+    redis_dbs = local.redis_dbs
+    pg_dbs = local.pg_dbs
+    mongo_dbs = local.mongo_dbs
 
     serverkey        = var.serverkey
     pg_password      = var.pg_password
@@ -104,6 +104,23 @@ module "mix" {
 }
 
 locals {
+
+    redis_dbs = [
+        for db in var.dbs_to_import:
+        {name = db.dbname, backups_enabled = db.backups_enabled}
+        if db.type == "redis" && ( db.import == "true" || db.backups_enabled == "true" )
+    ]
+    pg_dbs = [
+        for db in var.dbs_to_import:
+        {name = db.dbname, backups_enabled = db.backups_enabled}
+        if db.type == "pg" && ( db.import == "true" || db.backups_enabled == "true" )
+    ]
+    mongo_dbs = [
+        for db in var.dbs_to_import:
+        {name = db.dbname, backups_enabled = db.backups_enabled}
+        if db.type == "mongo" && ( db.import == "true" || db.backups_enabled == "true" )
+    ]
+
     config = {
         root_domain_name = local.root_domain_name
         gitlab_subdomain = var.gitlab_subdomain
@@ -113,6 +130,10 @@ locals {
         active_env_provider = var.active_env_provider
 
         region = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
+
+        # TODO: Map
+        s3alias = var.active_env_provider == "digital_ocean" ? "spaces" : "s3"
+        s3bucket = var.active_env_provider == "digital_ocean" ? var.do_spaces_name : var.aws_bucket_name
 
         do_token = var.do_token
         do_region = var.do_region
@@ -150,5 +171,13 @@ locals {
         placeholder_reusable_delegationset_id = var.placeholder_reusable_delegationset_id
 
         misc_cnames = concat([], local.misc_cnames)
+
+        gitlab_backups_enabled = var.gitlab_backups_enabled
+        use_gpg = var.use_gpg
+
+        #dbs_to_import       = var.dbs_to_import
+        redis_dbs = local.redis_dbs
+        pg_dbs = local.pg_dbs
+        mongo_dbs = local.mongo_dbs
     }
 }
