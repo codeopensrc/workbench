@@ -13,8 +13,14 @@ resource "digitalocean_vpc" "terraform_vpc" {
 resource "digitalocean_firewall" "db" {
     name = "${local.vpc_name}-db"
 
-    droplet_ids = local.all_db_server_ids
+    droplet_ids = data.digitalocean_droplets.db.droplets[*].id
 
+    # description = "ssh"
+    inbound_rule {
+        protocol    = "tcp"
+        port_range   = 22
+        source_addresses = ["0.0.0.0/0"]
+    }
     # "postgresql"
     inbound_rule  {
         protocol    = "tcp"
@@ -47,8 +53,14 @@ resource "digitalocean_firewall" "db" {
 resource "digitalocean_firewall" "app" {
     name = "${local.vpc_name}-app"
 
-    droplet_ids = local.all_lead_server_ids
+    droplet_ids = data.digitalocean_droplets.lead.droplets[*].id
 
+    # description = "ssh"
+    inbound_rule {
+        protocol    = "tcp"
+        port_range   = 22
+        source_addresses = ["0.0.0.0/0"]
+    }
     # If we ever seperate 80/443 to external load balancers we can move to diff group
     # "http"
     inbound_rule {
@@ -153,8 +165,14 @@ resource "digitalocean_firewall" "app" {
 resource "digitalocean_firewall" "admin" {
     name = "${local.vpc_name}-admin"
 
-    droplet_ids = local.admin_servers > 0 ? local.admin_server_ids : local.all_lead_server_ids
+    droplet_ids = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[*].id : data.digitalocean_droplets.lead.droplets[*].id
 
+    # description = "ssh"
+    inbound_rule {
+        protocol    = "tcp"
+        port_range   = 22
+        source_addresses = ["0.0.0.0/0"]
+    }
     # description = "http"
     inbound_rule {
         protocol    = "tcp"
@@ -214,7 +232,7 @@ resource "digitalocean_firewall" "admin" {
 resource "digitalocean_firewall" "default" {
     name = "${local.vpc_name}-default"
 
-    droplet_ids = local.all_server_ids
+    droplet_ids = concat(data.digitalocean_droplets.admin.droplets[*].id, data.digitalocean_droplets.lead.droplets[*].id, data.digitalocean_droplets.db.droplets[*].id, data.digitalocean_droplets.build.droplets[*].id)
 
     # description = "ssh"
     inbound_rule {
@@ -337,7 +355,7 @@ resource "digitalocean_firewall" "default" {
 resource "digitalocean_firewall" "ext_db" {
     name = "${local.vpc_name}-ext-db"
 
-    droplet_ids = local.all_db_server_ids
+    droplet_ids = data.digitalocean_droplets.db.droplets[*].id
 
     # description = "postgresql"
     inbound_rule {
@@ -377,7 +395,7 @@ resource "digitalocean_firewall" "ext_db" {
 resource "digitalocean_firewall" "ext_remote" {
     name = "${local.vpc_name}-ext-remote"
 
-    droplet_ids = local.all_server_ids
+    droplet_ids = concat(data.digitalocean_droplets.admin.droplets[*].id, data.digitalocean_droplets.lead.droplets[*].id, data.digitalocean_droplets.db.droplets[*].id, data.digitalocean_droplets.build.droplets[*].id)
 
     # description = "All Ports"
     inbound_rule {

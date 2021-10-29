@@ -22,7 +22,10 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
     # Add apt
     echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
     # Install
-    sudo apt-get update && sudo apt-get install -y kubelet=${VERSION} kubeadm=${VERSION} kubectl=${VERSION}
+    sudo apt-get update;
+    ## dpkg can stay briefly locked after update..
+    sleep 20;
+    sudo apt-get install -y kubelet=${VERSION} kubeadm=${VERSION} kubectl=${VERSION}
     # apt list -a kubeadm | head -5
 
     # Im assuming this prevents it from upgrading

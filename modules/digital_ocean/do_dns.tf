@@ -1,7 +1,7 @@
 resource "digitalocean_domain" "additional" {
     for_each = var.config.additional_domains
     name = each.key
-    ip_address  = element(slice(local.admin_public_ips, 0, 1), 0)
+    ip_address  = data.digitalocean_droplets.admin.droplets[0].ipv4_address
 }
 
 resource "digitalocean_record" "additional_cname" {
@@ -60,7 +60,7 @@ resource "digitalocean_record" "default_stun_a" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element(slice(local.all_lead_public_ips, 0, 1), 0)
+    value  = data.digitalocean_droplets.lead.droplets[0].ipv4_address
 }
 
 resource "digitalocean_record" "default_cname" {
@@ -87,7 +87,7 @@ resource "digitalocean_record" "default_a_admin" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element(slice(concat(local.admin_public_ips, local.all_lead_public_ips), 0, 1), 0)
+    value = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : data.digitalocean_droplets.lead.droplets[0].ipv4_address
 }
 
 resource "digitalocean_record" "default_a_db" {
@@ -96,7 +96,7 @@ resource "digitalocean_record" "default_a_db" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element(slice(local.all_db_public_ips, 0, 1), 0)
+    value  = data.digitalocean_droplets.db.droplets[0].ipv4_address
 }
 
 resource "digitalocean_record" "default_a_leader" {
@@ -105,7 +105,7 @@ resource "digitalocean_record" "default_a_leader" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element(slice(local.all_lead_public_ips, 0, 1), 0)
+    value  = data.digitalocean_droplets.lead.droplets[0].ipv4_address
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
@@ -114,7 +114,7 @@ resource "digitalocean_record" "default_a_leader_root" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element(slice(local.all_lead_public_ips, 0, 1), 0)
+    value  = data.digitalocean_droplets.lead.droplets[0].ipv4_address
     # records = slice([
     #     for SERVER in aws_instance.main[*]:
     #     SERVER.public_ip

@@ -1,108 +1,57 @@
 
 output "instances" {
-    value = {
-        for SERVER in aws_instance.main[*]:
-        (SERVER.tags.Name) => "ssh root@${SERVER.public_ip}"
-    }
+    value = zipmap(
+        flatten([
+            for SERVER in local.all_server_instances[*]:
+            keys(SERVER)
+        ]),
+        flatten([
+            for SERVER in local.all_server_instances[*]:
+            values(SERVER)
+        ])
+    )
 }
 
 output "admin_private_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.private_ip
-        if length(regexall("admin", SERVER.tags.Roles)) > 0
-    ]
+    value = local.admin_private_ips
 }
 output "admin_public_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("admin", SERVER.tags.Roles)) > 0
-    ]
+    value = local.admin_public_ips 
 }
 output "admin_names" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.tags.Name
-        if length(regexall("admin", SERVER.tags.Roles)) > 0
-    ]
+    value = local.admin_names
 }
-
-
 
 output "lead_private_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.private_ip
-        if length(regexall("lead", SERVER.tags.Roles)) > 0
-    ]
+    value = local.lead_private_ips
 }
 output "lead_public_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("lead", SERVER.tags.Roles)) > 0
-    ]
+    value = local.lead_public_ips
 }
 output "lead_names" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.tags.Name
-        if length(regexall("lead", SERVER.tags.Roles)) > 0
-    ]
+    value = local.lead_names
 }
-
-
 
 output "db_private_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.private_ip
-        if length(regexall("db", SERVER.tags.Roles)) > 0
-    ]
+    value = local.db_private_ips
 }
 output "db_public_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("db", SERVER.tags.Roles)) > 0
-    ]
+    value = local.db_public_ips
 }
 output "db_names" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.tags.Name
-        if length(regexall("db", SERVER.tags.Roles)) > 0
-    ]
+    value = local.db_names
 }
+
 output "db_ids" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.id
-        if length(regexall("db", SERVER.tags.Roles)) > 0
-    ]
+    value = local.db_server_ids
 }
-
-
 
 output "build_private_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.private_ip
-        if length(regexall("build", SERVER.tags.Roles)) > 0
-    ]
+    value = local.build_private_ips
 }
 output "build_public_ip_addresses" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.public_ip
-        if length(regexall("build", SERVER.tags.Roles)) > 0
-    ]
+    value = local.build_public_ips
 }
 output "build_names" {
-    value = [
-        for SERVER in aws_instance.main[*]:
-        SERVER.tags.Name
-        if length(regexall("build", SERVER.tags.Roles)) > 0
-    ]
+    value = local.build_names
 }

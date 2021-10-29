@@ -27,12 +27,13 @@ module "packer" {
     build = length(data.digitalocean_images.latest.images) >= 1 ? false : true
 
     active_env_provider = var.config.active_env_provider
+    role = var.servers.roles[0]
 
     aws_access_key = var.config.aws_access_key
     aws_secret_key = var.config.aws_secret_key
     aws_region = var.config.aws_region
     aws_key_name = var.config.aws_key_name
-    aws_instance_type = "t2.medium" #var.instance_type
+    aws_instance_type = ""
 
     do_token = var.config.do_token
     digitalocean_region = var.config.do_region
@@ -65,11 +66,10 @@ data "digitalocean_images" "new" {
     }
 }
 
-resource "random_uuid" "server" { count = var.servers.count }
+resource "random_uuid" "server" {}
 
 resource "digitalocean_droplet" "main" {
-    count = var.servers.count
-    name     = "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(random_uuid.server[count.index].id, 0, 4)}"
+    name     = "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(random_uuid.server.id, 0, 4)}"
     #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
     image = (var.servers.image != ""
         ? var.servers.image
@@ -80,7 +80,7 @@ resource "digitalocean_droplet" "main" {
     size     = var.servers.size["digital_ocean"]
     ssh_keys = [var.config.do_ssh_fingerprint]
     tags = compact(flatten([
-        "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(random_uuid.server[count.index].id, 0, 4)}",
+        "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(random_uuid.server.id, 0, 4)}",
         contains(var.servers.roles, "admin") ? "gitlab-${replace(var.config.root_domain_name, ".", "-")}" : "",
         var.servers.roles,
         var.tags
@@ -207,33 +207,33 @@ resource "digitalocean_droplet" "main" {
 
 module "init" {
     source = "../../init"
-    count = var.servers.count
 
-    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+    public_ip = digitalocean_droplet.main.ipv4_address
     do_spaces_region = var.config.do_spaces_region
     do_spaces_access_key = var.config.do_spaces_access_key
     do_spaces_secret_key = var.config.do_spaces_secret_key
+
+    aws_bot_access_key = var.config.aws_bot_access_key
+    aws_bot_secret_key = var.config.aws_bot_secret_key
 }
 
 module "consul" {
     source = "../../consul"
-    count = var.servers.count
     depends_on = [module.init]
 
     role = var.servers.roles[0]
     region = var.config.region
     datacenter_has_admin = var.admin_ip_public != "" ? true : false
-    consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : digitalocean_droplet.main[0].ipv4_address
+    consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : digitalocean_droplet.main.ipv4_address_private
     #consul_wan_leader_ip = var.consul_wan_leader_ip
 
-    name = digitalocean_droplet.main[count.index].name
-    public_ip = digitalocean_droplet.main[count.index].ipv4_address
-    private_ip = digitalocean_droplet.main[count.index].ipv4_address_private
+    name = digitalocean_droplet.main.name
+    public_ip = digitalocean_droplet.main.ipv4_address
+    private_ip = digitalocean_droplet.main.ipv4_address_private
 }
 
 module "hostname" {
     source = "../../hostname"
-    count = var.servers.count
     depends_on = [module.init, module.consul]
 
     region = var.config.region
@@ -241,17 +241,16 @@ module "hostname" {
     root_domain_name = var.config.root_domain_name
     hostname = "${var.config.gitlab_subdomain}.${var.config.root_domain_name}"
 
-    name = digitalocean_droplet.main[count.index].name
-    public_ip = digitalocean_droplet.main[count.index].ipv4_address
-    private_ip = digitalocean_droplet.main[count.index].ipv4_address_private
+    name = digitalocean_droplet.main.name
+    public_ip = digitalocean_droplet.main.ipv4_address
+    private_ip = digitalocean_droplet.main.ipv4_address_private
 }
 
 module "cron" {
     source = "../../cron"
-    count = var.servers.count
     depends_on = [module.init, module.consul, module.hostname]
 
-    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+    public_ip = digitalocean_droplet.main.ipv4_address
     roles = var.servers.roles
     s3alias = var.config.s3alias
     s3bucket = var.config.s3bucket
@@ -271,10 +270,9 @@ module "cron" {
 
 module "provision" {
     source = "../../provision"
-    count = var.servers.count
     depends_on = [module.init, module.consul, module.hostname, module.cron]
 
-    public_ip = digitalocean_droplet.main[count.index].ipv4_address
+    public_ip = digitalocean_droplet.main.ipv4_address
 
     known_hosts = var.config.known_hosts
     root_domain_name = var.config.root_domain_name
@@ -282,5 +280,5 @@ module "provision" {
 
     # DB checks
     pg_read_only_pw = var.config.pg_read_only_pw
-    private_ip = digitalocean_droplet.main[count.index].ipv4_address_private
+    private_ip = digitalocean_droplet.main.ipv4_address_private
 }

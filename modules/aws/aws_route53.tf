@@ -37,7 +37,7 @@ resource "aws_route53_record" "additional_a_leader_root" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = slice(local.lead_server_ips, 0, 1)
+    records  = [ data.aws_instances.lead.public_ips[0] ]
 }
 
 resource "aws_route53_record" "additional_cname" {
@@ -93,7 +93,7 @@ resource "aws_route53_record" "default_stun_a" {
     allow_overwrite = true
     type            = "A"
     ttl             = "300"
-    records = slice(local.lead_server_ips, 0, 1)
+    records  = [ data.aws_instances.lead.public_ips[0] ]
 }
 
 resource "aws_route53_record" "default_cname" {
@@ -123,7 +123,7 @@ resource "aws_route53_record" "default_a_admin" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = slice(concat(local.admin_server_ips, local.lead_server_ips), 0, 1)
+    records  = [ local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0]: data.aws_instances.lead.public_ips[0] ]
     # TODO: Check how we support tags changing while deployed as we have each aws_instance
     #  lifecycle attr set to     ignore_changes= [ tags ]
 }
@@ -135,7 +135,7 @@ resource "aws_route53_record" "default_a_db" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = slice(local.db_server_ips, 0, 1)
+    records  = [ data.aws_instances.db.public_ips[0] ]
 }
 
 resource "aws_route53_record" "default_a_leader" {
@@ -148,7 +148,7 @@ resource "aws_route53_record" "default_a_leader" {
     # If ip matches an admin, go with admin ip or lead ip.
     # Atm choosing first lead ip due to docker proxy service listening port dependent on where it was originally launched
     # Make sure this only points to leader ip after it's joined the swarm, if we cant guarantee, dont change
-    records = slice(local.lead_server_ips, 0, 1)
+    records  = [ data.aws_instances.lead.public_ips[0] ]
 
     # Get first ip
     # records = slice([
@@ -170,7 +170,7 @@ resource "aws_route53_record" "default_a_leader_root" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records = slice(local.lead_server_ips, 0, 1)
+    records  = [ data.aws_instances.lead.public_ips[0] ]
 }
 
 resource "aws_route53_record" "additional_ssl" {

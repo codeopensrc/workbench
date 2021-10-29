@@ -12,11 +12,14 @@ output "instances" {
 
 module "mix" {
     source             = "../../modules/mix"
+    depends_on = [ module.main ]
+
     server_name_prefix = local.server_name_prefix
     active_env_provider = var.active_env_provider
     region           = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
 
     # TODO: Map
+    vpc_private_iface = var.active_env_provider == "digital_ocean" ? "eth1" : "ens5"
     s3alias = var.active_env_provider == "digital_ocean" ? "spaces" : "s3"
     s3bucket = var.active_env_provider == "digital_ocean" ? var.do_spaces_name : var.aws_bucket_name
 
@@ -141,6 +144,8 @@ locals {
         aws_access_key = var.aws_access_key
         aws_secret_key = var.aws_secret_key
         aws_region = var.aws_region
+        aws_bot_access_key = var.aws_bot_access_key
+        aws_bot_secret_key = var.aws_bot_secret_key
 
         local_ssh_key_file = var.local_ssh_key_file
 

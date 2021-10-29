@@ -6,7 +6,7 @@ cat /etc/apt/apt.conf.d/20auto-upgrades
 
 CONSUL_VERSION="1.10.0"
 DOCKER_COMPOSE_VERSION="1.29.2"
-GITLAB_VERSION="13.12.5-ce.0"
+GITLAB_VERSION="14.3.0-ce.0"
 
 while getopts "c:d:g:a" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG

@@ -787,6 +787,7 @@ module "docker" {
         null_resource.add_proxy_hosts,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
+        #null_resource.gitlab_plugins, ## Technically should wait for wekan plugin
         module.admin_nginx,
         null_resource.install_dbs,
         null_resource.import_dbs,
@@ -1348,6 +1349,8 @@ resource "null_resource" "kubernetes_admin" {
     ##NOTE:   Latest kubernetes: 1.22.2-00
     ## Gitlab 14.3.0 kubernetes: 1.20.11-00
     ## TODO: kubernetes version root level var and inherited/synced with gitlab version
+    ##  digitaloceans private iface = eth1
+    ##  aws private iface = ens5
     provisioner "file" {
         content = <<-EOF
             KUBE_SCRIPTS=$HOME/code/scripts/kube
@@ -1358,11 +1361,11 @@ resource "null_resource" "kubernetes_admin" {
             ## For now if no admin, use 'default' as production namespace
             NGINX_ARGS="${local.admin_servers == 0 ? "-s -i $LEAD_IPS -p default" : ""}"
 
-            bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION;
+            bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION -i ${var.vpc_private_iface};
             bash $KUBE_SCRIPTS/nginxKubeProxy.sh -r ${var.root_domain_name} $NGINX_ARGS
             ${local.server_count == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-;" : ""}
             if [[ ${local.admin_servers} -gt 0 ]]; then
-                bash $KUBE_SCRIPTS/createClusterAccounts.sh -v $${VERSION//-00/} -a $ADMIN_IP $RUNNER_ARGS -u;
+                bash $KUBE_SCRIPTS/createClusterAccounts.sh -v $${VERSION//-00/} -d ${var.root_domain_name} -a $ADMIN_IP $RUNNER_ARGS -u;
                 bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u -r;
             fi
         EOF

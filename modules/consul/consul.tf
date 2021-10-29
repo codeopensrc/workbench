@@ -115,7 +115,7 @@ resource "null_resource" "consul_file" {
                 "advertise_addr": "${var.private_ip}",
                 "retry_join": [ "${var.consul_lan_leader_ip}" ],
                 "enable_local_script_checks": true,
-                ${ length(regexall("db", var.name)) > 0 ? "" : "'advertise_reconnect_timeout': '8h'," }
+                ${ length(regexall("db", var.name)) > 0 ? "" : "\"advertise_reconnect_timeout\": \"8h\"," }
                 "autopilot": {
                     "cleanup_dead_servers": true,
                     "last_contact_threshold": "5s",

@@ -1,7 +1,5 @@
 variable "public_ip" { default = "" }
 
-variable "aws_access_key_id" { default = "" }
-variable "aws_secret_access_key" { default = "" }
 variable "aws_bot_access_key" { default = "" }
 variable "aws_bot_secret_key" { default = "" }
 

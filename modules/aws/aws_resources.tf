@@ -1,251 +1,123 @@
-data "aws_ami_ids" "latest" {
-    owners = ["self"]
+##NOTE: image_size is packer ami size, not instance size
+### Some sizes for reference
+#t3a.large  = 2vcpu 8gbMem
+#t3a.medium = 2vcpu 4gbMem
+#t3a.small  = 2vcpu 2gbMem
+#t3a.micro  = 2vcpu 1gbMem 
+#t3a.nano   = 2vcpu .5gbMem 
 
-    filter {
-        name   = "tag:Type"
-        values = [ "build" ]
-    }
-    filter {
-        name   = "tag:consul_version"
-        values = [ var.config.packer_config.consul_version ]
-    }
-    filter {
-        name   = "tag:docker_version"
-        values = [ var.config.packer_config.docker_version ]
-    }
-    filter {
-        name   = "tag:docker_compose_version"
-        values = [ var.config.packer_config.docker_compose_version ]
-    }
-    ## TODO: Dynamically look for this tag on refactor
-    filter {
-        name   = "tag:gitlab_version"
-        values = [ var.config.packer_config.gitlab_version ]
-    }
-    filter {
-        name   = "tag:redis_version"
-        values = [ var.config.packer_config.redis_version ]
-    }
-    filter {
-        name   = "tag:aws_key_name"
-        values = [ var.config.aws_key_name ]
-    }
+module "admin" {
+    source = "./instances"
+    count = local.admin_servers > 0 ? 1 : 0
+
+    servers = local.admin_cfg_servers[0]
+    config = var.config
+    image_size = "t3a.medium"
+    vpc = local.vpc
 }
+module "lead" {
+    source = "./instances"
+    count = local.is_only_leader_count
 
-module "packer" {
-    source             = "../packer"
-    build = length(data.aws_ami_ids.latest.ids) >= 1 ? false : true
+    servers = local.lead_cfg_servers[0]
+    config = var.config
+    image_size = "t3a.micro"
+    vpc = local.vpc
 
-    active_env_provider = var.config.active_env_provider
-
-    aws_access_key = var.config.aws_access_key
-    aws_secret_key = var.config.aws_secret_key
-    aws_region = var.config.aws_region
-    aws_key_name = var.config.aws_key_name
-    aws_instance_type = "t2.medium"
-
-    do_token = var.config.do_token
-    digitalocean_region = var.config.do_region
-    digitalocean_image_size = "s-2vcpu-4gb"
-    digitalocean_image_name = ""
-
-    packer_config = var.config.packer_config
-}
-
-data "aws_ami" "new" {
-    depends_on = [ module.packer ]
-    most_recent = true
-
-    owners = ["self"]
-
-    filter {
-        name   = "tag:Type"
-        values = [ "build" ]
-    }
-    filter {
-        name   = "tag:consul_version"
-        values = [ var.config.packer_config.consul_version ]
-    }
-    filter {
-        name   = "tag:docker_version"
-        values = [ var.config.packer_config.docker_version ]
-    }
-    filter {
-        name   = "tag:docker_compose_version"
-        values = [ var.config.packer_config.docker_compose_version ]
-    }
-    ## TODO: Dynamically look for this tag on refactor
-    filter {
-        name   = "tag:gitlab_version"
-        values = [ var.config.packer_config.gitlab_version ]
-    }
-    filter {
-        name   = "tag:redis_version"
-        values = [ var.config.packer_config.redis_version ]
-    }
-    filter {
-        name   = "tag:aws_key_name"
-        values = [ var.config.aws_key_name ]
-    }
-}
-
-resource "aws_instance" "main" {
-    # TODO: total of all counts
-    count = length(var.config.servers)
-    depends_on = [aws_internet_gateway.igw]
-    key_name = var.config.aws_key_name
-    #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
-    ami = (var.config.servers[count.index].image != ""
-        ? var.config.servers[count.index].image
-        : (length(data.aws_ami_ids.latest.ids) > 0 ? data.aws_ami_ids.latest.ids[0] : data.aws_ami.new.id)
+    admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
+    admin_ip_private = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0] : ""
+    consul_lan_leader_ip = (local.admin_servers > 0
+        ? data.aws_instances.admin.private_ips[0]
+        : (count.index == 0 ? "" : data.aws_instances.lead.private_ips[0])
     )
-    instance_type = var.config.servers[count.index].size["aws"]
+}
+module "db" {
+    source = "./instances"
+    count = local.is_only_db_count
 
-    tags = {
-        Name = "${var.config.server_name_prefix}-${var.config.region}-${local.server_names[count.index]}-${substr(uuid(), 0, 4)}"
-        Roles = join(",", var.config.servers[count.index].roles)
+    servers = local.db_cfg_servers[0]
+    config = var.config
+    image_size = "t3a.micro"
+    vpc = local.vpc
+
+    admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
+    admin_ip_private = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0] : ""
+    consul_lan_leader_ip = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0]: data.aws_instances.lead.private_ips[0]
+}
+module "build" {
+    source = "./instances"
+    count = local.is_only_build_count
+
+    servers = local.build_cfg_servers[0]
+    config = var.config
+    image_size = "t3a.micro"
+    vpc = local.vpc
+
+    admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
+    admin_ip_private = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0] : ""
+    consul_lan_leader_ip = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0]: data.aws_instances.lead.private_ips[0]
+}
+
+### According to
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/instances
+### Its better to use remote_state data source, will need to investigate 
+# https://www.terraform.io/docs/language/state/remote-state-data.html
+
+data "aws_instances" "admin" {
+    depends_on = [ module.admin.id, ]
+    instance_tags = {
+        Prefix = "${var.config.server_name_prefix}-${var.config.region}"
+        Admin =  true
     }
-    #"TODO: Tag admin with gitlab.${var.config.root_domain_name}"
-    lifecycle {
-        ignore_changes= [ tags ]
+    ### TODO: Filter to get matching ami and/or vpc
+    #https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/instances
+    #https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-instances.html
+    #filter {
+    #    name    = "image-id"
+    #    values = [ module.admin.id ]
+    #}
+    #: (length(data.aws_ami_ids.latest.ids) > 0 ? data.aws_ami_ids.latest.ids[0] : data.aws_ami.new.id)
+    #filter {
+    #    vpc_id     = aws_vpc.terraform_vpc.id
+    #    vpc_name = "${var.config.server_name_prefix}_vpc"
+    #    resource "aws_vpc" "terraform_vpc" {
+    #    name    = "name"
+    #    values = [ "${var.config.server_name_prefix}-${var.config.region}" ]
+    #}
+}
+data "aws_instances" "lead" {
+    depends_on = [ module.admin.id, module.lead.id ]
+    instance_tags = {
+        Prefix = "${var.config.server_name_prefix}-${var.config.region}"
+        Lead = true
     }
-
-    root_block_device {
-        volume_size = var.config.servers[count.index].aws_volume_size
+}
+data "aws_instances" "db" {
+    depends_on = [ module.admin.id, module.db.id ]
+    instance_tags = {
+        Prefix = "${var.config.server_name_prefix}-${var.config.region}"
+        DB = true
     }
-
-    subnet_id              = aws_subnet.public_subnet.id
-
-    vpc_security_group_ids = compact([
-        aws_security_group.default_ports.id,
-        aws_security_group.ext_remote.id,
-
-        contains(var.config.servers[count.index].roles, "admin") ? aws_security_group.admin_ports.id : "",
-        contains(var.config.servers[count.index].roles, "lead") ? aws_security_group.app_ports.id : "",
-
-        contains(var.config.servers[count.index].roles, "db") ? aws_security_group.db_ports.id : "",
-        contains(var.config.servers[count.index].roles, "db") ? aws_security_group.ext_db.id : "",
-    ])
-
-    provisioner "remote-exec" {
-        inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "ubuntu"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
-
-            if [ "$IS_LEAD" = "true" ]; then
-                docker service update --constraint-add "node.hostname!=${self.tags.Name}" proxy_main
-                docker service update --constraint-rm "node.hostname!=${self.tags.Name}" proxy_main
-            fi
-
-        EOF
-        destination = "/tmp/dockerconstraint.sh"
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            IS_LEAD=${contains(var.config.servers[count.index].roles, "lead") ? "true" : ""}
-
-            if [ "$IS_LEAD" = "true" ]; then
-                sed -i "s|${self.private_ip}|${aws_instance.main[0].private_ip}|" /etc/nginx/conf.d/proxy.conf
-                gitlab-ctl reconfigure
-            fi
-
-        EOF
-        destination = "/tmp/changeip-${self.tags.Name}.sh"
-        connection {
-            host     = aws_instance.main[0].public_ip
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            if [ "${length(regexall("lead", self.tags.Roles)) > 0}" = "true" ]; then
-               docker node update --availability="drain" ${self.tags.Name}
-               sleep 20;
-               docker node demote ${self.tags.Name}
-               sleep 5
-               docker swarm leave
-               docker swarm leave --force;
-               exit 0
-           fi
-        EOF
-        destination = "/tmp/remove.sh"
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
-    provisioner "remote-exec" {
-        when = destroy
-        inline = [
-            <<-EOF
-                consul leave;
-                if [ "${length( regexall("build", self.tags.Roles) ) > 0}" = "true" ]; then
-                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
-                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
-                fi
-            EOF
-        ]
-        on_failure = continue
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
-        }
-    }
-
-    provisioner "local-exec" {
-        when = destroy
-        command = <<-EOF
-            ssh-keygen -R ${self.public_ip};
-            WORKSPACE="unknown";
-            ## TODO-Tag admin with var.config.root_domain_name
-
-            if [ "$WORKSPACE" != "default" ]; then
-                ## TODO: Create parsable domain from tag
-                ## "${length( regexall("domain", join(",", self.tags)) ) > 0}"
-                ## ssh-keygen -R "gitlab."
-                echo "Not default"
-            fi
-            exit 0;
-        EOF
-        on_failure = continue
+}
+data "aws_instances" "build" {
+    depends_on = [ module.admin.id, module.build.id ]
+    instance_tags = {
+        Prefix = "${var.config.server_name_prefix}-${var.config.region}"
+        Build = true
     }
 }
 
 resource "null_resource" "cleanup_consul" {
     count = 1
-    depends_on = [ aws_instance.main ]
+    depends_on = [
+        module.admin,
+        module.lead,
+        module.db,
+        module.build,
+    ]
 
     triggers = {
-        machine_ids = join(",", aws_instance.main[*].id)
+        machine_ids = join(",", local.all_server_ids)
     }
 
     provisioner "file" {
@@ -275,7 +147,7 @@ resource "null_resource" "cleanup_consul" {
     }
 
     connection {
-        host = element(aws_instance.main[*].public_ip, 0)
+        host = element(concat(local.admin_public_ips, local.lead_public_ips), 0)
         type = "ssh"
     }
 }
@@ -299,7 +171,7 @@ resource "null_resource" "cleanup" {
             var.config.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
         ]
         connection {
-            host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
+            host     = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
@@ -307,11 +179,11 @@ resource "null_resource" "cleanup" {
     }
     provisioner "remote-exec" {
         inline = [
-            "chmod +x /tmp/changeip-${element(aws_instance.main[*].tags.Name, length(aws_instance.main[*].tags.Name) - 1)}.sh",
-            var.config.downsize ? "/tmp/changeip-${element(aws_instance.main[*].tags.Name, length(aws_instance.main[*].tags.Name) - 1)}.sh" : "echo 0",
+            "chmod +x /tmp/changeip-${element(local.lead_names, length(local.lead_names) - 1)}.sh",
+            var.config.downsize ? "/tmp/changeip-${element(local.lead_names, length(local.lead_names) - 1)}.sh" : "echo 0",
         ]
         connection {
-            host     = element(aws_instance.main[*].public_ip, 0)
+            host     = element(concat(local.admin_public_ips, local.lead_public_ips), 0)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
@@ -323,15 +195,10 @@ resource "null_resource" "cleanup" {
             var.config.downsize ? "/tmp/remove.sh" : "echo 0",
         ]
         connection {
-            host     = element(aws_instance.main[*].public_ip, length(aws_instance.main[*].public_ip) - 1 )
+            host     = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
         }
     }
 }
-
-### Some sizes for reference
-# variable "aws_admin_instance_type" { default = "t3a.large" }
-# variable "aws_leader_instance_type" { default = "t3a.small" }
-# variable "aws_db_instance_type" { default = "t3a.micro" }

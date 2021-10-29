@@ -1,3 +1,5 @@
+##NOTE: image_size is packer snapshot size, not instance size
+
 module "admin" {
     source = "./droplets"
     count = local.admin_servers > 0 ? 1 : 0
@@ -11,7 +13,7 @@ module "admin" {
 }
 module "lead" {
     source = "./droplets"
-    count = local.is_only_leader_count > 0 ? 1 : 0
+    count = local.is_only_leader_count
 
     servers = local.lead_cfg_servers[0]
     config = var.config
@@ -20,12 +22,16 @@ module "lead" {
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
 
-    admin_ip_public = local.admin_servers > 0 ? element(local.admin_public_ips, 0) : ""
-    admin_ip_private = local.admin_servers > 0 ? element(local.admin_private_ips, 0) : ""
+    admin_ip_public = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : ""
+    admin_ip_private = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : ""
+    consul_lan_leader_ip = (local.admin_servers > 0
+        ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private
+        : (count.index == 0 ? "" : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private)
+    )
 }
 module "db" {
     source = "./droplets"
-    count = local.is_only_db_count > 0 ? 1 : 0
+    count = local.is_only_db_count
 
     servers = local.db_cfg_servers[0]
     config = var.config
@@ -34,13 +40,13 @@ module "db" {
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
 
-    admin_ip_public = local.admin_servers > 0 ? element(local.admin_public_ips, 0) : ""
-    admin_ip_private = local.admin_servers > 0 ? element(local.admin_private_ips, 0) : ""
-    consul_lan_leader_ip = element(concat(local.admin_private_ips, local.lead_private_ips), 0)
+    admin_ip_public = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : ""
+    admin_ip_private = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : ""
+    consul_lan_leader_ip = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private
 }
 module "build" {
     source = "./droplets"
-    count = local.is_only_build_count > 0 ? 1 : 0
+    count = local.is_only_build_count
 
     servers = local.build_cfg_servers[0]
     config = var.config
@@ -49,11 +55,95 @@ module "build" {
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
 
-    admin_ip_public = local.admin_servers > 0 ? element(local.admin_public_ips, 0) : ""
-    admin_ip_private = local.admin_servers > 0 ? element(local.admin_private_ips, 0) : ""
-    consul_lan_leader_ip = element(concat(local.admin_private_ips, local.lead_private_ips), 0)
+    admin_ip_public = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : ""
+    admin_ip_private = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : ""
+    consul_lan_leader_ip = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private
 }
 
+### TODO: According to
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/instances
+### Its better to use terraform_remote_state data source, will need to investigate
+# https://www.terraform.io/docs/language/state/remote-state-data.html
+
+data "digitalocean_droplets" "admin" {
+    depends_on = [
+        module.admin.id,
+    ]
+    filter {
+        key    = "name"
+        values = [ "${var.config.server_name_prefix}-${var.config.region}" ]
+        match_by = "re"
+    }
+    filter {
+        key    = "tags"
+        values = [ "admin" ]
+        all = true
+    }
+    sort {
+        key       = "created_at"
+        direction = "desc"
+    }
+}
+data "digitalocean_droplets" "lead" {
+    depends_on = [
+        module.admin.id,
+        module.lead.id,
+    ]
+    filter {
+        key    = "name"
+        values = [ "${var.config.server_name_prefix}-${var.config.region}" ]
+        match_by = "re"
+    }
+    filter {
+        key    = "tags"
+        values = [ "lead" ]
+        all = true
+    }
+    sort {
+        key       = "created_at"
+        direction = "desc"
+    }
+}
+data "digitalocean_droplets" "db" {
+    depends_on = [
+        module.admin.id,
+        module.db.id,
+    ]
+    filter {
+        key    = "name"
+        values = [ "${var.config.server_name_prefix}-${var.config.region}" ]
+        match_by = "re"
+    }
+    filter {
+        key    = "tags"
+        values = [ "db" ]
+        all = true
+    }
+    sort {
+        key       = "created_at"
+        direction = "desc"
+    }
+}
+data "digitalocean_droplets" "build" {
+    depends_on = [
+        module.admin.id,
+        module.build.id
+    ]
+    filter {
+        key    = "name"
+        values = [ "${var.config.server_name_prefix}-${var.config.region}" ]
+        match_by = "re"
+    }
+    filter {
+        key    = "tags"
+        values = [ "build" ]
+        all = true
+    }
+    sort {
+        key       = "created_at"
+        direction = "desc"
+    }
+}
 
 resource "null_resource" "cleanup_consul" {
     count = 1
@@ -95,7 +185,7 @@ resource "null_resource" "cleanup_consul" {
     }
 
     connection {
-        host = element(local.all_public_ips, 0)
+        host = element(concat(local.admin_public_ips, local.lead_public_ips), 0)
         type = "ssh"
     }
 }
@@ -119,7 +209,7 @@ resource "null_resource" "cleanup" {
             var.config.downsize ? "/tmp/dockerconstraint.sh" : "echo 0",
         ]
         connection {
-            host = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
+            host     = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
@@ -131,7 +221,7 @@ resource "null_resource" "cleanup" {
             var.config.downsize ? "/tmp/changeip-${element(local.lead_names, length(local.lead_names) - 1)}.sh" : "echo 0",
         ]
         connection {
-            host = element(local.all_public_ips, 0)
+            host     = element(concat(local.admin_public_ips, local.lead_public_ips), 0)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
@@ -143,7 +233,7 @@ resource "null_resource" "cleanup" {
             var.config.downsize ? "/tmp/remove.sh" : "echo 0",
         ]
         connection {
-            host = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
+            host     = element(local.lead_public_ips, length(local.lead_public_ips) - 1)
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)

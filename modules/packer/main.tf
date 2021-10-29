@@ -11,11 +11,16 @@ variable "digitalocean_image_size" { default = "" }
 variable "digitalocean_image_name" { default = "" }
 
 variable "active_env_provider" {}
+variable "role" {}
 
 variable "packer_config" {}
 variable "build" {}
 
-
+### TODO: Multiple images built if none are found and launching multiple machines that would all use that image
+# Example: Leader machine, DB machine, Build machine want to use img-14234, but isn't found
+# This will cause the module.packer.build to build their own img-14234 for each instance
+# Need to create a more core data.image to query and only build ONE of that type of image
+#  while still allowing multiple types (admin w/gitlab, smaller w/o gitlab) of images to build in parallel
 
 resource "null_resource" "build" {
     count = var.build ? 1 : 0
@@ -35,16 +40,16 @@ resource "null_resource" "build" {
 
         command = <<-EOF
 
-            export PACKER_FILE=${var.active_env_provider == "aws" ? "aws.json" : "digitalocean.pkr.hcl" }
+            export BUILDER_SOURCE=${var.active_env_provider == "aws" ? "amazon-ebs.*" : "digitalocean.*" }
             export CUR_DIR=$(realpath ${path.module})
 
-            packer validate \
+            packer validate -only "$BUILDER_SOURCE" \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'consul_version=${var.packer_config.consul_version}' \
                 --var 'docker_version=${var.packer_config.docker_version}' \
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
-                --var 'gitlab_version=${var.packer_config.gitlab_version}' \
+                --var 'gitlab_version=${var.role == "admin" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'aws_key_name=${var.aws_key_name}' \
                 --var 'aws_region=${var.aws_region}' \
@@ -56,16 +61,16 @@ resource "null_resource" "build" {
                 --var 'digitalocean_image_size=${var.digitalocean_image_size}' \
                 --var 'digitalocean_image_name=${var.digitalocean_image_name}' \
                 --var packer_dir=$CUR_DIR \
-                $CUR_DIR/$PACKER_FILE
+                $CUR_DIR/multi.pkr.hcl
 
 
-            packer build -timestamp-ui \
+            packer build -timestamp-ui -only "$BUILDER_SOURCE" \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'consul_version=${var.packer_config.consul_version}' \
                 --var 'docker_version=${var.packer_config.docker_version}' \
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
-                --var 'gitlab_version=${var.packer_config.gitlab_version}' \
+                --var 'gitlab_version=${var.role == "admin" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'aws_key_name=${var.aws_key_name}' \
                 --var 'aws_region=${var.aws_region}' \
@@ -77,7 +82,7 @@ resource "null_resource" "build" {
                 --var 'digitalocean_image_size=${var.digitalocean_image_size}' \
                 --var 'digitalocean_image_name=${var.digitalocean_image_name}' \
                 --var packer_dir=$CUR_DIR \
-                $CUR_DIR/$PACKER_FILE
+                $CUR_DIR/multi.pkr.hcl
         EOF
     }
 }

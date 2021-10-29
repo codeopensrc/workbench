@@ -23,27 +23,27 @@ output "admin_names" {
 }
 
 output "lead_private_ip_addresses" {
-    value = local.all_lead_private_ips
+    value = local.lead_private_ips
 }
 output "lead_public_ip_addresses" {
-    value = local.all_lead_public_ips
+    value = local.lead_public_ips
 }
 output "lead_names" {
-    value = local.all_lead_names
+    value = local.lead_names
 }
 
 output "db_private_ip_addresses" {
-    value = local.all_db_private_ips
+    value = local.db_private_ips
 }
 output "db_public_ip_addresses" {
-    value = local.all_db_public_ips
+    value = local.db_public_ips
 }
 output "db_names" {
-    value = local.all_db_names
+    value = local.db_names
 }
 
 output "db_ids" {
-    value = local.all_db_server_ids
+    value = local.db_server_ids
 }
 
 output "build_private_ip_addresses" {

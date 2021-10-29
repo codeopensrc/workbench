@@ -6,6 +6,7 @@ variable "active_env_provider" {}
 variable "root_domain_name" {}
 variable "additional_domains" {}
 variable "region" { default = "" }
+variable "vpc_private_iface" { default = "" }
 variable "aws_ecr_region" { default = "" }
 variable "s3alias" { default = "" }
 variable "s3bucket" { default = "" }

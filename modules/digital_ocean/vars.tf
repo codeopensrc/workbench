@@ -1,26 +1,9 @@
-terraform {
-    required_providers {
-        digitalocean = {
-            source = "digitalocean/digitalocean"
-        }
-    }
-    required_version = ">=0.13"
-}
-
 ### See envs/env/main.tf locals.config
 variable "config" {}
 
 variable "stun_protos" { default = ["tcp", "udp"] }
 
-provider "digitalocean" {
-    token = var.config.do_token
-}
-
 locals {
-    server_names = [
-        for app in var.config.servers:
-        element(app.roles, 0)
-    ]
     is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
     ## Allows db with lead
     is_only_leader_count = sum(concat([0], tolist([
@@ -85,64 +68,36 @@ locals {
 }
 
 locals {
-    ## The "l" and "d" using _extra, is to allow lead and db on the admin allowing
-    ##  a single server to use admin + lead + db.
-    ## TODO: Hmm lightbulb moment:
-    ##   If no lead, use admin. If no db, use lead or admin
-    ## Entire infra depends on at a minimum lead + db roles so if they are NOT there
-    ##  then they MUST be attached to admin. Inverse is not true, we're attempting to
-    ##  have admin NOT be mandatory
-    admin_private_ips = flatten(module.admin[*].ipv4_addresses_private)
-    admin_l_private_ips = flatten(module.admin[*].ipv4_addresses_private_extra_lead)
-    admin_d_private_ips = flatten(module.admin[*].ipv4_addresses_private_extra_db)
-    lead_private_ips = flatten(module.lead[*].ipv4_addresses_private)
-    db_private_ips = flatten(module.db[*].ipv4_addresses_private)
-    build_private_ips = flatten(module.build[*].ipv4_addresses_private)
+    admin_private_ips = data.digitalocean_droplets.admin.droplets[*].ipv4_address_private
+    lead_private_ips = data.digitalocean_droplets.lead.droplets[*].ipv4_address_private
+    db_private_ips = data.digitalocean_droplets.db.droplets[*].ipv4_address_private
+    build_private_ips = data.digitalocean_droplets.build.droplets[*].ipv4_address_private
 
-    admin_public_ips = flatten(module.admin[*].ipv4_addresses)
-    admin_l_public_ips = flatten(module.admin[*].ipv4_addresses_extra_lead)
-    admin_d_public_ips = flatten(module.admin[*].ipv4_addresses_extra_db)
-    lead_public_ips = flatten(module.lead[*].ipv4_addresses)
-    db_public_ips = flatten(module.db[*].ipv4_addresses)
-    build_public_ips = flatten(module.build[*].ipv4_addresses)
+    admin_public_ips = data.digitalocean_droplets.admin.droplets[*].ipv4_address
+    lead_public_ips = data.digitalocean_droplets.lead.droplets[*].ipv4_address
+    db_public_ips = data.digitalocean_droplets.db.droplets[*].ipv4_address
+    build_public_ips = data.digitalocean_droplets.build.droplets[*].ipv4_address
 
-    admin_names = flatten(module.admin[*].names)
-    admin_l_names = flatten(module.admin[*].names_extra_lead)
-    admin_d_names = flatten(module.admin[*].names_extra_db)
-    lead_names = flatten(module.lead[*].names)
-    db_names = flatten(module.db[*].names)
-    build_names = flatten(module.build[*].names)
+    admin_names = data.digitalocean_droplets.admin.droplets[*].name
+    lead_names = data.digitalocean_droplets.lead.droplets[*].name
+    db_names = data.digitalocean_droplets.db.droplets[*].name
+    build_names = data.digitalocean_droplets.build.droplets[*].name
 
-    admin_server_ids = flatten(module.admin[*].ids)
-    admin_l_server_ids = flatten(module.admin[*].ids_extra_lead)
-    admin_d_server_ids = flatten(module.admin[*].ids_extra_db)
-    lead_server_ids = flatten(module.lead[*].ids)
-    db_server_ids = flatten(module.db[*].ids)
-    build_server_ids = flatten(module.build[*].ids)
+    admin_server_ids = data.digitalocean_droplets.admin.droplets[*].id
+    lead_server_ids = data.digitalocean_droplets.lead.droplets[*].id
+    db_server_ids = data.digitalocean_droplets.db.droplets[*].id
+    build_server_ids = data.digitalocean_droplets.build.droplets[*].id
 
-    admin_server_instances = flatten(module.admin[*].instances)
-    lead_server_instances = flatten(module.lead[*].instances)
-    db_server_instances = flatten(module.db[*].instances)
-    build_server_instances = flatten(module.build[*].instances)
+    admin_server_instances = flatten(module.admin[*].instance)
+    lead_server_instances = flatten(module.lead[*].instance)
+    db_server_instances = flatten(module.db[*].instance)
+    build_server_instances = flatten(module.build[*].instance)
 
-    all_lead_private_ips = concat(local.admin_l_private_ips, local.lead_private_ips)
-    all_lead_public_ips = concat(local.admin_l_public_ips, local.lead_public_ips)
-    all_lead_names = concat(local.admin_l_names, local.lead_names)
-    all_lead_server_ids = concat(local.admin_l_server_ids, local.lead_server_ids)
 
-    all_db_private_ips = concat(local.admin_d_private_ips, local.db_private_ips)
-    all_db_public_ips = concat(local.admin_d_public_ips, local.db_public_ips)
-    all_db_names = concat(local.admin_d_names, local.db_names)
-    all_db_server_ids = concat(local.admin_d_server_ids, local.db_server_ids)
-
-    all_public_ips = distinct(concat(local.admin_public_ips, local.all_lead_public_ips, local.all_db_public_ips, local.build_public_ips))
-    all_names = distinct(concat(local.admin_names, local.all_lead_names, local.all_db_names, local.build_names))
-    all_server_ids = distinct(concat(local.admin_server_ids, local.all_lead_server_ids, local.all_db_server_ids, local.build_server_ids))
+    all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
     all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
 }
 
-# Based on app, create .db, .beta, and .beta.db subdomains (not used just yet)
-# TODO: See if we can do locals like this in an envs/vars.tf file with a just declared variable
 locals {
     cname_aliases = [
         for app in var.config.app_definitions:
@@ -186,4 +141,17 @@ locals {
         "${replace(local.dockerc, ".", "-")}",
         "${replace(local.redis, ".", "-")}"
     ]
+}
+
+terraform {
+    required_providers {
+        digitalocean = {
+            source = "digitalocean/digitalocean"
+        }
+    }
+    required_version = ">=0.13"
+}
+
+provider "digitalocean" {
+    token = var.config.do_token
 }
