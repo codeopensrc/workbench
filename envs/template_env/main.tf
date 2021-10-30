@@ -167,7 +167,6 @@ locals {
 
         packer_config = var.packer_config
 
-        placeholder_hostzone = var.placeholder_hostzone
         placeholder_reusable_delegationset_id = var.placeholder_reusable_delegationset_id
 
         misc_cnames = concat([], local.misc_cnames)

@@ -263,9 +263,9 @@ module "cron" {
     gitlab_backups_enabled = var.config.gitlab_backups_enabled
 
     # DB specific
-    redis_dbs = length(var.config.redis_dbs) > 0 ? var.config.redis_dbs : []
-    mongo_dbs = length(var.config.mongo_dbs) > 0 ? var.config.mongo_dbs : []
-    pg_dbs = length(var.config.pg_dbs) > 0 ? var.config.pg_dbs : []
+    redis_dbs = var.config.redis_dbs
+    mongo_dbs = var.config.mongo_dbs
+    pg_dbs = var.config.pg_dbs
 }
 
 module "provision" {

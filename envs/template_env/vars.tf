@@ -5,7 +5,6 @@ variable "do_region" { default = "nyc3" }
 variable "aws_region_alias" { default = "awseast" }
 variable "aws_region" { default = "us-east-2" }
 variable "aws_ecr_region" { default = "us-east-2" }
-variable "placeholder_hostzone" { default = "" }
 variable "placeholder_reusable_delegationset_id" { default = "" }
 
 ########## MISC CONFIG/VARIABLES ##########

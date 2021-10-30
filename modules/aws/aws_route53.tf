@@ -1,32 +1,18 @@
-
-resource "aws_route53_delegation_set" "dset" {
-    count = var.config.placeholder_reusable_delegationset_id == "" ? 1 : 0
-    reference_name = var.config.root_domain_name
-    #reference_name = "" #TODO: Use timestamp
+## See wiki on creating placeholder_zone and delegation_set to get and set the delegationset id
+## https://gitlab.codeopensrc.com/os/workbench/-/wikis/cloud-provider#aws
+data "aws_route53_delegation_set" "dset" {
+    id = var.config.placeholder_reusable_delegationset_id
 }
 
-resource "aws_route53_zone" "placeholder" {
-    count = var.config.placeholder_reusable_delegationset_id == "" && var.config.placeholder_hostzone != "" ? 1 : 0
-    name = var.config.placeholder_hostzone
-    delegation_set_id = compact([
-        length(aws_route53_delegation_set.dset) > 0 ? aws_route53_delegation_set.dset[0].id : "", 
-        var.config.placeholder_reusable_delegationset_id
-    ])[0]
-}
 resource "aws_route53_zone" "default" {
     name         = var.config.root_domain_name
-    delegation_set_id = compact([
-        length(aws_route53_delegation_set.dset) > 0 ? aws_route53_delegation_set.dset[0].id : "", 
-        var.config.placeholder_reusable_delegationset_id
-    ])[0]
+    delegation_set_id = var.config.placeholder_reusable_delegationset_id
 }
+
 resource "aws_route53_zone" "additional" {
     for_each = var.config.additional_domains
     name = each.key
-    delegation_set_id = compact([
-        length(aws_route53_delegation_set.dset) > 0 ? aws_route53_delegation_set.dset[0].id : "", 
-        var.config.placeholder_reusable_delegationset_id
-    ])[0]
+    delegation_set_id = var.config.placeholder_reusable_delegationset_id
 }
 
 
