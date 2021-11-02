@@ -115,6 +115,10 @@ if [[ ! $KUBE_API_HOST_URL =~ "https://" ]]; then KUBE_API_HOST_URL="https://${K
 if [[ ! $KUBE_API_HOST_URL =~ $PORT_REG ]]; then KUBE_API_HOST_URL="${KUBE_API_HOST_URL}:6443"; fi
 
 
+curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+apt-cache madison gitlab-runner
+sudo apt-get install gitlab-runner jq -y
+sudo usermod -aG docker gitlab-runner
 
 # 1.
 ## Create gitlab service account clusterwide

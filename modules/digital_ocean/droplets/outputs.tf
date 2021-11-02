@@ -4,6 +4,14 @@ output "instance" {
     }
 }
 
+output "ansible_host" {
+    value = {
+        name = digitalocean_droplet.main.name
+        roles = var.servers.roles
+        ip = digitalocean_droplet.main.ipv4_address
+    }
+}
+
 output "private_ip" {
     value = digitalocean_droplet.main.ipv4_address_private
 }

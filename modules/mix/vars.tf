@@ -85,6 +85,8 @@ variable "db_names" { type = list(string) }
 variable "build_names" { type = list(string) }
 
 variable "db_ids" { type = list(string) }
+variable "ansible_hosts" { type = list(object({ name=string, roles=list(string), ip=string })) }
+variable "ansible_hostfile" { default = "" }
 
 locals {
     # TODO: Turn these into maps to reference by key
@@ -129,10 +131,11 @@ locals {
         SERVER.count
         if contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
     ])))
+    ## Allows db with lead
     is_only_db_count = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
-        if contains(SERVER.roles, "db") && length(SERVER.roles) == 1
+        if contains(SERVER.roles, "db") && !contains(SERVER.roles, "admin")
     ])))
     is_only_build_count = sum(concat([0], tolist([
         for SERVER in var.servers:

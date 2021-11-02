@@ -5,6 +5,72 @@
 ###  Another can have 1 server with all roles and scale out aditional servers as leader servers
 ###  Simplicity/Flexibility/Adaptability
 
+#module "ansible" {
+#    source = "../ansible"
+#}
+resource "null_resource" "ansible_hosts" {
+    count = 1
+    triggers = {
+        ips = join(",", local.all_public_ips)
+        hostfile = var.ansible_hostfile
+    }
+
+    provisioner "local-exec" {
+        command = <<-EOF
+		cat <<-EOLF > ${var.ansible_hostfile}
+		[servers]
+		%{ for ind, HOST in var.ansible_hosts ~}
+		${HOST.name} ansible_host=${HOST.ip}
+		%{ endfor ~}
+		
+		%{ if length(var.admin_public_ips) > 0 ~}
+		[admin]
+		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ if contains(HOST.roles, "admin") ~}
+		${HOST.name}_admin ansible_host=${HOST.ip}
+		%{ endif ~}
+		%{ endfor ~}
+		%{ endif ~}
+		
+		%{ if length(var.lead_public_ips) > 0 ~}
+		[lead]
+		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ if contains(HOST.roles, "lead") ~}
+		${HOST.name}_lead ansible_host=${HOST.ip}
+		%{ endif ~}
+		%{ endfor ~}
+		%{ endif ~}
+		
+		%{ if length(var.db_public_ips) > 0 ~}
+		[db]
+		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ if contains(HOST.roles, "db") ~}
+		${HOST.name}_db ansible_host=${HOST.ip}
+		%{ endif ~}
+		%{ endfor ~}
+		%{ endif ~}
+		
+		%{ if length(var.build_public_ips) > 0 ~}
+		[build]
+		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ if contains(HOST.roles, "build") ~}
+		${HOST.name}_build ansible_host=${HOST.ip}
+		%{ endif ~}
+		%{ endfor ~}
+		%{ endif ~}
+		
+		[all:vars]
+		ansible_python_interpreter=/usr/bin/python3
+		EOLF
+        EOF
+    }
+    provisioner "local-exec" {
+        when = destroy
+        command = "rm ./${self.triggers.hostfile}"
+        on_failure = continue
+    }
+}
+
 
 module "swarm" {
     source = "../swarm"
@@ -85,9 +151,13 @@ resource "null_resource" "add_proxy_hosts" {
                 consul kv put applist/$SERVICE_NAME $SUBDOMAIN_NAME
 
                 ### This is temporary
-                consul kv put apps/$SUBDOMAIN_NAME/green _main
+                consul kv put apps/$SUBDOMAIN_NAME/green 172.17.0.1:31000
                 consul kv put apps/$SUBDOMAIN_NAME/blue _dev
                 consul kv put apps/$SUBDOMAIN_NAME/active green
+
+                consul kv put apps/$SUBDOMAIN_NAME.beta/green 172.17.0.1:31000
+                consul kv put apps/$SUBDOMAIN_NAME.beta/blue _dev
+                consul kv put apps/$SUBDOMAIN_NAME.beta/active green
             %{ endfor }
 
             consul kv put domainname ${var.root_domain_name}
@@ -804,6 +874,7 @@ module "docker" {
     http_port = "8085"
     https_port = "4433"
 
+    root_domain_name = var.root_domain_name
     registry_ready = element(concat(null_resource.restore_gitlab[*].id, [""]), 0)
 }
 
@@ -1041,6 +1112,7 @@ resource "null_resource" "install_runner" {
     count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [
         null_resource.add_proxy_hosts,
+        module.docker,
         null_resource.setup_letsencrypt,
         null_resource.add_keys
     ]
@@ -1126,7 +1198,10 @@ resource "null_resource" "register_runner" {
     # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
     #TODO: var.gitlab_enabled ? var.servers : 0;
     count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
-    depends_on = [ null_resource.install_runner ]
+    depends_on = [
+        module.docker,
+        null_resource.install_runner
+    ]
 
     # TODO: 1 or 2 prod runners with rest non-prod
     # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
@@ -1258,7 +1333,11 @@ resource "null_resource" "register_runner" {
 resource "null_resource" "unregister_runner" {
     #TODO: var.gitlab_enabled ? var.servers * 2 : 0;
     count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
-    depends_on = [ null_resource.install_runner, null_resource.register_runner ]
+    depends_on = [
+        module.docker,
+        null_resource.install_runner,
+        null_resource.register_runner
+    ]
 
     triggers = {
         num_names = join(",", concat(var.lead_names, var.build_names))
@@ -1337,6 +1416,7 @@ resource "null_resource" "kubernetes_admin" {
     #source = "../kubernetes"
     depends_on = [
         null_resource.add_proxy_hosts,
+        module.docker,
         null_resource.docker_ready,
         null_resource.setup_letsencrypt,
         null_resource.add_keys,
@@ -1386,11 +1466,12 @@ resource "null_resource" "kubernetes_admin" {
 
 
 resource "null_resource" "kubernetes_worker" {
-    count = local.admin_servers > 0 ? local.is_not_admin_count : local.server_count - 1
+    count = local.server_count - 1
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
         null_resource.add_proxy_hosts,
+        module.docker,
         null_resource.install_runner,
         null_resource.register_runner,
         null_resource.unregister_runner,
@@ -1431,6 +1512,7 @@ resource "null_resource" "configure_smtp" {
     count = local.admin_servers
     depends_on = [
         null_resource.add_proxy_hosts,
+        module.docker,
         null_resource.install_runner,
         null_resource.register_runner,
         null_resource.unregister_runner,
@@ -1469,6 +1551,7 @@ resource "null_resource" "reboot_environments" {
     count = local.admin_servers
     depends_on = [
         null_resource.add_proxy_hosts,
+        module.docker,
         null_resource.install_runner,
         null_resource.register_runner,
         null_resource.unregister_runner,

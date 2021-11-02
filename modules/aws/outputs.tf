@@ -12,6 +12,10 @@ output "instances" {
     )
 }
 
+output "ansible_hosts" {
+    value = local.all_ansible_hosts
+}
+
 output "admin_private_ip_addresses" {
     value = local.admin_private_ips
 }

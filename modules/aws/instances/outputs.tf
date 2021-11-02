@@ -4,6 +4,14 @@ output "instance" {
     }
 }
 
+output "ansible_host" {
+    value = {
+        name = aws_instance.main.tags.Name
+        roles = var.servers.roles
+        ip = aws_instance.main.public_ip
+    }
+}
+
 output "private_ip" {
     value = aws_instance.main.private_ip
 }

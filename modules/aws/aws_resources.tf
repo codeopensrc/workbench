@@ -58,10 +58,15 @@ module "build" {
     consul_lan_leader_ip = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0]: data.aws_instances.lead.private_ips[0]
 }
 
-### According to
+### TODO: According to
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/instances
 ### Its better to use remote_state data source, will need to investigate 
 # https://www.terraform.io/docs/language/state/remote-state-data.html
+
+##NOTE: The sorting of the returned droplets actually matters to a degree
+## We cannot rely on it as we cannot sort returned aws_instances and need to find out
+##  if aws has a default return order
+## This should all be a non-issue once ansible is up and running
 
 data "aws_instances" "admin" {
     depends_on = [ module.admin.id, ]
@@ -93,14 +98,14 @@ data "aws_instances" "lead" {
     }
 }
 data "aws_instances" "db" {
-    depends_on = [ module.admin.id, module.db.id ]
+    depends_on = [ module.admin.id, module.lead.id, module.db.id ]
     instance_tags = {
         Prefix = "${var.config.server_name_prefix}-${var.config.region}"
         DB = true
     }
 }
 data "aws_instances" "build" {
-    depends_on = [ module.admin.id, module.build.id ]
+    depends_on = [ module.admin.id, module.lead.id, module.build.id ]
     instance_tags = {
         Prefix = "${var.config.server_name_prefix}-${var.config.region}"
         Build = true

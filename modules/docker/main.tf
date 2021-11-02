@@ -19,7 +19,7 @@ variable "app_definitions" {
         use_custom_restore=string, custom_restore_file=string, custom_init=string, custom_vars=string
     }))
 }
-
+variable "root_domain_name" {}
 variable "registry_ready" {}
 
 
@@ -100,7 +100,11 @@ resource "null_resource" "pull_images" {
 
 ## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "start_containers" {
-    count = var.servers
+    ##NOTE: Due to how we sort lead_ips for digital_ocean, index 0 will be the LAST
+    ##   created machine's ip. Need to test how aws sorts machines returned from
+    ##   aws_instances as we cannot forcefully sort them
+    ## Temp until ansible implemented appropriately
+    count = 1
     depends_on = [null_resource.pull_images]
 
     triggers = {
@@ -174,6 +178,15 @@ resource "null_resource" "start_containers" {
                             HTTPS_PORT=${var.https_port};
                             sed -i "s|80:80|$HTTP_PORT:80|" /root/repos/$REPO_NAME/docker-compose.yml;
                             sed -i "s|443:443|$HTTPS_PORT:443|" /root/repos/$REPO_NAME/docker-compose.yml;
+                        fi
+
+                        ### IF WE HAVE AN ADMIN AND OUR IP IS NOT AN ADMIN IP, THEN CONSTRAIN DOCKER PROXY CONTAINER AND SERVICE TO NON-ADMIN NODE
+                        USE_DEFAULT_PORTS=${length(var.admin_ips) > 0 && !contains(var.admin_ips, element(var.public_ips, count.index)) ? "true" : "false"}
+                        if [ "$SERVICE_NAME" = "proxy" ] && [ "$USE_DEFAULT_PORTS" = "true" ]; then
+                            sed -i "s/\([[:space:]]*\)- node.role == manager/\1- node.role == manager\n\1- node.hostname != gitlab.${var.root_domain_name}/" /root/repos/$REPO_NAME/docker-compose.yml;
+                            sed -i "s/\([[:space:]]*\)- \"80:80\"/\1- target: 80\n\1  published: 80\n\1  protocol: tcp\n\1  mode: host/" /root/repos/$REPO_NAME/docker-compose.yml;
+                            sed -i "s/\([[:space:]]*\)- \"443:443\"/\1- target: 443\n\1  published: 443\n\1  protocol: tcp\n\1  mode: host/" /root/repos/$REPO_NAME/docker-compose.yml;
+                            sed -i "s/\([[:space:]]*\)replicas: [0-9]/\1mode: global/" /root/repos/$REPO_NAME/docker-compose.yml;
                         fi
 
                         APP_UP=$(docker service ps $CLEAN_SERVICE_NAME);

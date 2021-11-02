@@ -49,10 +49,6 @@ module "main" {
     config = local.config
 }
 
-# Currently supports 1 server with all 3 roles or 3 servers each with a single role
-# Supports admin+lead+db and 1 server as lead as well
-# Believe it also supports 1 server as admin+lead and 1 server as db but untested
-
 ###! When downsizing from 2 to 1 leader, set downsize = true, terraform apply. This adjusts app routing.
 ###! Then comment/remove 2nd server, downsize = false, and terraform apply again to remove it
 variable "downsize" { default = false }
@@ -61,6 +57,26 @@ variable "downsize" { default = false }
 ###! Anything that is done pre-system/machine migration should be done in a
 ###!  run once (backups) or toggleable (dns TTL) fashion with this setting
 variable "migration_prep" { default = false } ## Not in use atm
+
+## Known role support matrix for 1-3 nodes
+## All matrices support adding multiple 1gb+ build nodes
+## None of the matrices support more than 1 db role in a cluster
+## None of the matrices support more than 1 admin role in a cluster
+
+# 1 node  - (admin + lead + db)  -- Confirmed
+# 1 node  - (lead + db)          -- Confirmed
+
+# 2 nodes - (lead), (db)                 -- Confirmed
+# 2 nodes - (admin), (lead + db)         -- Confirmed
+# 2 nodes - (admin + db), (lead)         -- Confirmed
+# 2 nodes - (admin + lead), (db)         -- Confirmed
+# 2 nodes - (admin + lead + db), (lead)  -- Confirmed
+
+# 3 nodes - (admin), (lead), (db)               -- Confirmed
+# 3 nodes - (admin + db), (lead), (lead)        -- TO TEST
+# 3 nodes - (admin + lead), (lead), (db)        -- TO TEST
+# 3 nodes - (admin + lead + db), (lead), (lead) -- TO TEST
+
 
 variable "servers" {
     ### NOTE: Do not add or remove roles from instances after they are launched

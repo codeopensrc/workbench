@@ -49,6 +49,8 @@ module "mix" {
 
     db_ids = module.main.db_ids
 
+    ansible_hosts = module.main.ansible_hosts
+    ansible_hostfile = "./${terraform.workspace}_ansible_hosts"
 
     mattermost_subdomain = var.mattermost_subdomain
     wekan_subdomain = var.wekan_subdomain

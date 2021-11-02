@@ -65,6 +65,11 @@ module "build" {
 ### Its better to use terraform_remote_state data source, will need to investigate
 # https://www.terraform.io/docs/language/state/remote-state-data.html
 
+##NOTE: The sorting of the returned droplets actually matters to a degree
+## We cannot rely on it as we cannot sort returned aws_instances and need to find out
+##  if aws has a default return order
+## This should all be a non-issue once ansible is up and running
+
 data "digitalocean_droplets" "admin" {
     depends_on = [
         module.admin.id,
@@ -107,6 +112,7 @@ data "digitalocean_droplets" "lead" {
 data "digitalocean_droplets" "db" {
     depends_on = [
         module.admin.id,
+        module.lead.id,
         module.db.id,
     ]
     filter {
@@ -127,6 +133,7 @@ data "digitalocean_droplets" "db" {
 data "digitalocean_droplets" "build" {
     depends_on = [
         module.admin.id,
+        module.lead.id,
         module.build.id
     ]
     filter {

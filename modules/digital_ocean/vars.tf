@@ -93,9 +93,14 @@ locals {
     db_server_instances = flatten(module.db[*].instance)
     build_server_instances = flatten(module.build[*].instance)
 
+    admin_ansible_hosts = flatten(module.admin[*].ansible_host)
+    lead_ansible_hosts = flatten(module.lead[*].ansible_host)
+    db_ansible_hosts = flatten(module.db[*].ansible_host)
+    build_ansible_hosts = flatten(module.build[*].ansible_host)
 
     all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
     all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
+    all_ansible_hosts = concat(local.admin_ansible_hosts, local.lead_ansible_hosts, local.db_ansible_hosts, local.build_ansible_hosts)
 }
 
 locals {
