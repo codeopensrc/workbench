@@ -67,14 +67,19 @@ variable "migration_prep" { default = false } ## Not in use atm
 # 1 node  - (lead + db)          -- Confirmed
 
 # 2 nodes - (lead), (db)                 -- Confirmed
+# 2 nodes - (lead + db), (lead)          -- TO TEST
 # 2 nodes - (admin), (lead + db)         -- Confirmed
 # 2 nodes - (admin + db), (lead)         -- Confirmed
 # 2 nodes - (admin + lead), (db)         -- Confirmed
 # 2 nodes - (admin + lead + db), (lead)  -- Confirmed
 
+# 3 nodes - (lead), (lead), (db)                -- TO TEST
+# 3 nodes - (lead + db), (lead), (lead)         -- TO TEST
 # 3 nodes - (admin), (lead), (db)               -- Confirmed
-# 3 nodes - (admin + db), (lead), (lead)        -- TO TEST
-# 3 nodes - (admin + lead), (lead), (db)        -- TO TEST
+# 3 nodes - (admin), (lead + db), (lead)        -- TO TEST
+# 3 nodes - (admin + db), (lead), (lead)        -- Confirmed
+# 3 nodes - (admin + lead), (lead), (db)        -- Confirmed
+# 3 nodes - (admin + lead), (lead + db), (lead) -- TO TEST
 # 3 nodes - (admin + lead + db), (lead), (lead) -- TO TEST
 
 

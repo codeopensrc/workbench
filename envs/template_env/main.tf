@@ -74,7 +74,7 @@ module "mix" {
     import_gitlab = var.import_gitlab
     import_gitlab_version = var.import_gitlab_version
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_tokens : {service = ""}
-    num_gitlab_runners = local.num_gitlab_runners
+    runners_per_machine = local.runners_per_machine
 
     app_definitions = var.app_definitions
     misc_repos = var.misc_repos

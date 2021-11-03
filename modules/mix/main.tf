@@ -1207,7 +1207,7 @@ resource "null_resource" "register_runner" {
     # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
     triggers = {
         num_names = join(",", concat(var.lead_names, var.build_names))
-        num_runners = var.num_gitlab_runners
+        num_runners = sum([local.lead_servers + local.build_servers]) * local.runners_per_machine
     }
 
     ### TODO: WHOOA, although a nice example of inline exec with EOF, make this a remote file so we can do bash things
@@ -1245,9 +1245,7 @@ resource "null_resource" "register_runner" {
                 sleep $((3 + $((${count.index} * 5)) ))
 
                 ## Split runners *evenly* between multiple machines
-                ## If not evenly distributed/divisible, all runners unregister atm
-                ## Due to float arithmetic and how runners are registered/unregistered
-                %{ for NUM in range(1, 1 + (var.num_gitlab_runners / length(concat(var.lead_names, var.build_names)) )) }
+                %{ for NUM in range(1, 1 + local.runners_per_machine) }
 
                     MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)};
                     RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$");
@@ -1262,6 +1260,7 @@ resource "null_resource" "register_runner" {
                         case "$MACHINE_NAME" in
                             *build*) TAG=unity ;;
                             *admin*) TAG=prod ;;
+                            *lead*) TAG=prod ;;
                             *) TAG="" ;;
                         esac
                     fi
@@ -1341,7 +1340,7 @@ resource "null_resource" "unregister_runner" {
 
     triggers = {
         num_names = join(",", concat(var.lead_names, var.build_names))
-        num_runners = var.num_gitlab_runners
+        num_runners = sum([local.lead_servers + local.build_servers]) * local.runners_per_machine
     }
 
     provisioner "file" {
@@ -1351,7 +1350,7 @@ resource "null_resource" "unregister_runner" {
             RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
             RUNNERS_ON_MACHINE=($(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg"))
             CURRENT_NUM_RUNNERS="$${#RUNNERS_ON_MACHINE[@]}"
-            MAX_RUNNERS_PER_MACHINE=${var.num_gitlab_runners / (local.lead_servers + local.build_servers) }
+            MAX_RUNNERS_PER_MACHINE=${local.runners_per_machine}
             RM_INDEX_START=$(( $MAX_RUNNERS_PER_MACHINE+1 ))
 
             for NUM in $(seq $RM_INDEX_START $CURRENT_NUM_RUNNERS); do

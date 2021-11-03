@@ -44,7 +44,7 @@ variable "gitlab_backups_enabled" { default = "" }
 variable "import_gitlab" { default = "" }
 variable "import_gitlab_version" { default = "" }
 variable "gitlab_runner_tokens" { type = map(string) }
-variable "num_gitlab_runners" { default = 0 }
+variable "runners_per_machine" { default = 0 }
 
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
@@ -143,6 +143,8 @@ locals {
         if contains(SERVER.roles, "build") && length(SERVER.roles) == 1
     ])))
     is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
+
+    runners_per_machine = local.lead_servers + local.build_servers == 1 ? 4 : var.runners_per_machine
 
 }
 

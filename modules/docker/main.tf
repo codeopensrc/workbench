@@ -187,6 +187,7 @@ resource "null_resource" "start_containers" {
                             sed -i "s/\([[:space:]]*\)- \"80:80\"/\1- target: 80\n\1  published: 80\n\1  protocol: tcp\n\1  mode: host/" /root/repos/$REPO_NAME/docker-compose.yml;
                             sed -i "s/\([[:space:]]*\)- \"443:443\"/\1- target: 443\n\1  published: 443\n\1  protocol: tcp\n\1  mode: host/" /root/repos/$REPO_NAME/docker-compose.yml;
                             sed -i "s/\([[:space:]]*\)replicas: [0-9]/\1mode: global/" /root/repos/$REPO_NAME/docker-compose.yml;
+                            sed -i "s/start-first/stop-first/" /root/repos/$REPO_NAME/docker-compose.yml;
                         fi
 
                         APP_UP=$(docker service ps $CLEAN_SERVICE_NAME);
