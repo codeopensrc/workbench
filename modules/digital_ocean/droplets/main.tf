@@ -223,7 +223,7 @@ module "consul" {
 
     role = var.servers.roles[0]
     region = var.config.region
-    datacenter_has_admin = var.admin_ip_public != "" ? true : false
+    datacenter_has_admin = var.admin_ip_public != "" || var.consul_lan_leader_ip != "" ? true : false
     consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : digitalocean_droplet.main.ipv4_address_private
     #consul_wan_leader_ip = var.consul_wan_leader_ip
 

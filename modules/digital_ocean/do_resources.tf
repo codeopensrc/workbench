@@ -4,7 +4,7 @@ module "admin" {
     source = "./droplets"
     count = local.admin_servers > 0 ? 1 : 0
 
-    servers = local.admin_cfg_servers[0]
+    servers = local.admin_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_name
     image_size = "s-2vcpu-4gb"
@@ -15,7 +15,7 @@ module "lead" {
     source = "./droplets"
     count = local.is_only_leader_count
 
-    servers = local.lead_cfg_servers[0]
+    servers = local.lead_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_small_name
     image_size = "s-1vcpu-1gb"
@@ -33,7 +33,7 @@ module "db" {
     source = "./droplets"
     count = local.is_only_db_count
 
-    servers = local.db_cfg_servers[0]
+    servers = local.db_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_small_name
     image_size = "s-1vcpu-1gb"
@@ -48,7 +48,7 @@ module "build" {
     source = "./droplets"
     count = local.is_only_build_count
 
-    servers = local.build_cfg_servers[0]
+    servers = local.build_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_small_name
     image_size = "s-1vcpu-1gb"
@@ -86,6 +86,10 @@ data "digitalocean_droplets" "admin" {
     }
     sort {
         key       = "created_at"
+        direction = "asc"
+    }
+    sort {
+        key       = "size"
         direction = "desc"
     }
 }
@@ -106,6 +110,10 @@ data "digitalocean_droplets" "lead" {
     }
     sort {
         key       = "created_at"
+        direction = "asc"
+    }
+    sort {
+        key       = "size"
         direction = "desc"
     }
 }
@@ -127,6 +135,10 @@ data "digitalocean_droplets" "db" {
     }
     sort {
         key       = "created_at"
+        direction = "asc"
+    }
+    sort {
+        key       = "size"
         direction = "desc"
     }
 }
@@ -148,6 +160,10 @@ data "digitalocean_droplets" "build" {
     }
     sort {
         key       = "created_at"
+        direction = "asc"
+    }
+    sort {
+        key       = "size"
         direction = "desc"
     }
 }

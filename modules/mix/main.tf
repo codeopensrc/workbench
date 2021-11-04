@@ -999,7 +999,8 @@ resource "null_resource" "setup_letsencrypt" {
         EOF
         destination = "/tmp/turnoff_proxy_ssl.sh"
         connection {
-            host = element(var.lead_public_ips, 0)
+            ## We launch the docker proxy from the last leader ip found in case for example admin node has lead role attached
+            host = element(reverse(var.lead_public_ips), 0)
             type = "ssh"
         }
     }
@@ -1011,7 +1012,8 @@ resource "null_resource" "setup_letsencrypt" {
         ]
 
         connection {
-            host = element(var.lead_public_ips, 0)
+            ## We launch the docker proxy from the last leader ip found in case for example admin node has lead role attached
+            host = element(reverse(var.lead_public_ips), 0)
             type = "ssh"
         }
     }
@@ -1103,7 +1105,8 @@ resource "null_resource" "add_keys" {
     }
 
     connection {
-        host = element(var.lead_public_ips, 0)
+        ## We launch the docker proxy from the last leader ip found in case for example admin node has lead role attached
+        host = element(reverse(var.lead_public_ips), 0)
         type = "ssh"
     }
 }

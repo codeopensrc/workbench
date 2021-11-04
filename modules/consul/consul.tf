@@ -161,8 +161,11 @@ resource "null_resource" "consul_service" {
         content = <<-EOF
 
             mkdir -p /etc/consul.d/conf.d
+            systemctl stop consul.service
+            rm -rf /tmp/consul
             systemctl start consul.service
             systemctl enable consul.service
+            systemctl daemon-reload
             service sshd restart
             sleep 10
 

@@ -67,7 +67,7 @@ variable "migration_prep" { default = false } ## Not in use atm
 # 1 node  - (lead + db)          -- Confirmed
 
 # 2 nodes - (lead), (db)                 -- Confirmed
-# 2 nodes - (lead + db), (lead)          -- TO TEST
+# 2 nodes - (lead + db), (lead)          -- Confirmed
 # 2 nodes - (admin), (lead + db)         -- Confirmed
 # 2 nodes - (admin + db), (lead)         -- Confirmed
 # 2 nodes - (admin + lead), (db)         -- Confirmed

@@ -44,26 +44,26 @@ locals {
     ])))
 
 
-    admin_cfg_servers = tolist([
+    admin_cfg_servers = [
         for SERVER in var.config.servers:
         SERVER
         if SERVER.roles[0] == "admin"
-    ])
-    lead_cfg_servers = tolist([
+    ]
+    lead_cfg_servers = [
         for SERVER in var.config.servers:
         SERVER
         if SERVER.roles[0] == "lead"
-    ])
-    db_cfg_servers = tolist([
+    ]
+    db_cfg_servers = [
         for SERVER in var.config.servers:
         SERVER
         if SERVER.roles[0] == "db"
-    ])
-    build_cfg_servers = tolist([
+    ]
+    build_cfg_servers = [
         for SERVER in var.config.servers:
         SERVER
         if SERVER.roles[0] == "build"
-    ])
+    ]
 
 }
 

@@ -100,10 +100,6 @@ resource "null_resource" "pull_images" {
 
 ## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "start_containers" {
-    ##NOTE: Due to how we sort lead_ips for digital_ocean, index 0 will be the LAST
-    ##   created machine's ip. Need to test how aws sorts machines returned from
-    ##   aws_instances as we cannot forcefully sort them
-    ## Temp until ansible implemented appropriately
     count = 1
     depends_on = [null_resource.pull_images]
 
@@ -171,8 +167,8 @@ resource "null_resource" "start_containers" {
                             sed -i "s|OAUTH2_ENABLED=false|OAUTH2_ENABLED=true|" /root/repos/$REPO_NAME/docker-compose.yml;
                         fi
 
-                        ### IF OUR IP IS ALSO AN ADMIN IP, THEN IT WILL HAVE GITLAB (for now) SO DO THIS
-                        USE_NON_DEFAULT_PORTS=${length(var.admin_ips) == 0 || contains(var.admin_ips, element(var.public_ips, count.index)) ? "true" : "false"}
+                        ### IF OUR IP IS ALSO AN ADMIN IP OR NO ADMIN IP, THEN GILAB NGINX OR KUBE NGINX WILL BE ON 80
+                        USE_NON_DEFAULT_PORTS=${length(var.admin_ips) == 0 || contains(var.admin_ips, element(reverse(var.public_ips), count.index)) ? "true" : "false"}
                         if [ "$SERVICE_NAME" = "proxy" ] && [ "$USE_NON_DEFAULT_PORTS" = "true" ]; then
                             HTTP_PORT=${var.http_port};
                             HTTPS_PORT=${var.https_port};
@@ -180,8 +176,9 @@ resource "null_resource" "start_containers" {
                             sed -i "s|443:443|$HTTPS_PORT:443|" /root/repos/$REPO_NAME/docker-compose.yml;
                         fi
 
+                        ### Only time we use port 80 for docker proxy is if we have an admin and leader is not on the admin node
                         ### IF WE HAVE AN ADMIN AND OUR IP IS NOT AN ADMIN IP, THEN CONSTRAIN DOCKER PROXY CONTAINER AND SERVICE TO NON-ADMIN NODE
-                        USE_DEFAULT_PORTS=${length(var.admin_ips) > 0 && !contains(var.admin_ips, element(var.public_ips, count.index)) ? "true" : "false"}
+                        USE_DEFAULT_PORTS=${length(var.admin_ips) > 0 && !contains(var.admin_ips, element(reverse(var.public_ips), count.index)) ? "true" : "false"}
                         if [ "$SERVICE_NAME" = "proxy" ] && [ "$USE_DEFAULT_PORTS" = "true" ]; then
                             sed -i "s/\([[:space:]]*\)- node.role == manager/\1- node.role == manager\n\1- node.hostname != gitlab.${var.root_domain_name}/" /root/repos/$REPO_NAME/docker-compose.yml;
                             sed -i "s/\([[:space:]]*\)- \"80:80\"/\1- target: 80\n\1  published: 80\n\1  protocol: tcp\n\1  mode: host/" /root/repos/$REPO_NAME/docker-compose.yml;
@@ -218,7 +215,11 @@ resource "null_resource" "start_containers" {
             EOF
         ]
         connection {
-            host = element(var.public_ips, count.index)
+            ##NOTE: We reverse ips to launch from the last leader ip
+            ##   Need to test how aws sorts machines returned from
+            ##   aws_instances as we cannot forcefully sort them
+            ## Temp until ansible implemented appropriately
+            host = element(reverse(var.public_ips), 0)
             type = "ssh"
         }
     }
