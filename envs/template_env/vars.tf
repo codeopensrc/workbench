@@ -63,6 +63,12 @@ variable "migration_prep" { default = false } ## Not in use atm
 ## None of the matrices support more than 1 db role in a cluster
 ## None of the matrices support more than 1 admin role in a cluster
 
+##NOTE: 100% for digital ocean. AWS may have issues when not having an admin and having
+##  multiple leaders as the IPs return order has not been fully audited (creation time, size etc).
+## Digital ocean allows for sorting by created_at and size to reliably determine the
+##  correct "pseudo admin" (kubernetes intialization, consul bootstrapping etc)
+## As we start implementing ansible this *should* be a non-issue
+
 # 1 node  - (admin + lead + db)  -- Confirmed
 # 1 node  - (lead + db)          -- Confirmed
 
@@ -73,14 +79,14 @@ variable "migration_prep" { default = false } ## Not in use atm
 # 2 nodes - (admin + lead), (db)         -- Confirmed
 # 2 nodes - (admin + lead + db), (lead)  -- Confirmed
 
-# 3 nodes - (lead), (lead), (db)                -- TO TEST
-# 3 nodes - (lead + db), (lead), (lead)         -- TO TEST
+# 3 nodes - (lead), (lead), (db)                -- Confirmed
+# 3 nodes - (lead + db), (lead), (lead)         -- Confirmed
 # 3 nodes - (admin), (lead), (db)               -- Confirmed
-# 3 nodes - (admin), (lead + db), (lead)        -- TO TEST
+# 3 nodes - (admin), (lead + db), (lead)        -- Confirmed
 # 3 nodes - (admin + db), (lead), (lead)        -- Confirmed
 # 3 nodes - (admin + lead), (lead), (db)        -- Confirmed
-# 3 nodes - (admin + lead), (lead + db), (lead) -- TO TEST
-# 3 nodes - (admin + lead + db), (lead), (lead) -- TO TEST
+# 3 nodes - (admin + lead), (lead + db), (lead) -- Confirmed
+# 3 nodes - (admin + lead + db), (lead), (lead) -- Confirmed
 
 
 variable "servers" {

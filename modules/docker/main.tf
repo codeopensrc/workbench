@@ -176,7 +176,7 @@ resource "null_resource" "start_containers" {
                             sed -i "s|443:443|$HTTPS_PORT:443|" /root/repos/$REPO_NAME/docker-compose.yml;
                         fi
 
-                        ### Only time we use port 80 for docker proxy is if we have an admin and leader is not on the admin node
+                        ### We use port 80 for docker proxy if we have an admin and we have a leader that is not on the admin node
                         ### IF WE HAVE AN ADMIN AND OUR IP IS NOT AN ADMIN IP, THEN CONSTRAIN DOCKER PROXY CONTAINER AND SERVICE TO NON-ADMIN NODE
                         USE_DEFAULT_PORTS=${length(var.admin_ips) > 0 && !contains(var.admin_ips, element(reverse(var.public_ips), count.index)) ? "true" : "false"}
                         if [ "$SERVICE_NAME" = "proxy" ] && [ "$USE_DEFAULT_PORTS" = "true" ]; then

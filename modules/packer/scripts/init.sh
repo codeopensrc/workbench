@@ -132,6 +132,12 @@ if [[ -n $IS_ADMIN ]]; then
 
     # Disable gitlab (enable for 1 instance only)
     sudo gitlab-ctl stop
+    
+    ###! If in the future we start provisioning FROM admin
+    ###! Also just to have simple documentation to install
+    #sudo apt-add-repository ppa:ansible/ansible
+    #sudo apt update
+    #sudo apt install ansible
 fi
 
 sed -i "s|0|1|" /etc/apt/apt.conf.d/20auto-upgrades

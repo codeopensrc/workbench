@@ -47,7 +47,7 @@ resource "null_resource" "proxy_config" {
         content = templatefile("${path.module}/templatefiles/mainproxy.tmpl", {
             root_domain_name = var.root_domain_name
             proxy_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
-            https_port = contains(var.lead_public_ips, element(var.admin_public_ips, count.index)) ? var.https_port : 443
+            https_port = element(reverse(var.lead_public_ips), 0) == element(var.admin_public_ips, count.index) ? var.https_port : 443
             cert_port = var.cert_port
             subdomains = [
                 for HOST in var.app_definitions:
