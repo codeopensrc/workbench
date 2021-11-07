@@ -1,0 +1,19 @@
+
+    ## Get ip from inventory file for first host in lead group
+    #leader_ip: {{ hostvars[groups['lead'][0]]['ansible_default_ipv4']['address'] }}
+      #when:  join_cmd.stdout == ''
+      #when: join_cmd.stdout is search('')
+      #notify: join swarm
+      #      #- name: upload template
+      #      #  template:
+      #      #    src: ../templatefiles/swarm.sh
+      #      #    dest: $HOME/code/scripts/ansible/swarm.sh
+      #
+      #  handlers:
+      #    - name: join swarm
+      #      debug: msg="Joining swarm"
+      #      command: {{ join_cmd }}
+      #      #when: swarm_token|success
+
+    #nodename: "{{ ansible_hostname | regex_replace('_lead$', '') }}"
+    #FUBAR="{{ ( PREFIX + '_' + CNAME + VERSION ) | replace('.','') }}"

@@ -1,0 +1,66 @@
+#TODO: How best to determine THE node to start swarm besides first index
+#TODO: Incorporate docker version if necessary "docker -v | cut -d ' ' -f 3 | cut -d ',' -f 1"
+---
+- name: Start docker swarm
+  hosts: lead[0]
+  remote_user: root
+  tasks:
+    - name: init swarm
+      block:
+        - name: check swarm started
+          command: docker node ls
+          changed_when: false
+      rescue:
+        - name: start swarm
+          command: docker swarm init --advertise-addr {{ ansible_default_ipv4.address }}:2377
+
+    - name: save swarm join_cmd
+      register: join_cmd
+      shell: "docker swarm join-token manager | grep -- --token"
+      changed_when: false
+
+    - name: join_cmd output
+      debug: msg={{ join_cmd.stdout }}
+
+
+- name: Join docker swarm
+  hosts: lead, !lead[0]
+  serial: 1
+  remote_user: root
+  vars:
+    join_cmd: "{{ hostvars[groups.lead[0]]['join_cmd'].stdout }}"
+  tasks:
+    - name: join existing swarm
+      block:
+        - name: check swarm joined
+          command: docker node ls
+          changed_when: false
+      rescue:
+        - name: join swarm
+          command: "{{ join_cmd }}"
+          when: join_cmd != ""
+
+    - name: get down nodes
+      register: found_down_nodes
+      shell: "docker node ls | grep 'Down' | cut -d ' ' -f1"
+      changed_when: false
+
+    - name: rm down nodes
+      command: docker node rm --force {{ found_down_nodes }}
+      when: found_down_nodes.stdout != ""
+
+
+- name: Add labels
+  hosts: lead
+  remote_user: root
+  vars:
+    region: "{{ region }}"
+  tasks:
+    - name: label docker nodes
+      block:
+        - name: check node labels
+          shell: "docker node ls -f node.label='name={{ ansible_hostname }}' | grep {{ ansible_hostname }}"
+          changed_when: false
+      rescue:
+        - name: add node labels
+          command: docker node update --label-add dc={{ region }} --label-add name={{ ansible_hostname }} {{ ansible_hostname }}
