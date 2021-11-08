@@ -17,3 +17,13 @@
 
     #nodename: "{{ ansible_hostname | regex_replace('_lead$', '') }}"
     #FUBAR="{{ ( PREFIX + '_' + CNAME + VERSION ) | replace('.','') }}"
+    #
+    #
+    #- debug: msg={{ ansible_nodename }}
+    #- debug: msg={{ machine_name }}
+    #- debug: msg={{ ansible_host }}
+    #
+    #
+    #shell: |
+    #  rm $HOME/{{ bot_gpg_name }}.asc
+    #  rm $HOME/{{ tmp_pubkeylist }}"

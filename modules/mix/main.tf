@@ -24,14 +24,19 @@ module "swarm" {
     source = "../swarm"
     depends_on = [module.ansible]
 
+    lead_public_ips = var.lead_public_ips
     ansible_hostfile = var.ansible_hostfile
     region      = var.region
 }
 
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "gpg" {
     source = "../gpg"
     count = var.use_gpg ? 1 : 0
     depends_on = [module.swarm]
+
+    ansible_hostfile = var.ansible_hostfile
 
     s3alias = var.s3alias
     s3bucket = var.s3bucket
@@ -41,10 +46,6 @@ module "gpg" {
 
     admin_public_ips = var.admin_public_ips
     db_public_ips = var.db_public_ips
-
-    admin_servers = local.admin_servers
-    is_only_db_count = local.is_only_db_count
-
 }
 
 ### NOTE: Only thing for this is consul needs to be installed

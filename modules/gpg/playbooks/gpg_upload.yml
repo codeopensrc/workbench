@@ -1,0 +1,39 @@
+---
+- name: Upload gpg
+  hosts: "{{ (groups['admin'] | default([]) + groups['db']) }}"
+  remote_user: root
+  gather_facts: no
+  vars:
+    bot_gpg_name: "{{ bot_gpg_name }}"
+    tmp_pubkeylist: "{{ tmp_pubkeylist }}"
+    s3alias: "{{ s3alias }}"
+    s3bucket: "{{ s3bucket }}"
+  tasks:
+    - name: upload decrypted key
+      copy:
+        src: "{{ inventory_dir }}/{{ bot_gpg_name }}.asc"
+        dest: "$HOME/{{ bot_gpg_name }}.asc"
+
+    - name: get passphrase
+      include_vars: "{{ inventory_dir }}/{{ bot_gpg_name }}.yml"
+
+    - name: upload passphrase
+      copy:
+        dest: "$HOME/{{ bot_gpg_name }}"
+        content: "{{ bot_gpg_passphrase }}"
+
+    ### Temporarily using remote pubkeys as recipients
+    - name: download pubkeys
+      shell: "/usr/local/bin/mc cp {{ s3alias }}/{{ s3bucket }}/{{ tmp_pubkeylist }} $HOME/{{ tmp_pubkeylist }}"
+
+    - name: import pubkeys
+      shell: "gpg --import --batch $HOME/{{ tmp_pubkeylist }}"
+
+    - name: import private key
+      shell: "gpg --import --batch $HOME/{{ bot_gpg_name }}.asc"
+
+    - name: trust keys
+      shell: 'gpg --list-keys | sed -r -n "s/ +([0-9A-H]{10,})/\1:6:/p" | gpg --import-ownertrust'
+
+    - name: rm remote keyfiles
+      shell: "rm $HOME/{{ bot_gpg_name }}.asc && rm $HOME/{{ tmp_pubkeylist }}"

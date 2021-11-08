@@ -22,14 +22,14 @@ resource "null_resource" "ansible_hosts" {
 		cat <<-EOLF > ${var.ansible_hostfile}
 		[servers]
 		%{ for ind, HOST in var.ansible_hosts ~}
-		${HOST.name} ansible_host=${HOST.ip}
+		${HOST.ip} machine_name=${HOST.name}
 		%{ endfor ~}
 		
 		%{ if length(var.admin_public_ips) > 0 ~}
 		[admin]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "admin") ~}
-		${HOST.name}_admin ansible_host=${HOST.ip}
+		${HOST.ip} machine_name=${HOST.name}
 		%{ endif ~}
 		%{ endfor ~}
 		%{ endif ~}
@@ -38,7 +38,7 @@ resource "null_resource" "ansible_hosts" {
 		[lead]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "lead") ~}
-		${HOST.name}_lead ansible_host=${HOST.ip}
+		${HOST.ip} machine_name=${HOST.name}
 		%{ endif ~}
 		%{ endfor ~}
 		%{ endif ~}
@@ -47,7 +47,7 @@ resource "null_resource" "ansible_hosts" {
 		[db]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "db") ~}
-		${HOST.name}_db ansible_host=${HOST.ip}
+		${HOST.ip} machine_name=${HOST.name}
 		%{ endif ~}
 		%{ endfor ~}
 		%{ endif ~}
@@ -56,7 +56,7 @@ resource "null_resource" "ansible_hosts" {
 		[build]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "build") ~}
-		${HOST.name}_build ansible_host=${HOST.ip}
+		${HOST.ip} machine_name=${HOST.name}
 		%{ endif ~}
 		%{ endfor ~}
 		%{ endif ~}

@@ -1,0 +1,23 @@
+---
+- name: Handle gpg
+  hosts: "{{ (groups['admin'] | default([]) + groups['db']) | first }}"
+  remote_user: root
+  gather_facts: no
+  vars:
+    bot_gpg_name: "{{ bot_gpg_name }}"
+    bot_gpg_filename: "{{ bot_gpg_name }}.asc.gpg"
+    s3alias: "{{ s3alias }}"
+    s3bucket: "{{ s3bucket }}"
+  tasks:
+    - name: download encrypted key
+      shell: "/usr/local/bin/mc cp {{ s3alias }}/{{ s3bucket }}/{{ bot_gpg_filename }} $HOME/{{ bot_gpg_filename }}"
+
+    - name: fetch encrypted key
+      fetch:
+        src: "$HOME/{{ bot_gpg_filename }}"
+        dest: "{{ inventory_dir }}/"
+        flat: yes
+
+    - name: remove key
+      shell: "rm $HOME/{{ bot_gpg_filename }}"
+      tags: rm
