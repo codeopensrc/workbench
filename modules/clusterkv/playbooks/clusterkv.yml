@@ -1,0 +1,46 @@
+---
+- name: Handle consul kv
+  hosts: "{{ (groups['admin'] | default([]) + groups['lead']) | first }}"
+  remote_user: root
+  gather_facts: no
+  vars:
+    app: "{{ app_definitions }}"
+    ssl: "{{ additional_ssl }}"
+    root_domain_name: "{{ root_domain_name }}"
+    serverkey: "{{ serverkey }}"
+    pg_password: "{{ pg_password }}"
+    dev_pg_password: "{{ dev_pg_password }}"
+  tasks:
+    - name: delete applist
+      command: consul kv delete -recurse applist
+
+    - name: write app_definitions kv
+      shell: |
+        consul kv put apps/{{ app[item].subdomain_name }}/green {{ app[item].green_service }}
+        consul kv put apps/{{ app[item].subdomain_name }}/blue {{ app[item].blue_service }}
+        consul kv put apps/{{ app[item].subdomain_name }}/active {{ app[item].default_active }}
+        consul kv put applist/{{ app[item].service_name }} {{ app[item].subdomain_name }}
+      with_items:
+        - "{{ app | list }}"
+
+    - name: write additional_ssl kv
+      shell: |
+        consul kv put applist/{{ app[item].service_name }} {{ app[item].subdomain_name }}
+
+        ### Temporary. When not using admin role, allows docker-proxy to proxy to kubernetes services
+        consul kv put apps/{{ app[item].subdomain_name }}/green 172.17.0.1:31000
+        consul kv put apps/{{ app[item].subdomain_name }}/blue _dev
+        consul kv put apps/{{ app[item].subdomain_name }}/active green
+
+        consul kv put apps/{{ app[item].subdomain_name }}.beta/green 172.17.0.1:31000
+        consul kv put apps/{{ app[item].subdomain_name }}.beta/blue _dev
+        consul kv put apps/{{ app[item].subdomain_name }}.beta/active green
+      with_items:
+        - "{{ ssl | list }}"
+
+    - name: write misc cluster kv
+      shell: |
+        consul kv put domainname {{ root_domain_name }}
+        consul kv put serverkey {{ serverkey }}
+        consul kv put PG_PASSWORD {{ pg_password }}
+        consul kv put DEV_PG_PASSWORD {{ dev_pg_password }}

@@ -27,3 +27,36 @@
     #shell: |
     #  rm $HOME/{{ bot_gpg_name }}.asc
     #  rm $HOME/{{ tmp_pubkeylist }}"
+    #
+    #
+    #
+    #vars:
+    #  app: "{{ app_definitions }}"
+    #tasks:
+    #  - name: json output
+    #    debug:
+    #      msg:
+    #      - "My item is {{ item }}"
+    #      - "{{ app[item] }}"
+    #    with_items:
+    #      - "{{ app | list }}"
+    #
+    #
+    #
+#   - name: write blue service
+#     register: output
+#     shell: |
+#         echo "consul kv put apps/{{ app[item].subdomain_name }}/green {{ app[item].green_service }}"
+#         echo "consul kv put apps/{{ app[item].subdomain_name }}/blue {{ app[item].blue_service }}"
+#         echo "consul kv put apps/{{ app[item].subdomain_name }}/active {{ app[item].default_active }}"
+#         echo "consul kv put applist/{{ app[item].service_name }} {{ app[item].subdomain_name }}"
+#     debug:
+#       msg: "consul kv put apps/{{ app[item].subdomain_name }}/blue {{ app[item].blue_service }}"
+#     with_items:
+#       - "{{ app | list }}"
+
+#   - name: out
+#     debug:
+#       msg: "{{ item.stdout_lines }}"
+#     with_items:
+#       - "{{ output.results }}"
