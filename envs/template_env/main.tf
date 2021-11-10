@@ -184,5 +184,9 @@ locals {
         known_hosts = var.known_hosts
         deploy_key_location = var.deploy_key_location
         pg_read_only_pw = var.pg_read_only_pw
+
+        nodeexporter_version = var.nodeexporter_version
+        promtail_version = var.promtail_version
+        consulexporter_version = var.consulexporter_version
     }
 }

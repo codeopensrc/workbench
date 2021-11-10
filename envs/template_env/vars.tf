@@ -17,6 +17,14 @@ variable "import_gitlab_version" { default = "" }
 variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "install_unity3d" { default = false }
 
+variable "nodeexporter_version" { default = "1.2.0" }
+variable "promtail_version" { default = "2.2.1" }
+variable "consulexporter_version" { default = "0.7.1" }
+#variable "kubernetes_version" { default = "1.20.11-00" }## Gitlab 14.3.0 supports
+
+###! TODO: Conditionally provision: kubernetes and/or docker_swarm
+#variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }
+
 ########## SOFTWARE VERSIONS ##########
 #######################################
 variable "packer_config" {
@@ -56,7 +64,7 @@ variable "downsize" { default = false }
 ###! TODO: Use to lower dns TTL to 60 seconds and perform all backups initially
 ###! Anything that is done pre-system/machine migration should be done in a
 ###!  run once (backups) or toggleable (dns TTL) fashion with this setting
-variable "migration_prep" { default = false } ## Not in use atm
+#variable "migration_prep" { default = false } ## Not in use atm
 
 ## Known role support matrix for 1-3 nodes
 ## All matrices support adding multiple 1gb+ build nodes

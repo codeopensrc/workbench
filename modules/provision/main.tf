@@ -1,4 +1,5 @@
 
+variable "name" { default = "" }
 variable "public_ip" { default = "" }
 variable "known_hosts" { default = [] }
 variable "root_domain_name" { default = "" }
@@ -6,6 +7,12 @@ variable "deploy_key_location" {}
 
 variable "private_ip" { default = "" }
 variable "pg_read_only_pw" { default = "" }
+
+variable "admin_ip_private" { default = "" }
+
+variable "nodeexporter_version" { default = "" }
+variable "promtail_version" { default = "" }
+variable "consulexporter_version" { default = "" }
 
 
 resource "null_resource" "access" {
@@ -138,3 +145,83 @@ resource "null_resource" "consul_checks" {
     }
 }
 
+resource "null_resource" "exporters" {
+    count = var.admin_ip_private == "" ? 0 : 1
+    depends_on = [
+        null_resource.access,
+        null_resource.reprovision_scripts,
+        null_resource.consul_checks,
+    ]
+
+    provisioner "remote-exec" {
+        inline = [
+            "FILENAME1=node_exporter-${var.nodeexporter_version}.linux-amd64.tar.gz",
+            "[ ! -f /tmp/$FILENAME1 ] && wget https://github.com/prometheus/node_exporter/releases/download/v${var.nodeexporter_version}/$FILENAME1 -P /tmp",
+            "tar xvfz /tmp/$FILENAME1 --wildcards --strip-components=1 -C /usr/local/bin */node_exporter",
+
+            "FILENAME2=promtail-linux-amd64.zip",
+            "[ ! -f /tmp/$FILENAME2 ] && wget https://github.com/grafana/loki/releases/download/v${var.promtail_version}/$FILENAME2 -P /tmp",
+            "unzip /tmp/$FILENAME2 -d /usr/local/bin && chmod a+x /usr/local/bin/promtail*amd64",
+
+            "FILENAME3=promtail-local-config.yaml",
+            "mkdir -p /etc/promtail.d",
+            "[ ! -f /etc/promtail.d/$FILENAME3 ] && wget https://raw.githubusercontent.com/grafana/loki/main/clients/cmd/promtail/$FILENAME3 -P /etc/promtail.d",
+            "sed -i \"s/localhost:/${var.admin_ip_private}:/\" /etc/promtail.d/$FILENAME3",
+            "sed -ni '/nodename:/!p; $ a \\      nodename: ${var.name}' /etc/promtail.d/$FILENAME3",
+
+            "FILENAME4=consul_exporter-${var.consulexporter_version}.linux-amd64.tar.gz",
+            "[ ! -f /tmp/$FILENAME4 ] && wget https://github.com/prometheus/consul_exporter/releases/download/v${var.consulexporter_version}/$FILENAME4 -P /tmp",
+            "tar xvfz /tmp/$FILENAME4 --wildcards --strip-components=1 -C /usr/local/bin */consul_exporter",
+        ]
+    }
+
+    provisioner "file" {
+        content = templatefile("${path.module}/templatefiles/services/nodeexporter.service", {})
+        destination = "/etc/systemd/system/nodeexporter.service"
+    }
+    provisioner "file" {
+        content = templatefile("${path.module}/templatefiles/services/consulexporter.service", {})
+        destination = "/etc/systemd/system/consulexporter.service"
+    }
+    provisioner "file" {
+        content = templatefile("${path.module}/templatefiles/services/promtail.service", {})
+        destination = "/etc/systemd/system/promtail.service"
+    }
+
+    provisioner "remote-exec" {
+        inline = [
+            length(regexall("admin", var.name)) > 0 ? "echo" : "sudo systemctl start nodeexporter",
+            length(regexall("admin", var.name)) > 0 ? "echo" : "sudo systemctl enable nodeexporter",
+            length(regexall("admin", var.name)) > 0 ? "sudo systemctl start consulexporter" : "echo",
+            length(regexall("admin", var.name)) > 0 ? "sudo systemctl enable consulexporter" : "echo",
+            "sudo systemctl start promtail",
+            "sudo systemctl enable promtail",
+        ]
+    }
+
+    connection {
+        host = var.public_ip
+        type = "ssh"
+    }
+}
+
+###NOTE: If we were to migrate to ansible for exporters (couldnt be run here without ansible_hostfile created already), 
+###  this is the resource we'd roughly use. Wrote it, but not necessary atm
+
+#resource "null_resource" "exporters" {
+#    count = var.admin_ip_private == "" ? 0 : local.server_count
+#    depends_on = [
+#        null_resource.access,
+#        null_resource.reprovision_scripts,
+#        null_resource.consul_checks,
+#    ]
+#
+#    provisioner "local-exec" {
+#        command = <<-EOF
+#            ansible-playbook ${path.module}/playbooks/nodeexporter.yml -i ${var.ansible_hostfile} --extra-vars \
+#                "nodeexporter_version=${var.nodeexporter_version} \
+#                promtail_version=${var.promtail_version} \
+#                consulexporter_version=${var.consulexporter_version}"
+#        EOF
+#    }
+#}

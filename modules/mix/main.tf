@@ -52,7 +52,7 @@ module "gpg" {
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "clusterkv" {
     source = "../clusterkv"
-    depends_on = [ module.gpg ]
+    depends_on = [module.gpg]
 
     ansible_hostfile = var.ansible_hostfile
 
@@ -67,9 +67,7 @@ module "clusterkv" {
 
 resource "null_resource" "prometheus_targets" {
     count = local.admin_servers
-    depends_on = [
-        null_resource.add_proxy_hosts,
-    ]
+    depends_on = [module.clusterkv]
 
     triggers = {
         ips = join(",", local.all_private_ips)
@@ -126,7 +124,7 @@ resource "null_resource" "prometheus_targets" {
 ###  https://docs.gitlab.com/omnibus/settings/memory_constrained_envs.html
 resource "null_resource" "install_gitlab" {
     count = local.admin_servers
-    depends_on = [ null_resource.add_proxy_hosts ]
+    depends_on = [module.clusterkv]
 
     # # After renewing certs possibly
     # sudo gitlab-ctl hup nginx
@@ -220,7 +218,7 @@ resource "null_resource" "install_gitlab" {
 resource "null_resource" "restore_gitlab" {
     count = local.admin_servers
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
     ]
 
@@ -300,7 +298,7 @@ resource "null_resource" "restore_gitlab" {
 resource "null_resource" "gitlab_plugins" {
     count = local.admin_servers
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
     ]
@@ -417,7 +415,7 @@ resource "null_resource" "gitlab_plugins" {
 resource "null_resource" "reauthorize_mattermost" {
     count = 0
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
     ]
@@ -463,75 +461,11 @@ resource "null_resource" "reauthorize_mattermost" {
 }
 
 
-resource "null_resource" "node_exporter" {
-    count = local.admin_servers > 0 ? local.server_count : 0
-    depends_on = [
-        null_resource.add_proxy_hosts,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab
-    ]
-
-    #TODO: pass node_exporter version
-    #TODO: pass consul_exporter version
-    #TODO: pass promtail version
-    provisioner "remote-exec" {
-        inline = [
-            "FILENAME1=node_exporter-1.2.0.linux-amd64.tar.gz",
-            "[ ! -f /tmp/$FILENAME1 ] && wget https://github.com/prometheus/node_exporter/releases/download/v1.2.0/$FILENAME1 -P /tmp",
-            "tar xvfz /tmp/$FILENAME1 --wildcards --strip-components=1 -C /usr/local/bin */node_exporter",
-            "FILENAME2=promtail-linux-amd64.zip",
-            "[ ! -f /tmp/$FILENAME2 ] && wget https://github.com/grafana/loki/releases/download/v2.2.1/$FILENAME2 -P /tmp",
-            "unzip /tmp/$FILENAME2 -d /usr/local/bin && chmod a+x /usr/local/bin/promtail*amd64",
-            "FILENAME3=promtail-local-config.yaml",
-            "mkdir -p /etc/promtail.d",
-            "[ ! -f /etc/promtail.d/$FILENAME3 ] && wget https://raw.githubusercontent.com/grafana/loki/main/clients/cmd/promtail/$FILENAME3 -P /etc/promtail.d",
-            "sed -i \"s/localhost:/${var.admin_private_ips[0]}:/\" /etc/promtail.d/$FILENAME3",
-            "sed -ni '/nodename:/!p; $ a \\      nodename: ${local.all_names[count.index]}' /etc/promtail.d/$FILENAME3",
-            "FILENAME4=consul_exporter-0.7.1.linux-amd64.tar.gz",
-            "[ ! -f /tmp/$FILENAME4 ] && wget https://github.com/prometheus/consul_exporter/releases/download/v0.7.1/$FILENAME4 -P /tmp",
-            "tar xvfz /tmp/$FILENAME4 --wildcards --strip-components=1 -C /usr/local/bin */consul_exporter",
-        ]
-    }
-
-    #Temp?
-    ##TODO: Probably best in provision module
-    provisioner "file" {
-        content = templatefile("${path.module}/templates/nodeexporter.service", {})
-        destination = "/etc/systemd/system/nodeexporter.service"
-    }
-    #Temp?
-    provisioner "file" {
-        content = templatefile("${path.module}/templates/consulexporter.service", {})
-        destination = "/etc/systemd/system/consulexporter.service"
-    }
-    #Temp?
-    provisioner "file" {
-        content = templatefile("${path.module}/templates/promtail.service", {})
-        destination = "/etc/systemd/system/promtail.service"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            length(regexall("admin", local.all_names[count.index])) > 0 ? "echo 0" : "sudo systemctl start nodeexporter",
-            length(regexall("admin", local.all_names[count.index])) > 0 ? "echo 0" : "sudo systemctl enable nodeexporter",
-            length(regexall("admin", local.all_names[count.index])) > 0 ? "sudo systemctl start consulexporter" : "echo 0",
-            length(regexall("admin", local.all_names[count.index])) > 0 ? "sudo systemctl enable consulexporter" : "echo 0",
-            "sudo systemctl start promtail",
-            "sudo systemctl enable promtail",
-        ]
-    }
-
-    connection {
-        host = element(local.all_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
 #TODO: pass Loki version
 resource "null_resource" "install_loki" {
     count = local.admin_servers
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab
     ]
@@ -579,7 +513,7 @@ module "admin_nginx" {
     count = local.lead_servers > 0 ? local.admin_servers : 0
     source = "../nginx"
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab
     ]
@@ -606,7 +540,7 @@ module "admin_nginx" {
 resource "null_resource" "install_dbs" {
     count      = local.db_servers > 0 ? local.db_servers : 0
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab
     ]
@@ -637,7 +571,7 @@ resource "null_resource" "install_dbs" {
 resource "null_resource" "import_dbs" {
     count = var.import_dbs && local.db_servers > 0 ? length(var.dbs_to_import) : 0
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         null_resource.install_dbs
@@ -689,7 +623,7 @@ resource "null_resource" "import_dbs" {
 resource "null_resource" "db_ready" {
     count = local.db_servers
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         null_resource.install_dbs,
@@ -737,7 +671,7 @@ resource "null_resource" "db_ready" {
 module "docker" {
     source = "../docker"
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         #null_resource.gitlab_plugins, ## Technically should wait for wekan plugin
@@ -765,7 +699,7 @@ module "docker" {
 resource "null_resource" "docker_ready" {
     count = local.lead_servers > 0 ? 1 : 0
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         module.admin_nginx,
@@ -810,7 +744,7 @@ resource "null_resource" "gpg_remove_key" {
     ## Only admin and DB should need it atm
     count = var.use_gpg ? sum([local.admin_servers, local.is_only_db_count]) : 0
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         module.admin_nginx,
@@ -845,7 +779,7 @@ resource "null_resource" "gpg_remove_key" {
 resource "null_resource" "setup_letsencrypt" {
     count = local.lead_servers > 0 ? 1 : 0
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
         module.admin_nginx,
@@ -997,7 +931,7 @@ resource "null_resource" "add_keys" {
 resource "null_resource" "install_runner" {
     count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         module.docker,
         null_resource.setup_letsencrypt,
         null_resource.add_keys
@@ -1300,7 +1234,7 @@ resource "null_resource" "kubernetes_admin" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         module.docker,
         null_resource.docker_ready,
         null_resource.setup_letsencrypt,
@@ -1355,7 +1289,7 @@ resource "null_resource" "kubernetes_worker" {
     #TODO: module
     #source = "../kubernetes"
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         module.docker,
         null_resource.install_runner,
         null_resource.register_runner,
@@ -1396,7 +1330,7 @@ resource "null_resource" "kubernetes_worker" {
 resource "null_resource" "configure_smtp" {
     count = local.admin_servers
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         module.docker,
         null_resource.install_runner,
         null_resource.register_runner,
@@ -1435,7 +1369,7 @@ resource "null_resource" "configure_smtp" {
 resource "null_resource" "reboot_environments" {
     count = local.admin_servers
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         module.docker,
         null_resource.install_runner,
         null_resource.register_runner,
@@ -1514,7 +1448,7 @@ resource "null_resource" "reboot_environments" {
 resource "null_resource" "enable_autoupgrade" {
     count = local.server_count
     depends_on = [
-        null_resource.add_proxy_hosts,
+        module.clusterkv,
         null_resource.install_runner,
         null_resource.register_runner,
         null_resource.unregister_runner,

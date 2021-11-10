@@ -320,13 +320,20 @@ module "provision" {
     source = "../../provision"
     depends_on = [module.init, module.consul, module.hostname, module.cron]
 
+    name = aws_instance.main.tags.Name
     public_ip = aws_instance.main.public_ip
 
     known_hosts = var.config.known_hosts
     root_domain_name = var.config.root_domain_name
     deploy_key_location = var.config.deploy_key_location
 
+    nodeexporter_version = var.config.nodeexporter_version
+    promtail_version = var.config.promtail_version
+    consulexporter_version = var.config.consulexporter_version
+
     # DB checks
     pg_read_only_pw = var.config.pg_read_only_pw
     private_ip = aws_instance.main.private_ip
+
+    admin_ip_private = contains(var.servers.roles, "admin") ? aws_instance.main.private_ip : var.admin_ip_private
 }
