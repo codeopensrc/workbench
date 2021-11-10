@@ -60,3 +60,27 @@
 #       msg: "{{ item.stdout_lines }}"
 #     with_items:
 #       - "{{ output.results }}"
+#
+#
+    - meta: end_play
+#
+#  vars:
+#    redis: "{{ redis_dbs | from_json }}"
+#    mongo: "{{ mongo_dbs | from_json }}"
+#    pg: "{{ pg_dbs | from_json }}"
+#    dbs_to_import: "{{ dbs_to_import | from_json }}"
+#    use_gpg: "{{ use_gpg }}"
+#    bot_gpg_name: "{{ bot_gpg_name }}"
+#  tasks:
+#
+#    - name: test
+#      debug:
+#        msg:
+#        - "redis {{ redis }}"
+#        - "mongo {{ mongo }}"
+#      when: mongo
+#
+#    - name: test
+#      debug:
+#        msg:
+#        - "{{ hostvars[ansible_host]['ansible_'+vpc_private_iface].ipv4.address }}"

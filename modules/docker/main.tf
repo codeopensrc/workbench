@@ -20,7 +20,6 @@ variable "app_definitions" {
     }))
 }
 variable "root_domain_name" {}
-variable "registry_ready" {}
 
 
 ## TODO: Use for_each to use keys instead of indexes
@@ -29,7 +28,6 @@ resource "null_resource" "pull_images" {
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
-        registry_ready = var.registry_ready
     }
 
     provisioner "remote-exec" {

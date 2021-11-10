@@ -1,0 +1,74 @@
+# TODO: Setup ALL dbs (not just mongo) to bind to private net/vpc instead of relying on security group/firewall
+---
+- name: Install dbs
+  hosts: db
+  remote_user: root
+  vars:
+    redis: "{{ redis_dbs | from_json }}"
+    mongo: "{{ mongo_dbs | from_json }}"
+    pg: "{{ pg_dbs | from_json }}"
+    vpc_private_iface : "{{ vpc_private_iface }}"
+    private_ip: "{{ hostvars[ansible_host]['ansible_'+vpc_private_iface].ipv4.address }}"
+  tasks:
+    - name: chmod install files
+      command: "{{ item }}"
+      with_items:
+        - chmod +x /root/code/scripts/install/install_redis.sh
+        - chmod +x /root/code/scripts/install/install_mongo.sh
+        - chmod +x /root/code/scripts/install/install_pg.sh
+
+    - name: install redis
+      command: "{{ item }}"
+      with_items:
+        - sudo service redis_6379 start
+        - sudo systemctl enable redis_6379
+      when: redis
+
+    - name: install mongo
+      command: bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i {{ private_ip }}
+      when: mongo
+
+    - name: install pg
+      command: bash /root/code/scripts/install/install_pg.sh -v 9.5
+      when: pg_dbs
+
+
+- name: Import dbs
+  hosts: db
+  remote_user: root
+  vars:
+    import_dbs_list: "{{ dbs_to_import | from_json }}"
+    should_import_dbs: "{{ import_dbs }}"
+    vpc_private_iface : "{{ vpc_private_iface }}"
+    private_ip: "{{ hostvars[ansible_host]['ansible_'+vpc_private_iface].ipv4.address }}"
+    use_gpg: "{{ use_gpg }}"
+    bot_gpg_name: "{{ bot_gpg_name }}"
+    passphrase_file: "\"-p $HOME/{{ bot_gpg_name }}\""
+  tasks:
+    - name: import dbs
+      shell: |
+        IMPORT={{ item["import"] }}
+        DB_TYPE={{ item["type"] }}
+        S3_BUCKET_NAME={{ item["s3bucket"] }}
+        S3_ALIAS={{ item["s3alias"] }}
+        DB_NAME={{ item["dbname"] }}
+        HOST={{ private_ip }}
+        PASSPHRASE_FILE={{ (use_gpg == "true") | ternary(passphrase_file, "''") }}
+
+        if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
+            bash /root/code/scripts/db/import_mongo_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME -h $HOST $PASSPHRASE_FILE;
+            cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
+        fi
+
+        if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
+            bash /root/code/scripts/db/import_pg_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME $PASSPHRASE_FILE;
+            cp /etc/consul.d/templates/pg.json /etc/consul.d/conf.d/pg.json
+        fi
+
+        if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
+            bash /root/code/scripts/db/import_redis_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME $PASSPHRASE_FILE;
+            cp /etc/consul.d/templates/redis.json /etc/consul.d/conf.d/redis.json
+        fi
+      with_items:
+        - "{{ import_dbs_list }}"
+      when: should_import_dbs == "true" && import_dbs_list
