@@ -509,8 +509,7 @@ resource "null_resource" "install_loki" {
     }
 }
 
-module "admin_nginx" {
-    count = local.lead_servers > 0 ? local.admin_servers : 0
+module "nginx" {
     source = "../nginx"
     depends_on = [
         module.clusterkv,
@@ -526,22 +525,24 @@ module "admin_nginx" {
     additional_domains = var.additional_domains
     additional_ssl = var.additional_ssl
 
+    is_only_lead_servers = local.is_only_leader_count
     lead_public_ips = var.lead_public_ips
     ## Technically just need to send proxy ip here instead of all private leader ips
     lead_private_ips = var.lead_private_ips
 
-    https_port = "4433"
     cert_port = "7080" ## Currently hardcoded in letsencrypt/letsencrypt.tmpl
-
 }
 
 
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "clusterdb" {
     source = "../clusterdb"
     depends_on = [
         module.clusterkv,
         null_resource.install_gitlab,
-        null_resource.restore_gitlab
+        null_resource.restore_gitlab,
+        module.nginx,
     ]
 
     ansible_hostfile = var.ansible_hostfile
@@ -557,19 +558,17 @@ module "clusterdb" {
     bot_gpg_name = var.bot_gpg_name
 
     vpc_private_iface = var.vpc_private_iface
-    db_public_ips = var.db_public_ips
 }
 
 
-## NOTE: Internally waits for init/db_bootstrapped from consul before starting containers
 module "docker" {
     source = "../docker"
     depends_on = [
         module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        #null_resource.gitlab_plugins, ## Technically should wait for wekan plugin
-        module.admin_nginx,
+        null_resource.gitlab_plugins,
+        module.nginx,
         module.clusterdb,
     ]
 
@@ -578,89 +577,28 @@ module "docker" {
 
     app_definitions = var.app_definitions
     aws_ecr_region   = var.aws_ecr_region
-    admin_ips = var.admin_public_ips
-
-    # TODO: Indicate these are alt ports if admin+lead on same server
-    http_port = "8085"
-    https_port = "4433"
 
     root_domain_name = var.root_domain_name
 }
 
 
-resource "null_resource" "docker_ready" {
-    count = local.lead_servers > 0 ? 1 : 0
-    depends_on = [
-        module.clusterkv,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab,
-        module.admin_nginx,
-        module.clusterdb,
-        module.docker
-    ]
-
-    provisioner "file" {
-        content = <<-EOF
-            check_docker() {
-                LEADER_READY=$(consul kv get init/leader_ready);
-
-                if [ "$LEADER_READY" = "true" ]; then
-                    echo "Docker containers up";
-                    exit 0;
-                else
-                    echo "Waiting 30 for docker containers";
-                    sleep 30;
-                    check_docker
-                fi
-            }
-
-            check_docker
-        EOF
-        destination = "/tmp/docker_ready.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/docker_ready.sh",
-            "/tmp/docker_ready.sh",
-        ]
-    }
-    connection {
-        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
-        type = "ssh"
-    }
-}
-
 resource "null_resource" "gpg_remove_key" {
-    ## Only admin and DB should need it atm
-    count = var.use_gpg ? sum([local.admin_servers, local.is_only_db_count]) : 0
     depends_on = [
         module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        module.admin_nginx,
+        module.nginx,
         module.clusterdb,
         module.docker,
-        null_resource.docker_ready
     ]
-    provisioner "remote-exec" {
-        inline = [
-            <<-EOF
-                BOT_FPR=$(gpg --list-keys | grep -1 ${var.bot_gpg_name} | sed -n -r "1 s/\s+([0-9A-Z]{10,})/\1/p")
-                gpg --batch --yes --delete-secret-key $BOT_FPR || echo 0
-                rm $HOME/${var.bot_gpg_name}
-            EOF
-        ]
-    }
-    connection {
-        host = element(distinct(concat(var.admin_public_ips, var.db_public_ips)), count.index)
-        type = "ssh"
+    provisioner "local-exec" {
+        command = <<-EOF
+            ansible-playbook ${path.module}/playbooks/gpg_rmkey.yml -i ${var.ansible_hostfile} --extra-vars "use_gpg=${var.use_gpg} bot_gpg_name=${var.bot_gpg_name}"
+        EOF
     }
 }
 
-# Currently have a combination of proxies to get required result.
-#  *Leader docker proxy requires a docker.compose.yml change/restart once we get certs
-#  *Admin nginx proxy requires an nginx config change/hup once we get certs
+#  *Nginx proxies require an nginx config change/hup once we get certs
 # Boils down to, the server/ip var.root_domain_name points to, needs a proxy for port 80/http initially
 # After getting certs, restart then supports https and http -> https
 # TODO: Better support potential downtime when replacing certs
@@ -672,57 +610,13 @@ resource "null_resource" "setup_letsencrypt" {
         module.clusterkv,
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
-        module.admin_nginx,
+        module.nginx,
         module.docker,
-        null_resource.docker_ready
     ]
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
         num_ssl = length(var.additional_ssl)
-    }
-
-    ## Intially setting up letsencrypt, proxy needs to be setup using http even though we launch it using https
-    ## Currently the only workaround that is automated is relaunching the service by modifying
-    ##   the compose file and redeploying
-    provisioner "file" {
-        content = <<-EOF
-            HAS_PROXY_REPO=${ contains(keys(var.app_definitions), "proxy") }
-
-            if [ "$HAS_PROXY_REPO" = "true" ]; then
-                PROXY_STACK_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "service_name" ) : "" }
-                PROXY_REPO_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "repo_name" ) : "" }
-
-                # TODO: This hangs/gets stuck downloading nothing instead of erroring out
-                #  when root_domain_name points to the admin server already running nginx on 443
-                # SSL_CHECK=$(curl "https://${var.root_domain_name}");
-                # if [ $? -ne 0 ]; then
-                    docker stack rm $PROXY_STACK_NAME
-                    sed -i 's/LISTEN_ON_SSL:\s\+"true"/LISTEN_ON_SSL:      "false"/g' $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml
-                    docker stack deploy --compose-file $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml $PROXY_STACK_NAME --with-registry-auth
-                    sleep 10;  # Give proxy service a second. Next step uses it and needs to be up.
-                # fi
-            fi
-        EOF
-        destination = "/tmp/turnoff_proxy_ssl.sh"
-        connection {
-            ## We launch the docker proxy from the last leader ip found in case for example admin node has lead role attached
-            host = element(reverse(var.lead_public_ips), 0)
-            type = "ssh"
-        }
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/turnoff_proxy_ssl.sh",
-            "/tmp/turnoff_proxy_ssl.sh",
-        ]
-
-        connection {
-            ## We launch the docker proxy from the last leader ip found in case for example admin node has lead role attached
-            host = element(reverse(var.lead_public_ips), 0)
-            type = "ssh"
-        }
     }
 
     provisioner "file" {
@@ -744,9 +638,10 @@ resource "null_resource" "setup_letsencrypt" {
     provisioner "remote-exec" {
         inline = [
             "chmod +x /root/code/scripts/letsencrypt.sh",
-            "export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh ${local.admin_servers == 0 ? "-p 80" : ""}",
+            "export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh",
             "sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
             "sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
+            "sed -i \"s|#listen 443 ssl|listen 443 ssl|\" /etc/nginx/conf.d/*.conf",
             (local.admin_servers > 0 ? "gitlab-ctl reconfigure" : "echo 0"),
         ]
         ## If we find reconfigure screwing things up, maybe just try hup nginx
@@ -764,7 +659,7 @@ resource "null_resource" "setup_letsencrypt" {
 # TODO: Turn this into an ansible playbook
 # Restart service, re-fetching ssl keys
 resource "null_resource" "add_keys" {
-    count = local.lead_servers > 0 ? 1 : 0
+    count = local.is_only_leader_count
     depends_on = [ null_resource.setup_letsencrypt ]
 
     triggers = {
@@ -774,46 +669,24 @@ resource "null_resource" "add_keys" {
 
     provisioner "file" {
         content = <<-EOF
-            HAS_PROXY_REPO=${ contains(keys(var.app_definitions), "proxy") }
-
-            if [ "$HAS_PROXY_REPO" = "true" ]; then
-                PROXY_STACK_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "service_name" ) : "" }
-                PROXY_REPO_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "repo_name" ) : "" }
-
-                GREEN_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "green_service" ) : "" };
-                BLUE_SERVICE_NAME=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "blue_service" ) : "" };
-                DEFAULT_SERVICE_COLOR=${ contains(keys(var.app_definitions), "proxy") ? lookup(var.app_definitions["proxy"], "default_active" ) : "" };
-                SERVICE_NAME=$GREEN_SERVICE_NAME;
-
-                if [ "$DEFAULT_SERVICE_COLOR" = "blue" ]; then
-                    SERVICE_NAME=$BLUE_SERVICE_NAME;
-                fi
-
-                # TODO: This hangs/gets stuck downloading nothing instead of erroring out
-                #  when root_domain_name points to the admin server already running nginx on 443
-                # SSL_CHECK=$(curl "https://${var.root_domain_name}");
-                # if [ $? -eq 0 ]; then
-                #     docker service update $SERVICE_NAME -d --force
-                # else
-                    docker stack rm $PROXY_STACK_NAME
-                    sed -i 's/LISTEN_ON_SSL:\s\+"false"/LISTEN_ON_SSL:      "true"/g' $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml
-                    docker stack deploy --compose-file $HOME/repos/$PROXY_REPO_NAME/docker-compose.yml $PROXY_STACK_NAME --with-registry-auth
-                # fi
-            fi
+            LETSENCRYPT_DIR=/etc/letsencrypt/live/${var.root_domain_name}
+            mkdir -p $LETSENCRYPT_DIR
+            consul kv get ssl/fullchain > $LETSENCRYPT_DIR/fullchain.pem;
+            consul kv get ssl/privkey > $LETSENCRYPT_DIR/privkey.pem;
         EOF
-        destination = "/tmp/turnon_proxy_ssl.sh"
+        destination = "/tmp/fetch_ssl_certs.sh"
     }
-
     provisioner "remote-exec" {
         inline = [
-            "chmod +x /tmp/turnon_proxy_ssl.sh",
-            "/tmp/turnon_proxy_ssl.sh",
+            "sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
+            "sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
+            "sed -i \"s|#listen 443 ssl|listen 443 ssl|\" /etc/nginx/conf.d/*.conf",
+            "bash /tmp/fetch_ssl_certs.sh",
+            "sudo systemctl reload nginx",
         ]
     }
-
     connection {
-        ## We launch the docker proxy from the last leader ip found in case for example admin node has lead role attached
-        host = element(reverse(var.lead_public_ips), 0)
+        host = element(tolist(setsubtract(var.lead_public_ips, var.admin_public_ips)), count.index)
         type = "ssh"
     }
 }
@@ -1126,7 +999,6 @@ resource "null_resource" "kubernetes_admin" {
     depends_on = [
         module.clusterkv,
         module.docker,
-        null_resource.docker_ready,
         null_resource.setup_letsencrypt,
         null_resource.add_keys,
         null_resource.install_runner,

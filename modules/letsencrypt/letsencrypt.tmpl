@@ -49,3 +49,5 @@ CHAIN=$(<$LETSENCRYPT_DIR/chain.pem)
 /usr/local/bin/consul kv put ssl/privkey "$KEY"
 /usr/local/bin/consul kv put ssl/fullchain "$FULLCHAIN"
 /usr/local/bin/consul kv put ssl/chain "$CHAIN"
+
+gitlab-ctl hup nginx || echo 0

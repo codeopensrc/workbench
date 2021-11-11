@@ -1,18 +1,11 @@
-
 variable "admin_servers" {}
+variable "is_only_lead_servers" {}
 variable "root_domain_name" { default = "" }
 variable "additional_domains" { default = {} }
 variable "additional_ssl" { default = [] }
-variable "admin_public_ips" {
-    type = list(string)
-    default = []
-}
-variable "lead_public_ips" {
-    type = list(string)
-    default = []
-}
+variable "admin_public_ips" { default = [] }
+variable "lead_public_ips" { default = [] }
 variable "lead_private_ips" { default = [] }
-variable "https_port" {}
 variable "cert_port" {}
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
@@ -23,11 +16,29 @@ variable "app_definitions" {
     }))
 }
 
+## TODO: ansible playbook
+resource "null_resource" "tmp_install_nginx" {
+    count = var.is_only_lead_servers
+    provisioner "remote-exec" {
+        inline = [
+            <<-EOF
+                sudo apt install curl gnupg2 ca-certificates lsb-release ubuntu-keyring -y
+                sudo apt update
+                sudo apt install nginx -y
+            EOF
+        ]
+    }
+    connection {
+        host = element(tolist(setsubtract(var.lead_public_ips, var.admin_public_ips)), count.index)
+        type = "ssh"
+    }
+}
 
 
-
+## TODO: ansible playbook
 resource "null_resource" "proxy_config" {
-    count = var.admin_servers
+    count = var.admin_servers + var.is_only_lead_servers
+    depends_on = [ null_resource.tmp_install_nginx ]
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -37,40 +48,35 @@ resource "null_resource" "proxy_config" {
 
     provisioner "remote-exec" {
         # TODO: Test if changing the group necessary or not to reading directory for nginx
-        inline = [
-            "mkdir -p /etc/nginx/conf.d",
-            "chown root:gitlab-www /etc/nginx/conf.d"
-        ]
+        #"chown root:gitlab-www /etc/nginx/conf.d"
+        inline = [ "mkdir -p /etc/nginx/conf.d" ]
     }
 
     provisioner "file" {
         content = templatefile("${path.module}/templatefiles/mainproxy.tmpl", {
             root_domain_name = var.root_domain_name
             proxy_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
-            https_port = element(reverse(var.lead_public_ips), 0) == element(var.admin_public_ips, count.index) ? var.https_port : 443
             cert_port = var.cert_port
+            cert_domain = "cert.${var.root_domain_name}"
             subdomains = [
                 for HOST in var.app_definitions:
                 format("%s.%s", HOST.subdomain_name, var.root_domain_name)
+                if HOST.create_dns_record == "true" && HOST.create_ssl_cert == "true"
+            ]
+            services = [
+                for HOST in var.app_definitions:
+                { subdomain = format("%s.%s", HOST.subdomain_name, var.root_domain_name), port = regex(":[0-9]+", HOST.green_service) }
                 if HOST.create_dns_record == "true" && HOST.create_ssl_cert == "true"
             ]
         })
         destination = "/etc/nginx/conf.d/proxy.conf"
     }
 
-    # TODO: better solution to custom nginx conf files
-    provisioner "file" {
-        content = templatefile("${path.module}/templatefiles/btcpay.tmpl", {
-            root_domain_name = var.root_domain_name
-            proxy_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
-            cert_port = var.cert_port
-        })
-        destination = "/etc/nginx/conf.d/btcpay.conf"
-    }
     provisioner "file" {
         content = templatefile("${path.module}/templatefiles/kube_services.tmpl", {
             root_domain_name = var.root_domain_name
             cert_port = var.cert_port
+            cert_domain = "cert.${var.root_domain_name}"
             kube_nginx_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
             kube_nginx_port = "31000"  #Hardcoded nginx NodePort service atm
             subdomains = [
@@ -83,16 +89,14 @@ resource "null_resource" "proxy_config" {
     }
 
     connection {
-        host = element(var.admin_public_ips, count.index)
+        host = element(concat(var.admin_public_ips, var.lead_public_ips), count.index)
         type = "ssh"
     }
 }
 
 resource "null_resource" "proxy_additional_config" {
-    count = length(keys(var.additional_domains))
-    depends_on = [
-        null_resource.proxy_config
-    ]
+    count = var.admin_servers > 0 ? length(keys(var.additional_domains)) : 0
+    depends_on = [ null_resource.tmp_install_nginx ]
 
     triggers = {
         subdomains = join(",", keys(element(values(var.additional_domains), count.index)))
@@ -115,9 +119,7 @@ resource "null_resource" "proxy_additional_config" {
 
     provisioner "remote-exec" {
         when = destroy
-        inline = [
-            "rm /etc/nginx/conf.d/additional-${count.index}.conf"
-        ]
+        inline = [ "rm /etc/nginx/conf.d/additional-${count.index}.conf" ]
         connection {
             host = self.triggers.ip
             type = "ssh"
@@ -129,6 +131,7 @@ resource "null_resource" "proxy_additional_config" {
 resource "null_resource" "nginx_reconfigure" {
     count = var.admin_servers
     depends_on = [
+        null_resource.tmp_install_nginx,
         null_resource.proxy_config,
         null_resource.proxy_additional_config,
     ]
@@ -150,14 +153,7 @@ resource "null_resource" "nginx_reconfigure" {
     }
 
     connection {
-        host = element(var.admin_public_ips, count.index)
+        host = element(var.admin_public_ips, 0)
         type = "ssh"
     }
-}
-
-output "output" {
-    depends_on = [
-        null_resource.nginx_reconfigure,
-    ]
-    value = null_resource.nginx_reconfigure.*.id
 }

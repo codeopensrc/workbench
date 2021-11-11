@@ -25,16 +25,16 @@
 
     - name: write additional_ssl kv
       shell: |
-        consul kv put applist/{{ app[item].service_name }} {{ app[item].subdomain_name }}
+        consul kv put applist/{{ item.service_name }} {{ item.subdomain_name }}
 
         ### Temporary. When not using admin role, allows docker-proxy to proxy to kubernetes services
-        consul kv put apps/{{ app[item].subdomain_name }}/green 172.17.0.1:31000
-        consul kv put apps/{{ app[item].subdomain_name }}/blue _dev
-        consul kv put apps/{{ app[item].subdomain_name }}/active green
+        consul kv put apps/{{ item.subdomain_name }}/green 172.17.0.1:31000
+        consul kv put apps/{{ item.subdomain_name }}/blue _dev
+        consul kv put apps/{{ item.subdomain_name }}/active green
 
-        consul kv put apps/{{ app[item].subdomain_name }}.beta/green 172.17.0.1:31000
-        consul kv put apps/{{ app[item].subdomain_name }}.beta/blue _dev
-        consul kv put apps/{{ app[item].subdomain_name }}.beta/active green
+        consul kv put apps/{{ item.subdomain_name }}.beta/green 172.17.0.1:31000
+        consul kv put apps/{{ item.subdomain_name }}.beta/blue _dev
+        consul kv put apps/{{ item.subdomain_name }}.beta/active green
       with_items:
         - "{{ ssl | list }}"
 

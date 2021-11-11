@@ -1,7 +1,8 @@
 server {
     listen *:80;
-    listen *:443 ssl;
+    #listen 443 ssl;
     server_name ${root_domain_name};
+    resolver 127.0.0.53;
 
     #ssl_certificate     /etc/letsencrypt/live/${root_domain_name}/fullchain.pem;
     #ssl_certificate_key /etc/letsencrypt/live/${root_domain_name}/privkey.pem;
@@ -10,8 +11,7 @@ server {
     ssl_prefer_server_ciphers on;
 
     location /.well-known/ {
-        root /var/www/html;
-        proxy_pass http://127.0.0.1:${cert_port}$request_uri;
+        proxy_pass http://${cert_domain}:${cert_port}$request_uri;
     }
 
     location / {
@@ -22,10 +22,10 @@ server {
 server {
     listen *:80;
     server_name *.dev.${root_domain_name};
+    resolver 127.0.0.53;
 
     location /.well-known/ {
-        root /var/www/html;
-        proxy_pass http://127.0.0.1:${cert_port}$request_uri;
+        proxy_pass http://${cert_domain}:${cert_port}$request_uri;
     }
 
     location / {
@@ -39,10 +39,10 @@ server {
 server {
     listen *:80;
     server_name *.beta.${root_domain_name} ${ join(" ", subdomains) };
+    resolver 127.0.0.53;
 
     location /.well-known/ {
-        root /var/www/html;
-        proxy_pass http://127.0.0.1:${cert_port}$request_uri;
+        proxy_pass http://${cert_domain}:${cert_port}$request_uri;
     }
 
     location / {
@@ -51,13 +51,10 @@ server {
 }
 
 server {
-    listen *:443 ssl;
+    #listen 443 ssl;
     server_name *.beta.${root_domain_name} ${ join(" ", subdomains) };
     server_tokens off;
 
-    ### nginx for gitlab wont start if the files are missing
-    ### after obtaining certificate, uncomment these
-    ### TODO: Maybe an empty file works and ensure whether the file just needs to be present or not to start and is re-read on nginx restart
     #ssl_certificate     /etc/letsencrypt/live/${root_domain_name}/fullchain.pem;
     #ssl_certificate_key /etc/letsencrypt/live/${root_domain_name}/privkey.pem;
 

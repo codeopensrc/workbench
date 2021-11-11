@@ -1,0 +1,15 @@
+---
+- name: Remove secret key
+  hosts: "{{ (groups['admin'] | default([]) + groups['db']) }}"
+  remote_user: root
+  gather_facts: no
+  vars:
+    bot_gpg_name: "{{ bot_gpg_name }}"
+    use_gpg: "{{ use_gpg }}"
+  tasks:
+    - name: remove key
+      shell: |
+         BOT_FPR=$(gpg --list-keys | grep -1 {{ bot_gpg_name }} | sed -n -r "1 s/\s+([0-9A-Z]{10,})/\1/p")
+         gpg --batch --yes --delete-secret-key $BOT_FPR || echo 0
+         rm $HOME/{{ bot_gpg_name }}
+      when: use_gpg == "true"

@@ -22,16 +22,25 @@
       with_items:
         - sudo service redis_6379 start
         - sudo systemctl enable redis_6379
+        - cp /etc/consul.d/templates/redis.json /etc/consul.d/conf.d/redis.json
       when: redis
 
     - name: install mongo
-      command: bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i {{ private_ip }}
+      command: "{{ item }}"
+      with_items:
+        - bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i {{ private_ip }}
+        - cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
       when: mongo
 
     - name: install pg
-      command: bash /root/code/scripts/install/install_pg.sh -v 9.5
-      when: pg_dbs
+      command: "{{ item }}"
+      with_items:
+        - bash /root/code/scripts/install/install_pg.sh -v 9.5
+        - cp /etc/consul.d/templates/pg.json /etc/consul.d/conf.d/pg.json
+      when: pg
 
+    - name: reload consul
+      command: consul reload
 
 - name: Import dbs
   hosts: db
@@ -57,18 +66,15 @@
 
         if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "mongo" ]; then
             bash /root/code/scripts/db/import_mongo_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME -h $HOST $PASSPHRASE_FILE;
-            cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
         fi
 
         if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "pg" ]; then
             bash /root/code/scripts/db/import_pg_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME $PASSPHRASE_FILE;
-            cp /etc/consul.d/templates/pg.json /etc/consul.d/conf.d/pg.json
         fi
 
         if [ "$IMPORT" = "true" ] && [ "$DB_TYPE" = "redis" ]; then
             bash /root/code/scripts/db/import_redis_db.sh -a $S3_ALIAS -b $S3_BUCKET_NAME -d $DB_NAME $PASSPHRASE_FILE;
-            cp /etc/consul.d/templates/redis.json /etc/consul.d/conf.d/redis.json
         fi
       with_items:
         - "{{ import_dbs_list }}"
-      when: should_import_dbs == "true" && import_dbs_list
+      when: should_import_dbs == "true" and import_dbs_list

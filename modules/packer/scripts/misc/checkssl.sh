@@ -6,7 +6,12 @@
 ######
 
 CONSUL_KEY_NAME="ssl/privkey"
-KEY_FILE="/etc/ssl/creds/privkey.pem"
+CONSUL_CHAIN_NAME="ssl/fullchain"
+DOMAIN=$(consul kv get domainname)
+
+LETSENCRYPT_DIR=/etc/letsencrypt/live/$DOMAIN
+KEY_FILE="$LETSENCRYPT_DIR/privkey.pem"
+CHAIN_FILE="$LETSENCRYPT_DIR/fullchain.pem"
 
 while getopts "f:k:s:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
@@ -17,13 +22,12 @@ while getopts "f:k:s:" flag; do
     esac
 done
 
+GET_KEY_CMD="/usr/local/bin/consul kv get $CONSUL_KEY_NAME"
+GET_CHAIN_CMD="/usr/local/bin/consul kv get $CONSUL_CHAIN_NAME"
 
-GET_KV_CMD="/usr/local/bin/consul kv get $CONSUL_KEY_NAME"
-
-CONSUL_KEY=$($GET_KV_CMD)
+CONSUL_KEY=$($GET_KEY_CMD)
 # Save result at getting the key, 0 successful 1 if not found
 FOUND_CONSUL_KEY=$?
-
 
 if [ $FOUND_CONSUL_KEY = "0" ]; then
 
@@ -31,19 +35,13 @@ if [ $FOUND_CONSUL_KEY = "0" ]; then
 
     if [ "$CONSUL_KEY" != "$FILE_KEY" ]; then
         echo "Consul key at '$CONSUL_KEY_NAME' did not match key file at $KEY_FILE"
-
-        $GET_KV_CMD > $KEY_FILE
-        echo "Updated $KEY_FILE on disk"
-
-        # Trigger restart on proxy service which will fetch the new ssl certs from consul
-        ACTIVE_COLOR=$(/usr/local/bin/consul kv get apps/proxy/active)
-        SERVICE_NAME=$(/usr/local/bin/consul kv get apps/proxy/$ACTIVE_COLOR);
-
-        if [ -n $SERVICE_NAME ]; then
-            echo "Restarting docker service to use new keys"
-            docker service ps $SERVICE_NAME && docker service update $SERVICE_NAME --force;
-        fi
+        $GET_KEY_CMD > $KEY_FILE
+        $GET_CHAIN_CMD > $CHAIN_FILE
+        echo "Updated certs on disk"
     fi
+
+    sudo systemctl reload nginx || echo 0
+
 else
     echo "Could not find consul key: $CONSUL_KEY_NAME"
 fi

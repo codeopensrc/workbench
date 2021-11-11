@@ -146,7 +146,6 @@ resource "null_resource" "consul_checks" {
 }
 
 resource "null_resource" "exporters" {
-    count = var.admin_ip_private == "" ? 0 : 1
     depends_on = [
         null_resource.access,
         null_resource.reprovision_scripts,
@@ -155,23 +154,28 @@ resource "null_resource" "exporters" {
 
     provisioner "remote-exec" {
         inline = [
-            "FILENAME1=node_exporter-${var.nodeexporter_version}.linux-amd64.tar.gz",
-            "[ ! -f /tmp/$FILENAME1 ] && wget https://github.com/prometheus/node_exporter/releases/download/v${var.nodeexporter_version}/$FILENAME1 -P /tmp",
-            "tar xvfz /tmp/$FILENAME1 --wildcards --strip-components=1 -C /usr/local/bin */node_exporter",
+            <<-EOF
+                ADMIN_IP=${var.admin_ip_private}
+                if [ -z "$ADMIN_IP" ]; then exit 0; fi
 
-            "FILENAME2=promtail-linux-amd64.zip",
-            "[ ! -f /tmp/$FILENAME2 ] && wget https://github.com/grafana/loki/releases/download/v${var.promtail_version}/$FILENAME2 -P /tmp",
-            "unzip /tmp/$FILENAME2 -d /usr/local/bin && chmod a+x /usr/local/bin/promtail*amd64",
+                FILENAME1=node_exporter-${var.nodeexporter_version}.linux-amd64.tar.gz
+                [ ! -f /tmp/$FILENAME1 ] && wget https://github.com/prometheus/node_exporter/releases/download/v${var.nodeexporter_version}/$FILENAME1 -P /tmp
+                tar xvfz /tmp/$FILENAME1 --wildcards --strip-components=1 -C /usr/local/bin */node_exporter
 
-            "FILENAME3=promtail-local-config.yaml",
-            "mkdir -p /etc/promtail.d",
-            "[ ! -f /etc/promtail.d/$FILENAME3 ] && wget https://raw.githubusercontent.com/grafana/loki/main/clients/cmd/promtail/$FILENAME3 -P /etc/promtail.d",
-            "sed -i \"s/localhost:/${var.admin_ip_private}:/\" /etc/promtail.d/$FILENAME3",
-            "sed -ni '/nodename:/!p; $ a \\      nodename: ${var.name}' /etc/promtail.d/$FILENAME3",
+                FILENAME2=promtail-linux-amd64.zip
+                [ ! -f /tmp/$FILENAME2 ] && wget https://github.com/grafana/loki/releases/download/v${var.promtail_version}/$FILENAME2 -P /tmp
+                unzip /tmp/$FILENAME2 -d /usr/local/bin && chmod a+x /usr/local/bin/promtail*amd64
 
-            "FILENAME4=consul_exporter-${var.consulexporter_version}.linux-amd64.tar.gz",
-            "[ ! -f /tmp/$FILENAME4 ] && wget https://github.com/prometheus/consul_exporter/releases/download/v${var.consulexporter_version}/$FILENAME4 -P /tmp",
-            "tar xvfz /tmp/$FILENAME4 --wildcards --strip-components=1 -C /usr/local/bin */consul_exporter",
+                FILENAME3=promtail-local-config.yaml
+                mkdir -p /etc/promtail.d
+                [ ! -f /etc/promtail.d/$FILENAME3 ] && wget https://raw.githubusercontent.com/grafana/loki/main/clients/cmd/promtail/$FILENAME3 -P /etc/promtail.d
+                sed -i "s/localhost:/${var.admin_ip_private}:/" /etc/promtail.d/$FILENAME3
+                sed -ni '/nodename:/!p; $ a \\      nodename: ${var.name}' /etc/promtail.d/$FILENAME3
+
+                FILENAME4=consul_exporter-${var.consulexporter_version}.linux-amd64.tar.gz
+                [ ! -f /tmp/$FILENAME4 ] && wget https://github.com/prometheus/consul_exporter/releases/download/v${var.consulexporter_version}/$FILENAME4 -P /tmp
+                tar xvfz /tmp/$FILENAME4 --wildcards --strip-components=1 -C /usr/local/bin */consul_exporter
+            EOF
         ]
     }
 
@@ -190,12 +194,17 @@ resource "null_resource" "exporters" {
 
     provisioner "remote-exec" {
         inline = [
-            length(regexall("admin", var.name)) > 0 ? "echo" : "sudo systemctl start nodeexporter",
-            length(regexall("admin", var.name)) > 0 ? "echo" : "sudo systemctl enable nodeexporter",
-            length(regexall("admin", var.name)) > 0 ? "sudo systemctl start consulexporter" : "echo",
-            length(regexall("admin", var.name)) > 0 ? "sudo systemctl enable consulexporter" : "echo",
-            "sudo systemctl start promtail",
-            "sudo systemctl enable promtail",
+            <<-EOF
+                ADMIN_IP=${var.admin_ip_private}
+                if [ -z "$ADMIN_IP" ]; then exit 0; fi
+
+                ${length(regexall("admin", var.name)) > 0 ? "echo" : "sudo systemctl start nodeexporter"}
+                ${length(regexall("admin", var.name)) > 0 ? "echo" : "sudo systemctl enable nodeexporter"}
+                ${length(regexall("admin", var.name)) > 0 ? "sudo systemctl start consulexporter" : "echo"}
+                ${length(regexall("admin", var.name)) > 0 ? "sudo systemctl enable consulexporter" : "echo"}
+                sudo systemctl start promtail
+                sudo systemctl enable promtail
+            EOF
         ]
     }
 
