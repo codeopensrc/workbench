@@ -1020,7 +1020,7 @@ resource "null_resource" "kubernetes_admin" {
             ADMIN_IP="${local.admin_servers > 0 ? element(var.admin_private_ips, 0) : ""}"
             RUNNER_ARGS="${var.gitlab_runner_tokens["service"] != "" ? "-t ${var.gitlab_runner_tokens["service"]}" : ""}"
             ## For now if no admin, use 'default' as production namespace
-            NGINX_ARGS="${local.admin_servers == 0 ? "-s -i $LEAD_IPS -p default" : ""}"
+            NGINX_ARGS="${local.admin_servers == 0 ? "-p default" : ""}"
 
             bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION -i ${var.vpc_private_iface};
             bash $KUBE_SCRIPTS/nginxKubeProxy.sh -r ${var.root_domain_name} $NGINX_ARGS

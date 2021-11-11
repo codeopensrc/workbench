@@ -8,7 +8,7 @@
     mongo: "{{ mongo_dbs | from_json }}"
     pg: "{{ pg_dbs | from_json }}"
     vpc_private_iface : "{{ vpc_private_iface }}"
-    private_ip: "{{ hostvars[ansible_host]['ansible_'+vpc_private_iface].ipv4.address }}"
+    private_ip: "{{ hostvars[inventory_hostname]['ansible_'+vpc_private_iface].ipv4.address }}"
   tasks:
     - name: chmod install files
       command: "{{ item }}"
@@ -49,7 +49,7 @@
     import_dbs_list: "{{ dbs_to_import | from_json }}"
     should_import_dbs: "{{ import_dbs }}"
     vpc_private_iface : "{{ vpc_private_iface }}"
-    private_ip: "{{ hostvars[ansible_host]['ansible_'+vpc_private_iface].ipv4.address }}"
+    private_ip: "{{ hostvars[inventory_hostname]['ansible_'+vpc_private_iface].ipv4.address }}"
     use_gpg: "{{ use_gpg }}"
     bot_gpg_name: "{{ bot_gpg_name }}"
     passphrase_file: "\"-p $HOME/{{ bot_gpg_name }}\""
