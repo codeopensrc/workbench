@@ -69,6 +69,9 @@ variable "use_gpg" { default = false }
 variable "bot_gpg_name" { default = "" }
 variable "bot_gpg_passphrase" { default = "" }
 
+variable "kubernetes_version" { default = "" }
+variable "container_orchestrators" { default = [] }
+
 variable "admin_private_ips" { type = list(string) }
 variable "lead_private_ips" { type = list(string) }
 variable "db_private_ips" { type = list(string) }

@@ -10,11 +10,11 @@ variable "app_definitions" {
     }))
 }
 variable "root_domain_name" {}
-
+variable "container_orchestrators" {}
 
 ## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "pull_images" {
-    count = var.servers
+    count = contains(var.container_orchestrators, "docker_swarm") ? var.servers : 0
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -88,7 +88,7 @@ resource "null_resource" "pull_images" {
 
 ## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "start_containers" {
-    count = 1
+    count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
     depends_on = [null_resource.pull_images]
 
     triggers = {

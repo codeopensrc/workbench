@@ -17,14 +17,14 @@ variable "import_gitlab_version" { default = "" }
 variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "install_unity3d" { default = false }
 
+##NOTE: Latest kubernetes: 1.22.2-00
+variable "kubernetes_version" { default = "1.20.11-00" }## Gitlab 14.3.0 supports kubernetes 1.20.11-00
 variable "nodeexporter_version" { default = "1.2.0" }
 variable "promtail_version" { default = "2.2.1" }
 variable "consulexporter_version" { default = "0.7.1" }
 variable "loki_version" { default = "2.2.1" }
-#variable "kubernetes_version" { default = "1.20.11-00" }## Gitlab 14.3.0 supports
 
-###! TODO: Conditionally provision: kubernetes and/or docker_swarm
-#variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }
+variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }## kubernetes and/or docker_swarm
 
 ########## SOFTWARE VERSIONS ##########
 #######################################

@@ -27,6 +27,7 @@ module "swarm" {
     lead_public_ips = var.lead_public_ips
     ansible_hostfile = var.ansible_hostfile
     region      = var.region
+    container_orchestrators = var.container_orchestrators
 }
 
 ##NOTE: Uses ansible
@@ -531,6 +532,7 @@ module "docker" {
     aws_ecr_region   = var.aws_ecr_region
 
     root_domain_name = var.root_domain_name
+    container_orchestrators = var.container_orchestrators
 }
 
 
@@ -630,13 +632,9 @@ resource "null_resource" "install_unity" {
 }
 
 
-## NOTE: Kubernetes requires 2 cores and 2 GB of ram
-resource "null_resource" "kubernetes_admin" {
-    ## TODO: Now that this works with or without admin role server, have this 
-    ##  depend on container orchestrator choice or simply `use_kubernetes`
-    count = 1
-    #TODO: module
-    #source = "../kubernetes"
+## NOTE: Kubernetes admin requires 2 cores and 2 GB of ram
+module "kubernetes" {
+    source = "../kubernetes"
     depends_on = [
         module.clusterkv,
         module.docker,
@@ -645,83 +643,23 @@ resource "null_resource" "kubernetes_admin" {
         null_resource.install_unity
     ]
 
-    ##NOTE:   Latest kubernetes: 1.22.2-00
-    ## Gitlab 14.3.0 kubernetes: 1.20.11-00
-    ## TODO: kubernetes version root level var and inherited/synced with gitlab version
-    ##  digitaloceans private iface = eth1
-    ##  aws private iface = ens5
-    provisioner "file" {
-        content = <<-EOF
-            KUBE_SCRIPTS=$HOME/code/scripts/kube
-            VERSION="1.20.11-00"
-            LEAD_IPS="${join(",", var.lead_public_ips)}"
-            ADMIN_IP="${local.admin_servers > 0 ? element(var.admin_private_ips, 0) : ""}"
-            RUNNER_ARGS="${var.gitlab_runner_tokens["service"] != "" ? "-t ${var.gitlab_runner_tokens["service"]}" : ""}"
-            ## For now if no admin, use 'default' as production namespace
-            NGINX_ARGS="${local.admin_servers == 0 ? "-p default" : ""}"
+    ansible_hostfile = var.ansible_hostfile
 
-            bash $KUBE_SCRIPTS/startKubeCluster.sh -v $VERSION -i ${var.vpc_private_iface};
-            bash $KUBE_SCRIPTS/nginxKubeProxy.sh -r ${var.root_domain_name} $NGINX_ARGS
-            ${local.server_count == 1 ? "kubectl taint nodes --all node-role.kubernetes.io/master-;" : ""}
-            if [[ ${local.admin_servers} -gt 0 ]]; then
-                bash $KUBE_SCRIPTS/createClusterAccounts.sh -v $${VERSION//-00/} -d ${var.root_domain_name} -a $ADMIN_IP $RUNNER_ARGS -u;
-                bash $KUBE_SCRIPTS/addClusterToGitlab.sh -d ${var.root_domain_name} -u -r;
-            fi
-        EOF
-        destination = "/tmp/init_kubernetes.sh"
-    }
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/init_kubernetes.sh",
-            "bash /tmp/init_kubernetes.sh"
-        ]
-    }
+    admin_servers = local.admin_servers
+    server_count = local.server_count
 
-    connection {
-        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
-        type = "ssh"
-    }
-}
+    lead_public_ips = var.lead_public_ips
+    admin_public_ips = var.admin_public_ips
+    admin_private_ips = var.admin_private_ips
+    all_public_ips = local.all_public_ips
 
+    gitlab_runner_tokens = var.gitlab_runner_tokens
+    root_domain_name = var.root_domain_name
+    import_gitlab = var.import_gitlab
+    vpc_private_iface = var.vpc_private_iface
 
-resource "null_resource" "kubernetes_worker" {
-    count = local.server_count - 1
-    #TODO: module
-    #source = "../kubernetes"
-    depends_on = [
-        module.clusterkv,
-        module.docker,
-        module.cirunners,
-        null_resource.install_unity,
-        null_resource.kubernetes_admin
-    ]
-
-    ##NOTE:   Latest kubernetes: 1.22.2-00
-    ## Gitlab 14.3.0 kubernetes: 1.20.11-00
-    ## TODO: kubernetes version root level var and inherited/synced with gitlab version
-    provisioner "file" {
-        content = <<-EOF
-            KUBE_SCRIPTS=$HOME/code/scripts/kube
-            JOIN_COMMAND=$(consul kv get kube/joincmd)
-            VERSION="1.20.11-00"
-
-            bash $KUBE_SCRIPTS/joinKubeCluster.sh -v $VERSION -j "$JOIN_COMMAND";
-        EOF
-        destination = "/tmp/init_kubernetes.sh"
-    }
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/init_kubernetes.sh",
-            "bash /tmp/init_kubernetes.sh"
-        ]
-    }
-
-    connection {
-        ## TODO: Till refactor, this has an issue where it may reprovision the 
-        ##  wrong ip (ips can get reordered) if we scale AFTER the initial bootstrapping
-        host = element(tolist(setsubtract(local.all_public_ips, [local.admin_servers > 0 ? var.admin_public_ips[0] : var.lead_public_ips[0]] )), count.index)
-        type = "ssh"
-    }
+    kubernetes_version = var.kubernetes_version
+    container_orchestrators = var.container_orchestrators
 }
 
 
@@ -732,8 +670,7 @@ resource "null_resource" "configure_smtp" {
         module.docker,
         module.cirunners,
         null_resource.install_unity,
-        null_resource.kubernetes_admin,
-        null_resource.kubernetes_worker
+        module.kubernetes,
     ]
 
     provisioner "file" {
@@ -762,82 +699,6 @@ resource "null_resource" "configure_smtp" {
     }
 }
 
-resource "null_resource" "reboot_environments" {
-    count = local.admin_servers
-    depends_on = [
-        module.clusterkv,
-        module.docker,
-        module.cirunners,
-        null_resource.install_unity,
-        null_resource.kubernetes_admin,
-        null_resource.kubernetes_worker,
-        null_resource.configure_smtp
-    ]
-
-    ## TODO: Move to s3 object storage using gitlab terraform state for file/info
-    ## NOTE: ID of project containing snippet and snippet ID hardcoded
-    provisioner "file" {
-        content = <<-EOF
-            #!/bin/bash
-
-            IMPORT_GITLAB=${var.import_gitlab}
-            if [ "$IMPORT_GITLAB" != "true" ]; then
-                exit 0;
-            fi
-
-            FILENAME=ENVS.txt
-            SNIPPET_PROJECT_ID=7
-            SNIPPET_ID=33
-            LOCAL_FILE="$HOME/code/backups/$FILENAME"
-            DEFAULT_BRANCH="master"
-
-            ## Download list of production environments
-            curl "https://gitlab.${var.root_domain_name}/api/v4/projects/$SNIPPET_PROJECT_ID/snippets/$SNIPPET_ID/files/main/$FILENAME/raw" > $LOCAL_FILE
-            ## Alternative without api
-            ## curl -sL "https://gitlab.${var.root_domain_name}/os/workbench/-/snippets/$SNIPPET_ID/raw/main/$FILENAME -o $LOCAL_FILE"
-
-            ## Gen tmp TOKEN to trigger deploy_prod job in each project listed
-            TERRA_UUID=${uuid()}
-            sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!";
-
-            ## Iterate over projects in $LOCAL_FILE and run pipeline for each
-            while read PROJECT_ID; do
-                echo $PROJECT_ID;
-
-                ## Create trigger and get [token, id]
-                TRIGGER_INFO=( $(curl -X POST -H "PRIVATE-TOKEN: $TERRA_UUID" --form description="reboot" \
-                    "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/triggers" | jq -r '.token, .id') )
-
-                ## Trigger pipeline
-                curl -X POST --form "variables[ONLY_DEPLOY_PROD]=true" \
-                "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/trigger/pipeline?token=$${TRIGGER_INFO[0]}&ref=$DEFAULT_BRANCH"
-
-                ## Delete trigger
-                curl -X DELETE -H "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.${var.root_domain_name}/api/v4/projects/$PROJECT_ID/triggers/$${TRIGGER_INFO[1]}";
-
-            done <$LOCAL_FILE
-
-            ## Revoke token
-            sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
-
-        EOF
-        destination = "/tmp/reboot_environments.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/reboot_environments.sh",
-            "bash /tmp/reboot_environments.sh",
-            "rm /tmp/reboot_environments.sh"
-        ]
-    }
-
-    connection {
-        host = element(var.admin_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
 # Re-enable after everything installed
 resource "null_resource" "enable_autoupgrade" {
     count = local.server_count
@@ -845,10 +706,8 @@ resource "null_resource" "enable_autoupgrade" {
         module.clusterkv,
         module.cirunners,
         null_resource.install_unity,
-        null_resource.kubernetes_admin,
-        null_resource.kubernetes_worker,
+        module.kubernetes,
         null_resource.configure_smtp,
-        null_resource.reboot_environments
     ]
 
     provisioner "remote-exec" {

@@ -92,6 +92,9 @@ module "mix" {
     bot_gpg_name = var.bot_gpg_name
     bot_gpg_passphrase = var.bot_gpg_passphrase
 
+    kubernetes_version = var.kubernetes_version
+    container_orchestrators = var.container_orchestrators
+
     # TODO: Dynamically change if using multiple providers/modules
     #external_leaderIP = (var.active_env_provider == "digital_ocean"
     #    ? element(concat(module.main.lead_public_ip_addresses, [""]), 0)

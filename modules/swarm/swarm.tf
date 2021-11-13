@@ -1,11 +1,13 @@
 variable "region" { default = "" }
 variable "ansible_hostfile" { default = "" }
 variable "lead_public_ips" { default = "" }
+variable "container_orchestrators" { default = [] }
 
 ## Setting variables in ansible
 #https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#setting-variables
 
 resource "null_resource" "docker_swarm_playbook" {
+    count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
     triggers = {
         lead_public_ips = join(",", var.lead_public_ips)
     }
