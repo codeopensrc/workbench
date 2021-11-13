@@ -461,54 +461,6 @@ resource "null_resource" "reauthorize_mattermost" {
 }
 
 
-#TODO: pass Loki version
-resource "null_resource" "install_loki" {
-    count = local.admin_servers
-    depends_on = [
-        module.clusterkv,
-        null_resource.install_gitlab,
-        null_resource.restore_gitlab
-    ]
-
-    provisioner "file" {
-        content = templatefile("${path.module}/templates/loki.service", {})
-        destination = "/etc/systemd/system/loki.service"
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-            ARCH=$(dpkg --print-architecture)
-            LOKI_VERSION=2.2.1
-            LOKI_LOCATION="/etc/loki.d"
-            LOKI_USER="root"
-            FILENAME="loki-linux-$ARCH"
-            sudo mkdir -p $LOKI_LOCATION
-            sudo chown -R $LOKI_USER:$LOKI_USER $LOKI_LOCATION
-            curl -L https://github.com/grafana/loki/releases/download/v$LOKI_VERSION/$FILENAME.zip -o /tmp/$FILENAME.zip
-            unzip /tmp/$FILENAME.zip -d $LOKI_LOCATION/
-            wget https://raw.githubusercontent.com/grafana/loki/v$LOKI_VERSION/cmd/loki/loki-local-config.yaml -P $LOKI_LOCATION
-            rm -rf /tmp/$FILENAME.zip
-            sudo mv $LOKI_LOCATION/$FILENAME /usr/local/bin/loki
-            sudo systemctl daemon-reload
-            sudo systemctl start loki.service
-            sudo systemctl enable loki.service
-        EOF
-        destination = "/tmp/install_loki.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/install_loki.sh",
-            "/tmp/install_loki.sh"
-        ]
-    }
-
-    connection {
-        host = element(var.admin_public_ips, count.index)
-        type = "ssh"
-    }
-}
-
 module "nginx" {
     source = "../nginx"
     depends_on = [
@@ -598,14 +550,9 @@ resource "null_resource" "gpg_remove_key" {
     }
 }
 
-#  *Nginx proxies require an nginx config change/hup once we get certs
-# Boils down to, the server/ip var.root_domain_name points to, needs a proxy for port 80/http initially
-# After getting certs, restart then supports https and http -> https
-# TODO: Better support potential downtime when replacing certs
 
-# TODO: Turn this into an ansible playbook
-resource "null_resource" "setup_letsencrypt" {
-    count = local.lead_servers > 0 ? 1 : 0
+module "letsencrypt" {
+    source = "../letsencrypt"
     depends_on = [
         module.clusterkv,
         null_resource.install_gitlab,
@@ -613,358 +560,52 @@ resource "null_resource" "setup_letsencrypt" {
         module.nginx,
         module.docker,
     ]
+    ansible_hostfile = var.ansible_hostfile
 
-    triggers = {
-        num_apps = length(keys(var.app_definitions))
-        num_ssl = length(var.additional_ssl)
-    }
+    is_only_leader_count = local.is_only_leader_count
+    lead_servers = local.lead_servers
+    admin_servers = local.admin_servers
 
-    provisioner "file" {
-        content = templatefile("${path.module}/../letsencrypt/letsencrypt_vars.tmpl", {
-            app_definitions = var.app_definitions,
-            fqdn = var.root_domain_name,
-            email = var.contact_email,
-            dry_run = false,
-            additional_ssl = var.additional_ssl
-        })
-        destination = "/root/code/scripts/letsencrypt_vars.sh"
-    }
+    app_definitions = var.app_definitions
+    additional_ssl = var.additional_ssl
 
-    provisioner "file" {
-        content = file("${path.module}/../letsencrypt/letsencrypt.tmpl")
-        destination = "/root/code/scripts/letsencrypt.sh"
-    }
+    root_domain_name = var.root_domain_name
+    contact_email = var.contact_email
 
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /root/code/scripts/letsencrypt.sh",
-            "export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh",
-            "sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
-            "sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
-            "sed -i \"s|#listen 443 ssl|listen 443 ssl|\" /etc/nginx/conf.d/*.conf",
-            (local.admin_servers > 0 ? "gitlab-ctl reconfigure" : "echo 0"),
-        ]
-        ## If we find reconfigure screwing things up, maybe just try hup nginx
-        ## "gitlab-ctl hup nginx"
-    }
-
-    connection {
-        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
-        type = "ssh"
-    }
-
+    admin_public_ips = var.admin_public_ips
+    lead_public_ips = var.lead_public_ips
 }
 
 
-# TODO: Turn this into an ansible playbook
-# Restart service, re-fetching ssl keys
-resource "null_resource" "add_keys" {
-    count = local.is_only_leader_count
-    depends_on = [ null_resource.setup_letsencrypt ]
-
-    triggers = {
-        num_apps = length(keys(var.app_definitions))
-        num_ssl = length(var.additional_ssl)
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-            LETSENCRYPT_DIR=/etc/letsencrypt/live/${var.root_domain_name}
-            mkdir -p $LETSENCRYPT_DIR
-            consul kv get ssl/fullchain > $LETSENCRYPT_DIR/fullchain.pem;
-            consul kv get ssl/privkey > $LETSENCRYPT_DIR/privkey.pem;
-        EOF
-        destination = "/tmp/fetch_ssl_certs.sh"
-    }
-    provisioner "remote-exec" {
-        inline = [
-            "sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
-            "sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
-            "sed -i \"s|#listen 443 ssl|listen 443 ssl|\" /etc/nginx/conf.d/*.conf",
-            "bash /tmp/fetch_ssl_certs.sh",
-            "sudo systemctl reload nginx",
-        ]
-    }
-    connection {
-        host = element(tolist(setsubtract(var.lead_public_ips, var.admin_public_ips)), count.index)
-        type = "ssh"
-    }
-}
-
-resource "null_resource" "install_runner" {
-    count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
+module "cirunners" {
+    source = "../cirunners"
     depends_on = [
         module.clusterkv,
         module.docker,
-        null_resource.setup_letsencrypt,
-        null_resource.add_keys
+        module.letsencrypt,
     ]
+    ansible_hostfile = var.ansible_hostfile
 
+    gitlab_runner_tokens = var.gitlab_runner_tokens
 
-    provisioner "file" {
-        content = <<-EOF
+    lead_public_ips = var.lead_public_ips
+    build_public_ips = var.build_public_ips
 
-            HAS_SERVICE_REPO=${ contains(keys(var.misc_repos), "service") }
+    admin_servers = local.admin_servers
+    lead_servers = local.lead_servers
+    build_servers = local.build_servers
 
-            curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
-            apt-cache madison gitlab-runner
-            sudo apt-get install gitlab-runner jq -y
-            sudo usermod -aG docker gitlab-runner
+    lead_names = var.lead_names
+    build_names = var.build_names
 
-            if [ "$HAS_SERVICE_REPO" = "true" ]; then
-                SERVICE_REPO_URL=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_url" ) : "" }
-                SERVICE_REPO_NAME=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "repo_name" ) : "" }
-                SERVICE_REPO_VER=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "stable_version" ) : "" }
-                DOCKER_IMAGE=${ contains(keys(var.misc_repos), "service") ? lookup(var.misc_repos["service"], "docker_registry_image" ) : "" }
-
-                git clone $SERVICE_REPO_URL /home/gitlab-runner/$SERVICE_REPO_NAME
-                ###! We should already be authed for this, kinda lazy/hacky atm. TODO: Turn this block into resource to run after install_runner
-                docker pull $DOCKER_IMAGE:$SERVICE_REPO_VER
-            fi
-
-            mkdir -p /home/gitlab-runner/.aws
-            touch /home/gitlab-runner/.aws/credentials
-            mkdir -p /home/gitlab-runner/.mc
-            cp /root/.mc/config.json /home/gitlab-runner/.mc/config.json
-            mkdir -p /home/gitlab-runner/rmscripts
-            chown -R gitlab-runner:gitlab-runner /home/gitlab-runner
-
-            sed -i "s|concurrent = 1|concurrent = 3|" /etc/gitlab-runner/config.toml
-
-            ### https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-runnerscaches3-section
-            ### Setup caching using a cluster minio instance
-            ### Will allow runners across machines to share cache instead of each machine
-        EOF
-        # chmod 0775 -R /home/gitlab-runner/$SERVICE_REPO_NAME
-        destination = "/tmp/install_runner.sh"
-    }
-
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/install_runner.sh",
-            "/tmp/install_runner.sh",
-            "rm /tmp/install_runner.sh",
-        ]
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-            [default]
-            aws_access_key_id = ${var.aws_bot_access_key}
-            aws_secret_access_key = ${var.aws_bot_secret_key}
-        EOF
-        destination = "/home/gitlab-runner/.aws/credentials"
-    }
-
-    connection {
-        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
-        type = "ssh"
-    }
+    runners_per_machine = local.runners_per_machine
+    root_domain_name = var.root_domain_name
 }
 
-##### NOTE: After obtaining the token we register the runner from the page
-# TODO: Figure out a way to retrieve the token programmatically
-
-# For a fresh project
-# https://docs.gitlab.com/ee/api/projects.html#create-project
-# For now this is overkill but we need to create the project, get its id, retrieve a private token
-#   with api scope, make a curl request to get the project level runners_token and use that
-# Programatically creating the project is a little tedious but honestly not a bad idea
-#  considering we can then just push the code and images up if we didnt/dont have a backup
-
-#TODO: Big obstacle is figuring out the different types of runners we want and how many per and per machine
-# Where does the prod runner run vs a build runner vs a generic vs a scheduled vs a unity builder etc.
-resource "null_resource" "register_runner" {
-    # We can use count to actually say how many runners we want
-    # Have a trigger set to update/destroy based on id etc
-    # /etc/gitlab-runner/config.toml   set concurrent to number of runners
-    # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
-    #TODO: var.gitlab_enabled ? var.servers : 0;
-    count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
-    depends_on = [
-        module.docker,
-        null_resource.install_runner
-    ]
-
-    # TODO: 1 or 2 prod runners with rest non-prod
-    # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
-    triggers = {
-        num_names = join(",", concat(var.lead_names, var.build_names))
-        num_runners = sum([local.lead_servers + local.build_servers]) * local.runners_per_machine
-    }
-
-    ### TODO: WHOOA, although a nice example of inline exec with EOF, make this a remote file so we can do bash things
-    provisioner "remote-exec" {
-        on_failure = continue
-        inline = [
-            <<-EOF
-
-                REGISTRATION_TOKEN=${var.gitlab_runner_tokens["service"]}
-                echo $REGISTRATION_TOKEN
-
-
-                if [ -z "$REGISTRATION_TOKEN" ]; then
-                    ## Get tmp root password if using fresh instance. Otherwise this fails like it should
-                    if [ -f /etc/gitlab/initial_root_password ]; then
-                        TMP_ROOT_PW=$(sed -rn "s|Password: (.*)|\1|p" /etc/gitlab/initial_root_password)
-                        REGISTRATION_TOKEN=$(bash $HOME/code/scripts/misc/getRunnerToken.sh -u root -p $TMP_ROOT_PW -d ${var.root_domain_name})
-                    else
-                        echo "Waiting 30 for possible consul token";
-                        sleep 30;
-                        REGISTRATION_TOKEN=$(consul kv get gitlab/runner_token)
-                    fi
-                fi
-
-                if [ -z "$REGISTRATION_TOKEN" ]; then
-                    echo "#################################################################################################"
-                    echo "WARNING: REGISTERING RUNNERS FOR ${element(concat(var.lead_names, var.build_names), count.index)} DID NOT FINISH HOWEVER WE ARE CONTINUING"
-                    echo "Obtain token and populate 'service' key for 'gitlab_runner_tokens' var in credentials.tf"
-                    echo "#################################################################################################"
-                    exit 1;
-                fi
-
-                consul kv put gitlab/runner_token "$REGISTRATION_TOKEN"
-
-                sleep $((3 + $((${count.index} * 5)) ))
-
-                ## Split runners *evenly* between multiple machines
-                %{ for NUM in range(1, 1 + local.runners_per_machine) }
-
-                    MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)};
-                    RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$");
-                    FULL_NAME="$${RUNNER_NAME}_shell_${NUM}";
-                    FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg");
-                    TAG="";
-                    ACCESS_LEVEL="not_protected";
-                    RUN_UNTAGGED="true";
-                    LOCKED="false";
-
-                    if [ ${NUM} = 1 ]; then
-                        case "$MACHINE_NAME" in
-                            *build*) TAG=unity ;;
-                            *admin*) TAG=prod ;;
-                            *lead*) TAG=prod ;;
-                            *) TAG="" ;;
-                        esac
-                    fi
-                    if [ "$TAG" = "prod" ]; then
-                        ACCESS_LEVEL="ref_protected";
-                        RUN_UNTAGGED="false";
-                        #LOCKED="true"; ## When we need to worry about it
-                    fi
-
-
-                    if [ -z "$FOUND_NAME" ]; then
-                        sudo gitlab-runner register -n \
-                          --url "https://gitlab.${var.root_domain_name}" \
-                          --registration-token "$REGISTRATION_TOKEN" \
-                          --executor shell \
-                          --run-untagged="$RUN_UNTAGGED" \
-                          --locked="$LOCKED" \
-                          --access-level="$ACCESS_LEVEL" \
-                          --name "$FULL_NAME" \
-                          --tag-list "$TAG"
-                    fi
-
-                %{ endfor }
-
-                  sleep $((2 + $((${count.index} * 5)) ))
-
-                  # https://gitlab.com/gitlab-org/gitlab-runner/issues/1316
-                  gitlab-runner verify --delete
-            EOF
-        ]
-        # sudo gitlab-runner register \
-        #     --non-interactive \
-        #     --url "https://gitlab.${var.root_domain_name}" \
-        #     --registration-token "${REGISTRATION_TOKEN}" \
-        #     --description "docker-runner" \
-        #     --tag-list "docker" \
-        #     --run-untagged="true" \
-        #     --locked="false" \
-        #     --executor "docker" \
-        #     --docker-image "docker:19.03.1" \
-        #     --docker-privileged \
-        #     --docker-volumes "/certs/client"
-    }
-
-    provisioner "file" {
-        on_failure = continue
-        content = <<-EOF
-            MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
-            RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
-            NAMES=( $(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg") )
-
-            for NAME in "$${NAMES[@]}"; do
-                sudo gitlab-runner unregister --name $NAME
-            done
-        EOF
-        destination = "/home/gitlab-runner/rmscripts/rmrunners.sh"
-    }
-
-
-    connection {
-        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
-        type = "ssh"
-    }
-}
-
-### TODO: On import remove old runners
-#Scale down runners based on num of runners and active names/ip addresses
-#Unregisters excess runners per machine
-resource "null_resource" "unregister_runner" {
-    #TODO: var.gitlab_enabled ? var.servers * 2 : 0;
-    count = local.admin_servers > 0 ? local.lead_servers + local.build_servers : 0
-    depends_on = [
-        module.docker,
-        null_resource.install_runner,
-        null_resource.register_runner
-    ]
-
-    triggers = {
-        num_names = join(",", concat(var.lead_names, var.build_names))
-        num_runners = sum([local.lead_servers + local.build_servers]) * local.runners_per_machine
-    }
-
-    provisioner "file" {
-        on_failure = continue
-        content = <<-EOF
-            MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
-            RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
-            RUNNERS_ON_MACHINE=($(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg"))
-            CURRENT_NUM_RUNNERS="$${#RUNNERS_ON_MACHINE[@]}"
-            MAX_RUNNERS_PER_MACHINE=${local.runners_per_machine}
-            RM_INDEX_START=$(( $MAX_RUNNERS_PER_MACHINE+1 ))
-
-            for NUM in $(seq $RM_INDEX_START $CURRENT_NUM_RUNNERS); do
-                SINGLE_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "shell_$${NUM}" | jq -r ".msg")
-                [ "$SINGLE_NAME" ] && sudo gitlab-runner unregister --name $SINGLE_NAME
-            done
-
-        EOF
-        destination = "/home/gitlab-runner/rmscripts/unregister.sh"
-    }
-    provisioner "remote-exec" {
-        on_failure = continue
-        inline = [
-            "chmod +x /home/gitlab-runner/rmscripts/unregister.sh",
-            "bash /home/gitlab-runner/rmscripts/unregister.sh"
-        ]
-    }
-
-    connection {
-        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
-        type = "ssh"
-    }
-}
 
 resource "null_resource" "install_unity" {
     count = var.install_unity3d ? local.build_servers : 0
-    depends_on = [
-        null_resource.install_runner,
-        null_resource.register_runner,
-        null_resource.unregister_runner
-    ]
+    depends_on = [ module.cirunners ]
 
     provisioner "file" {
         ## TODO: Unity version root level. Get year from version
@@ -999,11 +640,8 @@ resource "null_resource" "kubernetes_admin" {
     depends_on = [
         module.clusterkv,
         module.docker,
-        null_resource.setup_letsencrypt,
-        null_resource.add_keys,
-        null_resource.install_runner,
-        null_resource.register_runner,
-        null_resource.unregister_runner,
+        module.letsencrypt,
+        module.cirunners,
         null_resource.install_unity
     ]
 
@@ -1053,9 +691,7 @@ resource "null_resource" "kubernetes_worker" {
     depends_on = [
         module.clusterkv,
         module.docker,
-        null_resource.install_runner,
-        null_resource.register_runner,
-        null_resource.unregister_runner,
+        module.cirunners,
         null_resource.install_unity,
         null_resource.kubernetes_admin
     ]
@@ -1094,9 +730,7 @@ resource "null_resource" "configure_smtp" {
     depends_on = [
         module.clusterkv,
         module.docker,
-        null_resource.install_runner,
-        null_resource.register_runner,
-        null_resource.unregister_runner,
+        module.cirunners,
         null_resource.install_unity,
         null_resource.kubernetes_admin,
         null_resource.kubernetes_worker
@@ -1133,9 +767,7 @@ resource "null_resource" "reboot_environments" {
     depends_on = [
         module.clusterkv,
         module.docker,
-        null_resource.install_runner,
-        null_resource.register_runner,
-        null_resource.unregister_runner,
+        module.cirunners,
         null_resource.install_unity,
         null_resource.kubernetes_admin,
         null_resource.kubernetes_worker,
@@ -1211,9 +843,7 @@ resource "null_resource" "enable_autoupgrade" {
     count = local.server_count
     depends_on = [
         module.clusterkv,
-        null_resource.install_runner,
-        null_resource.register_runner,
-        null_resource.unregister_runner,
+        module.cirunners,
         null_resource.install_unity,
         null_resource.kubernetes_admin,
         null_resource.kubernetes_worker,

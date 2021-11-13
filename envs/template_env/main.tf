@@ -188,5 +188,6 @@ locals {
         nodeexporter_version = var.nodeexporter_version
         promtail_version = var.promtail_version
         consulexporter_version = var.consulexporter_version
+        loki_version = var.loki_version
     }
 }

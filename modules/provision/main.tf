@@ -13,6 +13,7 @@ variable "admin_ip_private" { default = "" }
 variable "nodeexporter_version" { default = "" }
 variable "promtail_version" { default = "" }
 variable "consulexporter_version" { default = "" }
+variable "loki_version" { default = "" }
 
 
 resource "null_resource" "access" {
@@ -135,7 +136,8 @@ resource "null_resource" "consul_checks" {
             "chmod 0755 /etc/consul.d/templates/pg.json",
             "chmod 0755 /etc/consul.d/templates/mongo.json",
             "chmod 0755 /etc/consul.d/templates/redis.json",
-            "chmod 0755 /etc/consul.d/conf.d/dns.json"
+            "chmod 0755 /etc/consul.d/conf.d/dns.json",
+            "consul reload"
         ]
     }
 
@@ -175,6 +177,13 @@ resource "null_resource" "exporters" {
                 FILENAME4=consul_exporter-${var.consulexporter_version}.linux-amd64.tar.gz
                 [ ! -f /tmp/$FILENAME4 ] && wget https://github.com/prometheus/consul_exporter/releases/download/v${var.consulexporter_version}/$FILENAME4 -P /tmp
                 tar xvfz /tmp/$FILENAME4 --wildcards --strip-components=1 -C /usr/local/bin */consul_exporter
+
+                FILENAME5="loki-linux-$(dpkg --print-architecture)"
+                sudo mkdir -p /etc/loki.d
+                [ ! -f /tmp/$FILENAME5.zip ] && curl -L https://github.com/grafana/loki/releases/download/v${var.loki_version}/$FILENAME5.zip -o /tmp/$FILENAME5.zip
+                unzip /tmp/$FILENAME5.zip -d /etc/loki.d/
+                sudo mv /etc/loki.d/$FILENAME5 /usr/local/bin/loki
+                wget https://raw.githubusercontent.com/grafana/loki/v${var.loki_version}/cmd/loki/loki-local-config.yaml -P /etc/loki.d
             EOF
         ]
     }
@@ -191,6 +200,10 @@ resource "null_resource" "exporters" {
         content = templatefile("${path.module}/templatefiles/services/promtail.service", {})
         destination = "/etc/systemd/system/promtail.service"
     }
+    provisioner "file" {
+        content = templatefile("${path.module}/templatefiles/services/loki.service", {})
+        destination = "/etc/systemd/system/loki.service"
+    }
 
     provisioner "remote-exec" {
         inline = [
@@ -202,8 +215,11 @@ resource "null_resource" "exporters" {
                 ${length(regexall("admin", var.name)) > 0 ? "echo" : "sudo systemctl enable nodeexporter"}
                 ${length(regexall("admin", var.name)) > 0 ? "sudo systemctl start consulexporter" : "echo"}
                 ${length(regexall("admin", var.name)) > 0 ? "sudo systemctl enable consulexporter" : "echo"}
+                ${length(regexall("admin", var.name)) > 0 ? "sudo systemctl start loki.service" : "echo"}
+                ${length(regexall("admin", var.name)) > 0 ? "sudo systemctl enable loki.service" : "echo"}
                 sudo systemctl start promtail
                 sudo systemctl enable promtail
+                sudo systemctl daemon-reload
             EOF
         ]
     }

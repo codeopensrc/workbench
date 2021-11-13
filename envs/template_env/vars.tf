@@ -20,6 +20,7 @@ variable "install_unity3d" { default = false }
 variable "nodeexporter_version" { default = "1.2.0" }
 variable "promtail_version" { default = "2.2.1" }
 variable "consulexporter_version" { default = "0.7.1" }
+variable "loki_version" { default = "2.2.1" }
 #variable "kubernetes_version" { default = "1.20.11-00" }## Gitlab 14.3.0 supports
 
 ###! TODO: Conditionally provision: kubernetes and/or docker_swarm

@@ -59,8 +59,8 @@
     - name: label docker nodes
       block:
         - name: check node labels
-          shell: "docker node ls -f node.label='name={{ ansible_hostname }}' | grep {{ ansible_hostname }}"
+          shell: "docker node ls -f node.label='name={{ ansible_nodename }}' | grep {{ ansible_nodename }}"
           changed_when: false
       rescue:
         - name: add node labels
-          command: docker node update --label-add dc={{ region }} --label-add name={{ ansible_hostname }} {{ ansible_hostname }}
+          command: docker node update --label-add dc={{ region }} --label-add name={{ ansible_nodename }} {{ ansible_nodename }}

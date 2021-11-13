@@ -330,6 +330,7 @@ module "provision" {
     nodeexporter_version = var.config.nodeexporter_version
     promtail_version = var.config.promtail_version
     consulexporter_version = var.config.consulexporter_version
+    loki_version = var.config.loki_version
 
     # DB checks
     pg_read_only_pw = var.config.pg_read_only_pw
