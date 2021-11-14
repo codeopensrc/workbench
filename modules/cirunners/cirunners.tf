@@ -85,6 +85,8 @@ resource "null_resource" "register_runner" {
     ### TODO: WHOOA, although a nice example of inline exec with EOF, make this a remote file so we can do bash things
     provisioner "remote-exec" {
         on_failure = continue
+        #TODO: If fresh gitlab install has lead role on a different server we dont have the initial_root_password
+        # Maybe put the initial password in consul kv if we dont import since it should be changed anyway
         inline = [
             <<-EOF
 

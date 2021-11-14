@@ -17,12 +17,12 @@ variable "import_gitlab_version" { default = "" }
 variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "install_unity3d" { default = false }
 
-##NOTE: Latest kubernetes: 1.22.2-00
+##NOTE: Latest kubernetes: 1.22.3-00
 variable "kubernetes_version" { default = "1.20.11-00" }## Gitlab 14.3.0 supports kubernetes 1.20.11-00
-variable "nodeexporter_version" { default = "1.2.0" }
-variable "promtail_version" { default = "2.2.1" }
+variable "nodeexporter_version" { default = "1.2.2" }
+variable "promtail_version" { default = "2.4.1" }
 variable "consulexporter_version" { default = "0.7.1" }
-variable "loki_version" { default = "2.2.1" }
+variable "loki_version" { default = "2.4.1" }
 
 variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }## kubernetes and/or docker_swarm
 
@@ -30,10 +30,10 @@ variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }#
 #######################################
 variable "packer_config" {
     default = {
-        gitlab_version = "14.3.0-ce.0"
-        docker_version = "20.10.7"
+        gitlab_version = "14.4.0-ce.0"
+        docker_version = "20.10.10"
         docker_compose_version = "1.29.2"
-        consul_version = "1.10.0"
+        consul_version = "1.10.3"
         redis_version = "5.0.9"
         base_amis = {
             "us-east-2" = "ami-030bd1caa8425dfe8" #20.04
