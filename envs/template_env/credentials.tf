@@ -54,7 +54,7 @@ locals {
         "default" = "10.1.0.0/16"
     }
     ## If only 1 machine, 4 runners
-    num_runners_per_machine = {
+    default_runners_per_machine = {
         "default" = 2
     }
     gitlab_runner_tokens_list = {
@@ -79,7 +79,7 @@ locals {
     misc_cnames = lookup(local.misc_cname_aliases, local.env)
 
     # Gitlab runner registration token
-    gitlab_runner_tokens = lookup(local.gitlab_runner_tokens_list, local.env)
+    gitlab_runner_registration_tokens = lookup(local.gitlab_runner_tokens_list, local.env)
 
     # This is used for the fqdn
     root_domain_name = lookup(local.root_domain_names, local.env)
@@ -88,7 +88,7 @@ locals {
     server_name_prefix = lookup(local.server_name_prefixes, local.env)
 
     cidr_block = lookup(local.cidr_blocks, local.env)
-    runners_per_machine = lookup(local.num_runners_per_machine, local.env, 2)
+    num_runners_per_machine = lookup(local.default_runners_per_machine, local.env, 2)
 
     # Configures sendgrid SMTP for gitlab using verified domain sender identity
     # TODO: Maybe put in wiki some links to setup and get apikey from sendgrid

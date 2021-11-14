@@ -46,10 +46,6 @@ output "db_names" {
     value = local.db_names
 }
 
-output "db_ids" {
-    value = local.db_server_ids
-}
-
 output "build_private_ip_addresses" {
     value = local.build_private_ips
 }
