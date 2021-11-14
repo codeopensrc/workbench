@@ -51,9 +51,9 @@ variable "packer_config" {
 # Options will be digital_ocean, aws, azure, google_cloud etc.
 ###! Current options: "digital_ocean" or "aws"
 variable "active_env_provider" { default = "digital_ocean" }
-module "main" {
+module "cloud" {
     source             = "../../modules/digital_ocean"  ###! Uncomment for digital ocean
-    # source             = "../../modules/aws"          ###! Uncomment for aws
+    #source             = "../../modules/aws"          ###! Uncomment for aws
 
     config = local.config
 }
@@ -105,43 +105,43 @@ variable "servers" {
             "count" = 1
             "image" = ""
             "roles" = ["admin", "lead", "db"]
-            # "roles" = ["admin"]
+            #"roles" = ["admin"]
             "size" = {
                 "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][3]
                 "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][1]
             }
             "aws_volume_size" = 60
         },
-        # {
-        #     "count" = 1
-        #     "image" = ""
-        #     "roles" = ["lead"]
-        #     "size" = {
-        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-        #     }
-        #     "aws_volume_size" = 40
-        # },
-        # {
-        #     "count" = 1
-        #     "image" = ""
-        #     "roles" = ["db"]
-        #     "size" = {
-        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-        #     }
-        #     "aws_volume_size" = 40
-        # },
-        # {
-        #     "count" = 1
-        #     "image" = ""
-        #     "roles" = ["build"]
-        #     "size" = {
-        #         "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-        #     }
-        #     "aws_volume_size" = 40
-        # },
+        #{
+        #    "count" = 1
+        #    "image" = ""
+        #    "roles" = ["lead"]
+        #    "size" = {
+        #        "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
+        #        "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #    }
+        #    "aws_volume_size" = 40
+        #},
+        #{
+        #    "count" = 1
+        #    "image" = ""
+        #    "roles" = ["db"]
+        #    "size" = {
+        #        "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
+        #        "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #    }
+        #    "aws_volume_size" = 40
+        #},
+        #{
+        #    "count" = 1
+        #    "image" = ""
+        #    "roles" = ["build"]
+        #    "size" = {
+        #        "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
+        #        "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+        #    }
+        #    "aws_volume_size" = 40
+        #},
     ]
 }
 

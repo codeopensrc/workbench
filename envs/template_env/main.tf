@@ -6,13 +6,13 @@
 
 # `terraform output` for name and ip address of instances in state for env
 output "instances" {
-    value = module.main.instances
+    value = module.cloud.instances
 }
 
 
 module "ansible" {
     source = "../../modules/ansible"
-    depends_on = [ module.main ]
+    depends_on = [ module.cloud ]
 
     ansible_hostfile = local.ansible_hostfile
     ansible_hosts = local.ansible_hosts
@@ -366,7 +366,7 @@ locals {
     ansible_hostfile = "./${terraform.workspace}_ansible_hosts"
     additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
 
-    ansible_hosts = module.main.ansible_hosts
+    ansible_hosts = module.cloud.ansible_hosts
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
     runners_per_machine = local.lead_servers + local.build_servers == 1 ? 4 : local.num_runners_per_machine
 
@@ -411,20 +411,20 @@ locals {
         if db.type == "mongo" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
 
-    admin_private_ips = module.main.admin_private_ip_addresses
-    lead_private_ips = module.main.lead_private_ip_addresses
-    db_private_ips = module.main.db_private_ip_addresses
-    build_private_ips = module.main.build_private_ip_addresses
+    admin_private_ips = module.cloud.admin_private_ip_addresses
+    lead_private_ips = module.cloud.lead_private_ip_addresses
+    db_private_ips = module.cloud.db_private_ip_addresses
+    build_private_ips = module.cloud.build_private_ip_addresses
 
-    admin_public_ips = module.main.admin_public_ip_addresses
-    lead_public_ips = module.main.lead_public_ip_addresses
-    db_public_ips = module.main.db_public_ip_addresses
-    build_public_ips = module.main.build_public_ip_addresses
+    admin_public_ips = module.cloud.admin_public_ip_addresses
+    lead_public_ips = module.cloud.lead_public_ip_addresses
+    db_public_ips = module.cloud.db_public_ip_addresses
+    build_public_ips = module.cloud.build_public_ip_addresses
 
-    admin_names = module.main.admin_names
-    lead_names = module.main.lead_names
-    db_names = module.main.db_names
-    build_names = module.main.build_names
+    admin_names = module.cloud.admin_names
+    lead_names = module.cloud.lead_names
+    db_names = module.cloud.db_names
+    build_names = module.cloud.build_names
 
     all_private_ips = distinct(concat(local.admin_private_ips, local.lead_private_ips, local.db_private_ips, local.build_private_ips))
     all_public_ips = distinct(concat(local.admin_public_ips, local.lead_public_ips, local.db_public_ips, local.build_public_ips))
