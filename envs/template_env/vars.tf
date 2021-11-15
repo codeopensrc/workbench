@@ -30,7 +30,7 @@ variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }#
 #######################################
 variable "packer_config" {
     default = {
-        gitlab_version = "14.4.0-ce.0"
+        gitlab_version = "14.4.2-ce.0"
         docker_version = "20.10.10"
         docker_compose_version = "1.29.2"
         consul_version = "1.10.3"

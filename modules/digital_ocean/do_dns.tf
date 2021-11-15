@@ -5,6 +5,7 @@ resource "digitalocean_domain" "additional" {
 }
 
 resource "digitalocean_record" "additional_cname" {
+    depends_on = [ digitalocean_domain.additional ]
     for_each = {
         for ind, domain in local.cname_additional_aliases :
         "${domain.domainname}.${domain.subdomainname}" => domain
