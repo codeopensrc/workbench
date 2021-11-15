@@ -22,23 +22,14 @@ variable "build" {}
 # Need to create a more core data.image to query and only build ONE of that type of image
 #  while still allowing multiple types (admin w/gitlab, smaller w/o gitlab) of images to build in parallel
 
-resource "null_resource" "build" {
-    count = var.build ? 1 : 0
-
-    triggers = {
-        consul_version = var.packer_config.consul_version
-        docker_version = var.packer_config.docker_version
-        docker_compose_version = var.packer_config.docker_compose_version
-        gitlab_version = var.packer_config.gitlab_version
-        redis_version = var.packer_config.redis_version
-        aws_key_name = var.aws_key_name
-    }
-
-    # TODO: Will need builder specific variables
+resource "null_resource" "image" {
 
     provisioner "local-exec" {
 
         command = <<-EOF
+            if [ "${var.build}" = "false" ]; then
+                exit 0
+            fi
 
             export BUILDER_SOURCE=${var.active_env_provider == "aws" ? "amazon-ebs.*" : "digitalocean.*" }
             export CUR_DIR=$(realpath ${path.module})

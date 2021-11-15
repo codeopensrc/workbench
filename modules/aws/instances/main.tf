@@ -81,6 +81,10 @@ data "aws_ami" "new" {
     }
 }
 
+resource "null_resource" "image_status" {
+    count = length(data.aws_ami_ids.latest.ids) >= 1 ? 0 : 1
+    triggers = { needs_packer_build = length(data.aws_ami_ids.latest.ids) >= 1 ? false : true }
+}
 resource "random_uuid" "server" {}
 
 ## We use to indirectly depend on vpc which is necesssary to destroy aws_instance
