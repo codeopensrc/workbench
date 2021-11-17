@@ -111,37 +111,41 @@ variable "servers" {
                 "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][1]
             }
             "aws_volume_size" = 60
+            "fleet" = "aurora"
         },
-        #{
-        #    "count" = 1
-        #    "image" = ""
-        #    "roles" = ["lead"]
-        #    "size" = {
-        #        "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #        "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-        #    }
-        #    "aws_volume_size" = 40
-        #},
-        #{
-        #    "count" = 1
-        #    "image" = ""
-        #    "roles" = ["db"]
-        #    "size" = {
-        #        "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #        "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-        #    }
-        #    "aws_volume_size" = 40
-        #},
-        #{
-        #    "count" = 1
-        #    "image" = ""
-        #    "roles" = ["build"]
-        #    "size" = {
-        #        "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-        #        "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-        #    }
-        #    "aws_volume_size" = 40
-        #},
+        {
+            "count" = 0
+            "image" = ""
+            "roles" = ["lead"]
+            "size" = {
+                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
+                "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+            }
+            "aws_volume_size" = 40
+            "fleet" = "lucy"
+        },
+        {
+            "count" = 0
+            "image" = ""
+            "roles" = ["db"]
+            "size" = {
+                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
+                "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+            }
+            "aws_volume_size" = 40
+            "fleet" = "daisy"
+        },
+        {
+            "count" = 0
+            "image" = ""
+            "roles" = ["build"]
+            "size" = {
+                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
+                "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
+            }
+            "aws_volume_size" = 40
+            "fleet" = "beth"
+        },
     ]
 }
 

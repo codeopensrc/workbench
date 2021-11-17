@@ -8,18 +8,25 @@
 
 module "admin" {
     source = "./instances"
-    count = local.admin_servers > 0 ? 1 : 0
+    ##TODO: Limit to 1 atm
+    for_each = {
+        for ind, cfg in local.admin_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.admin_cfg_servers[0]
     config = var.config
     image_size = "t3a.medium"
     vpc = local.vpc
 }
 module "lead" {
     source = "./instances"
-    count = local.is_only_leader_count
+    for_each = {
+        for ind, cfg in local.lead_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.lead_cfg_servers[0]
     config = var.config
     image_size = "t3a.micro"
     vpc = local.vpc
@@ -33,9 +40,13 @@ module "lead" {
 }
 module "db" {
     source = "./instances"
-    count = local.is_only_db_count
+    ##TODO: Limit to 1 atm
+    for_each = {
+        for ind, cfg in local.db_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.db_cfg_servers[0]
     config = var.config
     image_size = "t3a.micro"
     vpc = local.vpc
@@ -46,9 +57,12 @@ module "db" {
 }
 module "build" {
     source = "./instances"
-    count = local.is_only_build_count
+    for_each = {
+        for ind, cfg in local.build_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.build_cfg_servers[0]
     config = var.config
     image_size = "t3a.micro"
     vpc = local.vpc
@@ -98,14 +112,14 @@ data "aws_instances" "lead" {
     }
 }
 data "aws_instances" "db" {
-    depends_on = [ module.admin.id, module.lead.id, module.db.id ]
+    depends_on = [ module.admin.id, module.db.id ]
     instance_tags = {
         Prefix = "${var.config.server_name_prefix}-${var.config.region}"
         DB = true
     }
 }
 data "aws_instances" "build" {
-    depends_on = [ module.admin.id, module.lead.id, module.build.id ]
+    depends_on = [ module.admin.id, module.build.id ]
     instance_tags = {
         Prefix = "${var.config.server_name_prefix}-${var.config.region}"
         Build = true
@@ -128,7 +142,7 @@ resource "null_resource" "cleanup_consul" {
     provisioner "file" {
         content = <<-EOF
             #Wait for consul to detect failure;
-            sleep 120;
+            sleep 300;
             DOWN_MEMBERS=( $(consul members | grep "left\|failed" | cut -d " " -f1) )
             echo "DOWN MEMBERS: $${DOWN_MEMBERS[@]}"
             if [ -n "$DOWN_MEMBERS" ]; then

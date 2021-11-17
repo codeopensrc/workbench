@@ -12,10 +12,13 @@ output "instances" {
     )
 }
 
+### This output depends on the full module
 output "ansible_hosts" {
     value = local.all_ansible_hosts
 }
 
+### These outputs only depend on the data resource
+### They will output BEFORE any destroys on an instance/resource -- Important
 output "admin_private_ip_addresses" {
     value = local.admin_private_ips
 }

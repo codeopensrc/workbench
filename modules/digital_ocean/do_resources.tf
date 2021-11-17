@@ -2,9 +2,13 @@
 
 module "admin" {
     source = "./droplets"
-    count = local.admin_servers > 0 ? 1 : 0
+    ##TODO: Limit to 1 atm
+    for_each = {
+        for ind, cfg in local.admin_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.admin_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_name
     image_size = "s-2vcpu-4gb"
@@ -13,9 +17,12 @@ module "admin" {
 }
 module "lead" {
     source = "./droplets"
-    count = local.is_only_leader_count
+    for_each = {
+        for ind, cfg in local.lead_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.lead_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_small_name
     image_size = "s-1vcpu-1gb"
@@ -31,9 +38,13 @@ module "lead" {
 }
 module "db" {
     source = "./droplets"
-    count = local.is_only_db_count
+    ##TODO: Limit to 1 atm
+    for_each = {
+        for ind, cfg in local.db_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.db_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_small_name
     image_size = "s-1vcpu-1gb"
@@ -46,9 +57,12 @@ module "db" {
 }
 module "build" {
     source = "./droplets"
-    count = local.is_only_build_count
+    for_each = {
+        for ind, cfg in local.build_cfg_servers:
+        cfg.key => cfg
+    }
+    servers = each.value.server
 
-    servers = local.build_cfg_servers[count.index]
     config = var.config
     image_name = local.do_image_small_name
     image_size = "s-1vcpu-1gb"
@@ -120,7 +134,6 @@ data "digitalocean_droplets" "lead" {
 data "digitalocean_droplets" "db" {
     depends_on = [
         module.admin.id,
-        module.lead.id,
         module.db.id,
     ]
     filter {
@@ -145,7 +158,6 @@ data "digitalocean_droplets" "db" {
 data "digitalocean_droplets" "build" {
     depends_on = [
         module.admin.id,
-        module.lead.id,
         module.build.id
     ]
     filter {
@@ -184,7 +196,7 @@ resource "null_resource" "cleanup_consul" {
     provisioner "file" {
         content = <<-EOF
             #Wait for consul to detect failure;
-            sleep 120;
+            sleep 300;
             DOWN_MEMBERS=( $(consul members | grep "left\|failed" | cut -d " " -f1) )
             echo "DOWN MEMBERS: $${DOWN_MEMBERS[@]}"
             if [ -n "$DOWN_MEMBERS" ]; then

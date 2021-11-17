@@ -9,6 +9,7 @@ output "ansible_host" {
         name = aws_instance.main.tags.Name
         roles = var.servers.roles
         ip = aws_instance.main.public_ip
+        private_ip = aws_instance.main.private_ip
     }
 }
 

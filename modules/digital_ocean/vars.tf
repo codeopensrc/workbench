@@ -43,28 +43,42 @@ locals {
         if contains(SERVER.roles, "build")
     ])))
 
-
-    admin_cfg_servers = [
-        for SERVER in var.config.servers:
-        SERVER
-        if SERVER.roles[0] == "admin"
-    ]
-    lead_cfg_servers = [
-        for SERVER in var.config.servers:
-        SERVER
-        if SERVER.roles[0] == "lead"
-    ]
-    db_cfg_servers = [
-        for SERVER in var.config.servers:
-        SERVER
-        if SERVER.roles[0] == "db"
-    ]
-    build_cfg_servers = [
-        for SERVER in var.config.servers:
-        SERVER
-        if SERVER.roles[0] == "build"
-    ]
-
+    admin_cfg_servers = flatten([
+        for ind, SERVER in var.config.servers: [
+            for num in range(0, SERVER.count): {
+                key = "${SERVER.fleet}-n${num}"
+                server = SERVER
+            }
+            if SERVER.roles[0] == "admin"
+        ]
+    ])
+    lead_cfg_servers = flatten([
+        for ind, SERVER in var.config.servers: [
+            for num in range(0, SERVER.count): {
+                key = "${SERVER.fleet}-n${num}"
+                server = SERVER
+            }
+            if SERVER.roles[0] == "lead"
+        ]
+    ])
+    db_cfg_servers = flatten([
+        for ind, SERVER in var.config.servers: [
+            for num in range(0, SERVER.count): {
+                key = "${SERVER.fleet}-n${num}"
+                server = SERVER
+            }
+            if SERVER.roles[0] == "db"
+        ]
+    ])
+    build_cfg_servers = flatten([
+        for ind, SERVER in var.config.servers: [
+            for num in range(0, SERVER.count): {
+                key = "${SERVER.fleet}-n${num}"
+                server = SERVER
+            }
+            if SERVER.roles[0] == "build"
+        ]
+    ])
 }
 
 locals {
@@ -83,20 +97,20 @@ locals {
     db_names = data.digitalocean_droplets.db.droplets[*].name
     build_names = data.digitalocean_droplets.build.droplets[*].name
 
-    admin_server_ids = data.digitalocean_droplets.admin.droplets[*].id
-    lead_server_ids = data.digitalocean_droplets.lead.droplets[*].id
-    db_server_ids = data.digitalocean_droplets.db.droplets[*].id
-    build_server_ids = data.digitalocean_droplets.build.droplets[*].id
+    admin_server_ids = [for v in module.admin : v.id]
+    lead_server_ids = [for v in module.lead : v.id]
+    db_server_ids = [for v in module.db : v.id]
+    build_server_ids = [for v in module.build : v.id]
 
-    admin_server_instances = flatten(module.admin[*].instance)
-    lead_server_instances = flatten(module.lead[*].instance)
-    db_server_instances = flatten(module.db[*].instance)
-    build_server_instances = flatten(module.build[*].instance)
+    admin_server_instances = [for v in module.admin : v.instance]
+    lead_server_instances = [for v in module.lead : v.instance]
+    db_server_instances = [for v in module.db : v.instance]
+    build_server_instances = [for v in module.build : v.instance]
 
-    admin_ansible_hosts = flatten(module.admin[*].ansible_host)
-    lead_ansible_hosts = flatten(module.lead[*].ansible_host)
-    db_ansible_hosts = flatten(module.db[*].ansible_host)
-    build_ansible_hosts = flatten(module.build[*].ansible_host)
+    admin_ansible_hosts = [for v in module.admin : v.ansible_host]
+    lead_ansible_hosts = [for v in module.lead : v.ansible_host]
+    db_ansible_hosts = [for v in module.db : v.ansible_host]
+    build_ansible_hosts = [for v in module.build : v.ansible_host]
 
     all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
     all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)

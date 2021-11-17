@@ -1,0 +1,139 @@
+---
+- name: Handle Kubernetes admin
+  hosts: "{{ (groups['admin'] | default([]) + groups['lead']) | first }}"
+  remote_user: root
+  vars:
+    kubernetes_version: "{{ kubernetes_version }}"
+    gitlab_tokens: "{{ gitlab_runner_tokens | from_json }}"
+    kube_tokens: "'-t {{ gitlab_tokens['service'] }}'"
+    vpc_private_iface: "{{ vpc_private_iface }}"
+    root_domain_name: "{{ root_domain_name }}"
+    admin_servers: "{{ admin_servers }}"
+    server_count: "{{ server_count }}"
+
+    private_ip: "{{ hostvars[inventory_hostname]['ansible_'+vpc_private_iface].ipv4.address }}"
+    nginx_args: "{{ (admin_servers | int == 0) | ternary('-p default', '') }}"
+    runner_img_version: "{{ kubernetes_version | regex_replace('-00') }}"
+  tasks:
+    - name: init cluster
+      block:
+        - name: check cluster started
+          command: kubectl get nodes
+          changed_when: false
+      rescue:
+        - name: start cluster
+          command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }}
+          
+    - name: init nginxKubeProxy
+      command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
+
+    - name: untaint node if solo
+      shell: "kubectl taint nodes --all node-role.kubernetes.io/master- || echo"
+      changed_when: false
+      when: server_count | int == 1
+
+    - name: cluster serviceaccounts
+      block:
+        - name: check accounts added
+          shell: "gitlab-runner verify --delete && gitlab-runner -log-format json list 2>&1 >/dev/null | grep 'deploy-kube-runner'"
+          changed_when: false
+      rescue:
+        - name: create cluster serviceaccounts
+          command: bash $HOME/code/scripts/kube/createClusterAccounts.sh -v {{ runner_img_version }} -d {{ root_domain_name }} \
+            -a {{ private_ip }} {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u
+      when: admin_servers | int > 0
+
+    - name: add cluster to gitlab
+      block:
+        - name: check cluster added
+          command: consul kv get kube/gitlab_integrated
+          changed_when: false
+      rescue:
+        - name: add cluster
+          command: bash $HOME/code/scripts/kube/addClusterToGitlab.sh -d {{ root_domain_name }} -u -r
+      when: admin_servers | int > 0
+
+
+- name: Handle Kubernetes worker
+  ### Get all hosts that do NOT match kubernetes admin (verbose as a group could be absent)
+  ### (lead+db+build) NOT IN (admin+lead | first)
+  hosts: "{{ ( groups.lead + (groups.db|default([])) + (groups.build|default([])) ) | difference( ((groups.admin|default([])) + groups.lead) | first) }}"
+  remote_user: root
+  gather_facts: no
+  vars:
+    kubernetes_version: "{{ kubernetes_version }}"
+  tasks:
+    - name: join cluster
+      block:
+        - name: check cluster joined
+          command: kubectl get nodes
+          changed_when: false
+      rescue:
+        - name: join cluster
+          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }}"
+
+
+- name: Reboot gitlab environments
+  ##TODO: Test if admin group is not present, error or empty
+  hosts: "{{ (groups['admin'] | default([])) | first }}"
+  remote_user: root
+  vars:
+    root_domain_name: "{{ root_domain_name }}"
+    import_gitlab: "{{ import_gitlab }}"
+  tasks:
+    - name: check cluster
+      block:
+        - name: check cluster started
+          command: kubectl get nodes
+          changed_when: false
+      rescue:
+        - name: inform error
+          shell: "echo 'Cluster not started, which means something went wrong'; exit 1;"
+
+    - name: init envs
+      block:
+        - name: check envs rebooted
+          command: consul kv get kube/envs_rebooted
+          changed_when: false
+      rescue:
+        - name: reboot envs
+          shell: |
+            FILENAME=ENVS.txt
+            SNIPPET_PROJECT_ID=7
+            SNIPPET_ID=33
+            LOCAL_FILE="$HOME/code/backups/$FILENAME"
+            DEFAULT_BRANCH="master"
+
+            ## Download list of production environments
+            curl "https://gitlab.{{ root_domain_name }}/api/v4/projects/$SNIPPET_PROJECT_ID/snippets/$SNIPPET_ID/files/main/$FILENAME/raw" > $LOCAL_FILE
+            ## Alternative without api
+            ## curl -sL "https://gitlab.{{ root_domain_name }}/os/workbench/-/snippets/$SNIPPET_ID/raw/main/$FILENAME -o $LOCAL_FILE"
+
+            ## Gen tmp TOKEN to trigger deploy_prod job in each project listed
+            TERRA_UUID=$(uuidgen)
+            sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!";
+
+            ## Iterate over projects in $LOCAL_FILE and run pipeline for each
+            while read PROJECT_ID; do
+                echo $PROJECT_ID;
+
+                ## Create trigger and get [token, id]
+                TRIGGER_INFO=$(curl -X POST -H "PRIVATE-TOKEN: $TERRA_UUID" --form description="reboot" \
+                    "https://gitlab.{{ root_domain_name }}/api/v4/projects/$PROJECT_ID/triggers")
+
+                TRIGGER_TOKEN=$(echo $TRIGGER_INFO | jq -r '.token')
+                TRIGGER_ID=$(echo $TRIGGER_INFO | jq -r '.id')
+
+                ## Trigger pipeline
+                curl -X POST --form "variables[ONLY_DEPLOY_PROD]=true" \
+                "https://gitlab.{{ root_domain_name }}/api/v4/projects/$PROJECT_ID/trigger/pipeline?token=$TRIGGER_TOKEN&ref=$DEFAULT_BRANCH"
+
+                ## Delete trigger
+                curl -X DELETE -H "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.{{ root_domain_name }}/api/v4/projects/$PROJECT_ID/triggers/$TRIGGER_ID";
+
+            done <$LOCAL_FILE
+
+            ## Revoke token
+            sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
+            consul kv put kube/envs_rebooted true
+      when: import_gitlab | bool == true

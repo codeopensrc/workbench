@@ -84,3 +84,30 @@
 #      debug:
 #        msg:
 #        - "{{ hostvars[ansible_host]['ansible_'+vpc_private_iface].ipv4.address }}"
+#
+#
+#PASSPHRASE_FILE={{ (use_gpg == "true") | ternary(passphrase_file, "''") }}
+#
+#
+#  tasks:
+#    - name: check cli tools
+#      stat:
+#        path: "$HOME/code/cli-config"
+#      register: file_data
+#
+#    - name: download cli tools
+#      shell: |
+#        sed -i "s|0|1|" /etc/apt/apt.conf.d/20auto-upgrades
+#        cat /etc/apt/apt.conf.d/20auto-upgrades
+#        curl -L clidot.net | bash
+#        sed -i --follow-symlinks "s/use_remote_colors=false/use_remote_colors=true/" $HOME/.tmux.conf
+#      when: not file_data.stat.exists
+#
+#
+#
+#   - set_fact:
+#       current_names: []
+#   - set_fact:
+#       current_names: "{{ current_names + [hostvars[item].machine_name] }}"
+#     with_items: #"{{ g.results }}"
+#       - "{{ ( (groups['admin']|default([])) + (groups['lead']|default([])) + (groups['db'] | default([])) + (groups['build'] | default([])) ) | unique }}"

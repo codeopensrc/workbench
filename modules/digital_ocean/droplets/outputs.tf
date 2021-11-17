@@ -9,6 +9,7 @@ output "ansible_host" {
         name = digitalocean_droplet.main.name
         roles = var.servers.roles
         ip = digitalocean_droplet.main.ipv4_address
+        private_ip = digitalocean_droplet.main.ipv4_address_private
     }
 }
 

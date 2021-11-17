@@ -28,7 +28,10 @@ module "ansible" {
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "swarm" {
     source = "../../modules/swarm"
-    depends_on = [module.ansible]
+    depends_on = [
+        module.cloud,
+        module.ansible
+    ]
 
     ansible_hostfile = local.ansible_hostfile
 
@@ -42,7 +45,11 @@ module "swarm" {
 module "gpg" {
     source = "../../modules/gpg"
     count = var.use_gpg ? 1 : 0
-    depends_on = [module.swarm]
+    depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm
+    ]
 
     ansible_hostfile = local.ansible_hostfile
 
@@ -60,7 +67,12 @@ module "gpg" {
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "clusterkv" {
     source = "../../modules/clusterkv"
-    depends_on = [module.gpg]
+    depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg
+    ]
 
     ansible_hostfile = local.ansible_hostfile
 
@@ -75,7 +87,13 @@ module "clusterkv" {
 
 module "gitlab" {
     source = "../../modules/gitlab"
-    depends_on = [module.clusterkv]
+    depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
+        module.clusterkv
+    ]
 
     ansible_hostfile = local.ansible_hostfile
 
@@ -105,6 +123,10 @@ module "gitlab" {
 module "nginx" {
     source = "../../modules/nginx"
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
         module.gitlab,
     ]
@@ -130,6 +152,10 @@ module "nginx" {
 module "clusterdb" {
     source = "../../modules/clusterdb"
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
         module.gitlab,
         module.nginx,
@@ -153,6 +179,10 @@ module "clusterdb" {
 module "docker" {
     source = "../../modules/docker"
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
         module.gitlab,
         module.nginx,
@@ -171,6 +201,10 @@ module "docker" {
 
 resource "null_resource" "gpg_remove_key" {
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
         module.gitlab,
         module.nginx,
@@ -187,9 +221,14 @@ resource "null_resource" "gpg_remove_key" {
 module "letsencrypt" {
     source = "../../modules/letsencrypt"
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
         module.gitlab,
         module.nginx,
+        module.clusterdb,
         module.docker,
     ]
     ansible_hostfile = local.ansible_hostfile
@@ -211,8 +250,14 @@ module "letsencrypt" {
 module "cirunners" {
     source = "../../modules/cirunners"
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
         module.gitlab,
+        module.nginx,
+        module.clusterdb,
         module.docker,
         module.letsencrypt,
     ]
@@ -264,7 +309,14 @@ resource "null_resource" "install_unity" {
 module "kubernetes" {
     source = "../../modules/kubernetes"
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
+        module.gitlab,
+        module.nginx,
+        module.clusterdb,
         module.docker,
         module.letsencrypt,
         module.cirunners,
@@ -276,10 +328,8 @@ module "kubernetes" {
     admin_servers = local.admin_servers
     server_count = local.server_count
 
-    lead_public_ips = local.lead_public_ips
-    admin_public_ips = local.admin_public_ips
-    admin_private_ips = local.admin_private_ips
     all_public_ips = local.all_public_ips
+    all_names = local.all_names
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
     root_domain_name = local.root_domain_name
@@ -293,8 +343,16 @@ module "kubernetes" {
 resource "null_resource" "configure_smtp" {
     count = local.admin_servers
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
+        module.gitlab,
+        module.nginx,
+        module.clusterdb,
         module.docker,
+        module.letsencrypt,
         module.cirunners,
         null_resource.install_unity,
         module.kubernetes,
@@ -328,28 +386,29 @@ resource "null_resource" "configure_smtp" {
 
 # Re-enable after everything installed
 resource "null_resource" "enable_autoupgrade" {
-    count = local.server_count
     depends_on = [
+        module.cloud,
+        module.ansible,
+        module.swarm,
+        module.gpg,
         module.clusterkv,
+        module.gitlab,
+        module.nginx,
+        module.clusterdb,
+        module.docker,
+        module.letsencrypt,
         module.cirunners,
         null_resource.install_unity,
         module.kubernetes,
         null_resource.configure_smtp,
     ]
 
-    provisioner "remote-exec" {
-        inline = [
-            "sed -i \"s|0|1|\" /etc/apt/apt.conf.d/20auto-upgrades",
-            "cat /etc/apt/apt.conf.d/20auto-upgrades",
-            "curl -L clidot.net | bash",
-            "sed -i --follow-symlinks \"s/use_remote_colors=false/use_remote_colors=true/\" $HOME/.tmux.conf",
-            "cat /etc/gitlab/initial_root_password",
-            "exit 0"
-        ]
+    triggers = {
+        ips = join(",", local.all_public_ips)
     }
-    connection {
-        host = element(local.all_public_ips, count.index)
-        type = "ssh"
+
+    provisioner "local-exec" {
+        command = "ansible-playbook ../../modules/provision/playbooks/cli.yml -i ${local.ansible_hostfile}"
     }
 }
 
@@ -411,21 +470,72 @@ locals {
         if db.type == "mongo" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
 
-    admin_private_ips = module.cloud.admin_private_ip_addresses
-    lead_private_ips = module.cloud.lead_private_ip_addresses
-    db_private_ips = module.cloud.db_private_ip_addresses
-    build_private_ips = module.cloud.build_private_ip_addresses
 
-    admin_public_ips = module.cloud.admin_public_ip_addresses
-    lead_public_ips = module.cloud.lead_public_ip_addresses
-    db_public_ips = module.cloud.db_public_ip_addresses
-    build_public_ips = module.cloud.build_public_ip_addresses
+    admin_private_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.private_ip
+        if contains(HOST.roles, "admin")
+    ]
+    lead_private_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.private_ip
+        if contains(HOST.roles, "lead")
+    ]
+    db_private_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.private_ip
+        if contains(HOST.roles, "db")
+    ]
+    build_private_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.private_ip
+        if contains(HOST.roles, "build")
+    ]
 
-    admin_names = module.cloud.admin_names
-    lead_names = module.cloud.lead_names
-    db_names = module.cloud.db_names
-    build_names = module.cloud.build_names
 
+    admin_public_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "admin")
+    ]
+    lead_public_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "lead")
+    ]
+    db_public_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "db")
+    ]
+    build_public_ips = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "build")
+    ]
+
+    admin_names = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.name
+        if contains(HOST.roles, "admin")
+    ]
+    lead_names = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.name
+        if contains(HOST.roles, "lead")
+    ]
+    db_names = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.name
+        if contains(HOST.roles, "db")
+    ]
+    build_names = [
+        for HOST in module.cloud.ansible_hosts:
+        HOST.name
+        if contains(HOST.roles, "build")
+    ]
+
+    #ansible_ips = join(",", var.ansible_hosts[*].ip)
     all_private_ips = distinct(concat(local.admin_private_ips, local.lead_private_ips, local.db_private_ips, local.build_private_ips))
     all_public_ips = distinct(concat(local.admin_public_ips, local.lead_public_ips, local.db_public_ips, local.build_public_ips))
     all_names = distinct(concat(local.admin_names, local.lead_names, local.db_names, local.build_names))

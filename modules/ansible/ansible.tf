@@ -13,7 +13,7 @@ variable "build_public_ips" { default = "" }
 
 resource "null_resource" "ansible_hosts" {
     triggers = {
-        ips = join(",", var.all_public_ips)
+        ansible_ips = join(",", var.ansible_hosts[*].ip)
         hostfile = var.ansible_hostfile
     }
 

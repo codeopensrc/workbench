@@ -1,0 +1,36 @@
+---
+- name: Remove nodes
+  hosts: "{{ (groups['admin'] | default([]) + groups['lead']) | first }}"
+  remote_user: root
+  vars:
+    current_names: "{{ all_names | split(',')  }}"
+    old_ansible_names: []
+    nodes_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_names: "{{ old_ansible_names + [hostvars[item].machine_name] }}"
+      with_items: "{{ groups['servers'] }}"
+
+    ## Old ansible names/hosts not in current_names - nodes that should be removed
+    - set_fact:
+        nodes_to_remove: "{{ nodes_to_remove + [item] }}"
+      with_items: "{{ old_ansible_names | difference(current_names) }}"
+
+    - name: missing
+      debug:
+        msg: "{{ item }}"
+      with_items: "{{ nodes_to_remove }}"
+
+    - name: drain nodes to remove
+      shell: "kubectl drain {{ item }} --ignore-daemonsets --force --delete-emptydir-data && sleep 10"
+      with_items: "{{ nodes_to_remove }}"
+      when: nodes_to_remove | length > 0
+
+    - name: sleep
+      command: sleep 10
+      when: nodes_to_remove | length > 0
+
+    - name: delete nodes to remove
+      shell: "kubectl delete node {{ item }} && sleep 10"
+      with_items: "{{ nodes_to_remove }}"
+      when: nodes_to_remove | length > 0

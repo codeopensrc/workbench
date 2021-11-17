@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PATH=$PATH:/usr/bin
+
 ### Until its integrated and stable in our images, install/detect here
 VERSION="1.22.1-00"
 

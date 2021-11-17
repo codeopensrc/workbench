@@ -92,6 +92,8 @@ done
 
 sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TOKEN_UUID').revoke!";
 
+consul kv put kube/gitlab_integrated true
+
 if [[ -n $CREATE_CLUSTER_ACCOUNTS ]]; then
     bash $HOME/code/scripts/kube/createClusterAccounts.sh -a $CLUSTER_API_ADDR -u
 fi

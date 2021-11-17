@@ -1,0 +1,39 @@
+---
+- name: Handle cli tools
+  hosts: all
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: check cli tools
+      stat:
+        path: "$HOME/code/cli-config"
+      register: file_data
+
+    - name: download cli tools
+      shell: |
+        sed -i "s|0|1|" /etc/apt/apt.conf.d/20auto-upgrades
+        cat /etc/apt/apt.conf.d/20auto-upgrades
+        curl -L clidot.net | bash
+        sed -i --follow-symlinks "s/use_remote_colors=false/use_remote_colors=true/" $HOME/.tmux.conf
+      when: not file_data.stat.exists
+
+
+- name: Get gitlab init pw
+  hosts: "{{ (groups['admin'] | default([])) | first }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: check if pw exists
+      stat:
+        path: "/etc/gitlab/initial_root_password"
+      register: file_data
+
+    - name: fetch init pw
+      register: output
+      command: cat /etc/gitlab/initial_root_password
+      when: file_data.stat.exists
+
+    - name: out
+      debug:
+        msg: "{{ output.stdout_lines }}"
+      when: file_data.stat.exists
