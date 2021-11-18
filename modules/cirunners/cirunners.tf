@@ -1,19 +1,26 @@
+variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 variable "gitlab_runner_tokens" {}
-
-variable "lead_public_ips" {}
-variable "build_public_ips" {}
 
 variable "admin_servers" {}
 variable "lead_servers" {}
 variable "build_servers" {}
 
-variable "lead_names" {}
-variable "build_names" {}
-
 variable "runners_per_machine" {}
 variable "root_domain_name" {}
 
+locals {
+    lead_hosts = [
+        for HOST in var.ansible_hosts:
+        HOST
+        if contains(HOST.roles, "lead")
+    ]
+    build_hosts = [
+        for HOST in var.ansible_hosts:
+        HOST
+        if contains(HOST.roles, "build")
+    ]
+}
 
 resource "null_resource" "install_runner" {
     count = var.admin_servers > 0 ? var.lead_servers + var.build_servers : 0
@@ -47,7 +54,7 @@ resource "null_resource" "install_runner" {
     }
 
     connection {
-        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
+        host = element(concat(local.lead_hosts[*].ip, local.build_hosts[*].ip), count.index)
         type = "ssh"
     }
 }
@@ -78,7 +85,7 @@ resource "null_resource" "register_runner" {
     # TODO: 1 or 2 prod runners with rest non-prod
     # TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
     triggers = {
-        num_names = join(",", concat(var.lead_names, var.build_names))
+        num_names = join(",", concat(local.lead_hosts[*].name, local.build_hosts[*].name))
         num_runners = sum([var.lead_servers + var.build_servers]) * var.runners_per_machine
     }
 
@@ -108,7 +115,7 @@ resource "null_resource" "register_runner" {
 
                 if [ -z "$REGISTRATION_TOKEN" ]; then
                     echo "#################################################################################################"
-                    echo "WARNING: REGISTERING RUNNERS FOR ${element(concat(var.lead_names, var.build_names), count.index)} DID NOT FINISH HOWEVER WE ARE CONTINUING"
+                    echo "WARNING: REGISTERING RUNNERS FOR ${element(concat(local.lead_hosts[*].name, local.build_hosts[*].name), count.index)} DID NOT FINISH HOWEVER WE ARE CONTINUING"
                     echo "Obtain token and populate 'service' key for 'gitlab_runner_tokens' var in credentials.tf"
                     echo "#################################################################################################"
                     exit 1;
@@ -121,7 +128,7 @@ resource "null_resource" "register_runner" {
                 ## Split runners *evenly* between multiple machines
                 %{ for NUM in range(1, 1 + var.runners_per_machine) }
 
-                    MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)};
+                    MACHINE_NAME=${element(concat(local.lead_hosts[*].name, local.build_hosts[*].name), count.index)};
                     RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$");
                     FULL_NAME="$${RUNNER_NAME}_shell_${NUM}";
                     FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg");
@@ -182,7 +189,7 @@ resource "null_resource" "register_runner" {
     provisioner "file" {
         on_failure = continue
         content = <<-EOF
-            MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
+            MACHINE_NAME=${element(concat(local.lead_hosts[*].name, local.build_hosts[*].name), count.index)}
             RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
             NAMES=( $(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg") )
 
@@ -195,7 +202,7 @@ resource "null_resource" "register_runner" {
 
 
     connection {
-        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
+        host = element(concat(local.lead_hosts[*].ip, local.build_hosts[*].ip), count.index)
         type = "ssh"
     }
 }
@@ -212,14 +219,14 @@ resource "null_resource" "unregister_runner" {
     ]
 
     triggers = {
-        num_names = join(",", concat(var.lead_names, var.build_names))
+        num_names = join(",", concat(local.lead_hosts[*].name, local.build_hosts[*].name))
         num_runners = sum([var.lead_servers + var.build_servers]) * var.runners_per_machine
     }
 
     provisioner "file" {
         on_failure = continue
         content = <<-EOF
-            MACHINE_NAME=${element(concat(var.lead_names, var.build_names), count.index)}
+            MACHINE_NAME=${element(concat(local.lead_hosts[*].name, local.build_hosts[*].name), count.index)}
             RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
             RUNNERS_ON_MACHINE=($(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg"))
             CURRENT_NUM_RUNNERS="$${#RUNNERS_ON_MACHINE[@]}"
@@ -243,7 +250,7 @@ resource "null_resource" "unregister_runner" {
     }
 
     connection {
-        host = element(concat(var.lead_public_ips, var.build_public_ips), count.index)
+        host = element(concat(local.lead_hosts[*].ip, local.build_hosts[*].ip), count.index)
         type = "ssh"
     }
 }

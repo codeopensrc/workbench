@@ -1,18 +1,31 @@
+variable "ansible_hosts" {}
+variable "ansible_hostfile" {}
+
 variable "s3alias" {}
 variable "s3bucket" {}
 variable "bot_gpg_name" { default = "" }
 variable "bot_gpg_passphrase" { default = "" }
 variable "tmp_pubkeylist" { default = "pubkeylist.asc" }
 
-variable "admin_public_ips" { default = [] }
-variable "db_public_ips" { default = [] }
 
-variable "ansible_hostfile" { default = "" }
+locals {
+    admin_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "admin")
+    ]
+    db_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "db")
+    ]
+}
+
 
 resource "null_resource" "gpg_download" {
     triggers = {
-        admin_public_ips = join(",", var.admin_public_ips)
-        db_public_ips = join(",", var.db_public_ips)
+        admin_public_ips = join(",", local.admin_public_ips)
+        db_public_ips = join(",", local.db_public_ips)
     }
 
     provisioner "local-exec" {
@@ -65,8 +78,8 @@ resource "null_resource" "gpg_upload" {
     ]
 
     triggers = {
-        admin_public_ips = join(",", var.admin_public_ips)
-        db_public_ips = join(",", var.db_public_ips)
+        admin_public_ips = join(",", local.admin_public_ips)
+        db_public_ips = join(",", local.db_public_ips)
     }
 
     #Used in playbook. Its run here to limit output masking
@@ -93,8 +106,8 @@ resource "null_resource" "gpg_clean_files" {
     ]
 
     triggers = {
-        admin_public_ips = join(",", var.admin_public_ips)
-        db_public_ips = join(",", var.db_public_ips)
+        admin_public_ips = join(",", local.admin_public_ips)
+        db_public_ips = join(",", local.db_public_ips)
     }
 
     provisioner "local-exec" {

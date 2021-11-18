@@ -5,9 +5,9 @@ module "admin" {
     ##TODO: Limit to 1 atm
     for_each = {
         for ind, cfg in local.admin_cfg_servers:
-        cfg.key => cfg
+        cfg.key => { cfg = cfg, ind = ind }
     }
-    servers = each.value.server
+    servers = each.value.cfg.server
 
     config = var.config
     image_name = local.do_image_name
@@ -19,9 +19,9 @@ module "lead" {
     source = "./droplets"
     for_each = {
         for ind, cfg in local.lead_cfg_servers:
-        cfg.key => cfg
+        cfg.key => { cfg = cfg, ind = ind }
     }
-    servers = each.value.server
+    servers = each.value.cfg.server
 
     config = var.config
     image_name = local.do_image_small_name
@@ -33,7 +33,7 @@ module "lead" {
     admin_ip_private = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : ""
     consul_lan_leader_ip = (local.admin_servers > 0
         ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private
-        : (count.index == 0 ? "" : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private)
+        : (each.value.ind == 0 ? "" : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private)
     )
 }
 module "db" {
@@ -41,9 +41,9 @@ module "db" {
     ##TODO: Limit to 1 atm
     for_each = {
         for ind, cfg in local.db_cfg_servers:
-        cfg.key => cfg
+        cfg.key => { cfg = cfg, ind = ind }
     }
-    servers = each.value.server
+    servers = each.value.cfg.server
 
     config = var.config
     image_name = local.do_image_small_name
@@ -59,9 +59,9 @@ module "build" {
     source = "./droplets"
     for_each = {
         for ind, cfg in local.build_cfg_servers:
-        cfg.key => cfg
+        cfg.key => { cfg = cfg, ind = ind }
     }
-    servers = each.value.server
+    servers = each.value.cfg.server
 
     config = var.config
     image_name = local.do_image_small_name

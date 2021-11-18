@@ -1,11 +1,7 @@
+variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 
 variable "admin_servers" {}
-variable "admin_public_ips" {}
-
-variable "all_public_ips" {}
-variable "all_private_ips" {}
-variable "all_names" {}
 
 variable "root_domain_name" {}
 variable "contact_email" {}
@@ -22,12 +18,19 @@ variable "s3bucket" {}
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
 
+locals {
+    admin_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "admin")
+    ]
+}
 
 resource "null_resource" "prometheus_targets" {
     count = var.admin_servers
 
     triggers = {
-        ips = join(",", var.all_private_ips)
+        ips = join(",", var.ansible_hosts[*].ip)
     }
 
     ## 9107 is consul exporter
@@ -37,16 +40,16 @@ resource "null_resource" "prometheus_targets" {
             #}
         content = <<-EOF
         [
-        %{ for ind, IP in var.all_private_ips }
+        %{ for ind, HOST in var.ansible_hosts }
             {
-                "targets": ["${length(regexall("admin", var.all_names[ind])) > 0 ? "localhost" : IP}:9100"],
+                "targets": ["${contains(HOST.roles, "admin") ? "localhost" : HOST.private_ip}:9100"],
                 "labels": {
-                    "hostname": "${length(regexall("admin", var.all_names[ind])) > 0 ? "gitlab.${var.root_domain_name}" : var.all_names[ind]}",
-                    "public_ip": "${var.all_public_ips[ind]}",
-                    "private_ip": "${IP}",
-                    "nodename": "${var.all_names[ind]}"
+                    "hostname": "${contains(HOST.roles, "admin") ? "gitlab.${var.root_domain_name}" : HOST.name}",
+                    "public_ip": "${HOST.ip}",
+                    "private_ip": "${HOST.private_ip}",
+                    "nodename": "${HOST.name}"
                 }
-            }${ind < length(var.all_private_ips) - 1 ? "," : ""}
+            }${ind < length(var.ansible_hosts) - 1 ? "," : ""}
         %{ endfor }
         ]
         EOF
@@ -70,7 +73,7 @@ resource "null_resource" "prometheus_targets" {
     }
 
     connection {
-        host = element(var.admin_public_ips, 0)
+        host = element(local.admin_public_ips, 0)
         type = "ssh"
     }
 }
@@ -165,7 +168,7 @@ resource "null_resource" "install_gitlab" {
     # "cp /etc/letsencrypt/live/${var.root_domain_name}/privkey.pem /etc/letsencrypt/live/${var.root_domain_name}/fullchain.pem /etc/gitlab/ssl/",
 
     connection {
-        host = element(var.admin_public_ips, 0)
+        host = element(local.admin_public_ips, 0)
         type = "ssh"
     }
 }
@@ -236,7 +239,7 @@ resource "null_resource" "restore_gitlab" {
         ]
 
         connection {
-            host = element(var.admin_public_ips, 0)
+            host = element(local.admin_public_ips, 0)
             type = "ssh"
         }
     }
@@ -244,8 +247,8 @@ resource "null_resource" "restore_gitlab" {
     # Change known_hosts to new imported ssh keys from gitlab restore
     provisioner "local-exec" {
         command = <<-EOF
-            ssh-keygen -f ~/.ssh/known_hosts -R ${element(var.admin_public_ips, 0)}
-            ssh-keyscan -H ${element(var.admin_public_ips, 0)} >> ~/.ssh/known_hosts
+            ssh-keygen -f ~/.ssh/known_hosts -R ${element(local.admin_public_ips, 0)}
+            ssh-keyscan -H ${element(local.admin_public_ips, 0)} >> ~/.ssh/known_hosts
         EOF
     }
 }
@@ -360,7 +363,7 @@ resource "null_resource" "gitlab_plugins" {
     }
 
     connection {
-        host = element(var.admin_public_ips, 0)
+        host = element(local.admin_public_ips, 0)
         type = "ssh"
     }
 }
@@ -408,7 +411,7 @@ resource "null_resource" "reauthorize_mattermost" {
     }
 
     connection {
-        host = element(var.admin_public_ips, 0)
+        host = element(local.admin_public_ips, 0)
         type = "ssh"
     }
 }

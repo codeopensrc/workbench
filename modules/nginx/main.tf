@@ -1,11 +1,11 @@
+variable "ansible_hosts" {}
+variable "ansible_hostfile" {}
+
 variable "admin_servers" {}
 variable "is_only_lead_servers" {}
 variable "root_domain_name" { default = "" }
 variable "additional_domains" { default = {} }
 variable "additional_ssl" { default = [] }
-variable "admin_public_ips" { default = [] }
-variable "lead_public_ips" { default = [] }
-variable "lead_private_ips" { default = [] }
 variable "cert_port" {}
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
@@ -16,6 +16,24 @@ variable "app_definitions" {
     }))
 }
 
+locals {
+    admin_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "admin")
+    ]
+    lead_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "lead")
+    ]
+    lead_private_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.private_ip
+        if contains(HOST.roles, "lead")
+    ]
+}
+
 
 ## TODO: ansible playbook
 resource "null_resource" "proxy_config" {
@@ -24,7 +42,7 @@ resource "null_resource" "proxy_config" {
     triggers = {
         num_apps = length(keys(var.app_definitions))
         num_ssl = length(var.additional_ssl)
-        num_ips = length(var.lead_private_ips)
+        num_ips = length(local.lead_private_ips)
     }
 
     provisioner "remote-exec" {
@@ -34,7 +52,7 @@ resource "null_resource" "proxy_config" {
     provisioner "file" {
         content = templatefile("${path.module}/templatefiles/mainproxy.tmpl", {
             root_domain_name = var.root_domain_name
-            proxy_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
+            proxy_ip = "172.17.0.1" #docker0 subnet
             cert_port = var.cert_port
             cert_domain = "cert.${var.root_domain_name}"
             subdomains = [
@@ -56,7 +74,7 @@ resource "null_resource" "proxy_config" {
             root_domain_name = var.root_domain_name
             cert_port = var.cert_port
             cert_domain = "cert.${var.root_domain_name}"
-            kube_nginx_ip = element(var.lead_private_ips, length(var.lead_private_ips) - 1 )
+            kube_nginx_ip = element(local.lead_private_ips, length(local.lead_private_ips) - 1 )
             kube_nginx_port = "31000"  #Hardcoded nginx NodePort service atm
             subdomains = [
                 for HOST in var.additional_ssl:
@@ -68,7 +86,8 @@ resource "null_resource" "proxy_config" {
     }
 
     connection {
-        host = element(concat(var.admin_public_ips, var.lead_public_ips), count.index)
+        ## admin_ips and lead_ips NOT in admin_ips
+        host = element(concat(local.admin_public_ips, tolist(setsubtract(local.lead_public_ips, local.admin_public_ips))), count.index)
         type = "ssh"
     }
 }
@@ -80,7 +99,7 @@ resource "null_resource" "proxy_additional_config" {
     triggers = {
         subdomains = join(",", keys(element(values(var.additional_domains), count.index)))
         num_domains = length(keys(var.additional_domains))
-        ip = element(var.admin_public_ips, 0)
+        ip = element(local.admin_public_ips, 0)
     }
 
     provisioner "file" {
@@ -91,7 +110,7 @@ resource "null_resource" "proxy_additional_config" {
         })
         destination = "/etc/nginx/conf.d/additional-${count.index}.conf"
         connection {
-            host = element(var.admin_public_ips, 0)
+            host = element(local.admin_public_ips, 0)
             type = "ssh"
         }
     }
@@ -124,7 +143,7 @@ resource "null_resource" "tmp_install_nginx" {
         ]
     }
     connection {
-        host = element(tolist(setsubtract(var.lead_public_ips, var.admin_public_ips)), count.index)
+        host = element(tolist(setsubtract(local.lead_public_ips, local.admin_public_ips)), count.index)
         type = "ssh"
     }
 }
@@ -149,12 +168,13 @@ resource "null_resource" "nginx_reconfigure" {
         inline = [
             "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
             "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
+            "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#listen 443 ssl|listen 443 ssl|\" /etc/nginx/conf.d/*.conf",
             "gitlab-ctl reconfigure"
         ]
     }
 
     connection {
-        host = element(var.admin_public_ips, 0)
+        host = element(local.admin_public_ips, 0)
         type = "ssh"
     }
 }
@@ -179,12 +199,13 @@ resource "null_resource" "nginx_reload" {
         inline = [
             "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#ssl_certificate|ssl_certificate|\" /etc/nginx/conf.d/*.conf",
             "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#ssl_certificate_key|ssl_certificate_key|\" /etc/nginx/conf.d/*.conf",
+            "[ -d \"/etc/letsencrypt/live/${var.root_domain_name}\" ] && sed -i \"s|#listen 443 ssl|listen 443 ssl|\" /etc/nginx/conf.d/*.conf",
             "sudo systemctl reload nginx",
         ]
     }
 
     connection {
-        host = element(tolist(setsubtract(var.lead_public_ips, var.admin_public_ips)), count.index)
+        host = element(tolist(setsubtract(local.lead_public_ips, local.admin_public_ips)), count.index)
         type = "ssh"
     }
 }

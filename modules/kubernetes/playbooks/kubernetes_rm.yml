@@ -3,7 +3,7 @@
   hosts: "{{ (groups['admin'] | default([]) + groups['lead']) | first }}"
   remote_user: root
   vars:
-    current_names: "{{ all_names | split(',')  }}"
+    current_names: "{{ all_names | from_json  }}"
     old_ansible_names: []
     nodes_to_remove: []
   tasks:

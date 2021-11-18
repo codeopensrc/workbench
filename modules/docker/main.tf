@@ -1,6 +1,12 @@
-variable "servers" {}
+variable "ansible_hosts" {}
+variable "ansible_hostfile" {}
+
+variable "lead_servers" {}
+variable "region" { default = "" }
 variable "aws_ecr_region" { default = "" }
-variable "public_ips" { default = [] }
+variable "root_domain_name" {}
+variable "container_orchestrators" {}
+
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
@@ -9,12 +15,32 @@ variable "app_definitions" {
         use_custom_restore=string, custom_restore_file=string, custom_init=string, custom_vars=string
     }))
 }
-variable "root_domain_name" {}
-variable "container_orchestrators" {}
+
+locals {
+    lead_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "lead")
+    ]
+}
+
+
+resource "null_resource" "swarm" {
+    count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
+    triggers = {
+        lead_public_ips = join(",", local.lead_public_ips)
+    }
+    provisioner "local-exec" {
+        command = "ansible-playbook ${path.module}/playbooks/swarm.yml -i ${var.ansible_hostfile} --extra-vars \"region=${var.region}\""
+    }
+}
+
+
 
 ## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "pull_images" {
-    count = contains(var.container_orchestrators, "docker_swarm") ? var.servers : 0
+    count = contains(var.container_orchestrators, "docker_swarm") ? var.lead_servers : 0
+    depends_on = [null_resource.swarm]
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -80,7 +106,7 @@ resource "null_resource" "pull_images" {
             EOF
         ]
         connection {
-            host = element(var.public_ips, count.index)
+            host = element(local.lead_public_ips, count.index)
             type = "ssh"
         }
     }
@@ -89,7 +115,10 @@ resource "null_resource" "pull_images" {
 ## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "start_containers" {
     count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
-    depends_on = [null_resource.pull_images]
+    depends_on = [
+        null_resource.swarm,
+        null_resource.pull_images,
+    ]
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -159,8 +188,34 @@ resource "null_resource" "start_containers" {
             EOF
         ]
         connection {
-            host = element(var.public_ips, 0)
+            host = element(local.lead_public_ips, 0)
             type = "ssh"
         }
     }
 }
+
+
+
+# TODO: Move web specific things into docker_swarm resource
+# resource "null_resource" "docker_web" {
+#     count = 0 #length(distinct(var.web_public_ips)
+#     depends_on = [null_resource.docker_init]
+#
+#     # Join a docker swarm
+#     provisioner "local-exec" {
+#         # TODO: We dont use web instances yet, but we should ensure that web instances joining the leaders/cluster ALSO
+#         #   share the same docker version so we dont introduce swarm/load balancing/proxy bugs, like in docker_leader resource
+#         # SWARM_DOCKER_VER=$(docker-machine ssh ${element(var.names, 1)} "docker -v;")
+#         # CUR_DOCKER_VER=$(docker-machine ssh ${element(var.names, count.index)} "docker -v;")
+#
+#         command = <<-EOF
+#             JOIN_CMD=$(docker-machine ssh ${var.docker_leader_name} "docker swarm join-token worker | grep -- --token;");
+#             docker-machine ssh ${element(var.names, count.index)} "set -e; $JOIN_CMD;"
+#
+#             OLD_ID=$(docker-machine ssh ${var.docker_leader_name} "docker node ls --filter name=${element(var.names, count.index)} | grep Down | cut -d ' ' -f1;")
+#             docker-machine ssh ${var.docker_leader_name} "docker node rm --force $OLD_ID;"
+#             docker-machine ssh ${var.docker_leader_name} "docker node update --label-add dc=${var.region} --label-add name=${element(var.names, count.index)} ${element(var.names, count.index)}"
+#         EOF
+#     }
+# }
+

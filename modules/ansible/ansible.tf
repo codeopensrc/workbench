@@ -1,13 +1,28 @@
-
 variable "ansible_hostfile" { default = "" }
 variable "ansible_hosts" { default = "" }
 
-variable "all_public_ips" { default = "" }
-variable "admin_public_ips" { default = "" }
-variable "lead_public_ips" { default = "" }
-variable "db_public_ips" { default = "" }
-variable "build_public_ips" { default = "" }
-
+locals {
+    admin_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "admin")
+    ]
+    lead_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "lead")
+    ]
+    db_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "db")
+    ]
+    build_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "build")
+    ]
+}
 ## Setting variables in ansible
 #https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#setting-variables
 
@@ -25,7 +40,7 @@ resource "null_resource" "ansible_hosts" {
 		${HOST.ip} machine_name=${HOST.name}
 		%{ endfor ~}
 		
-		%{ if length(var.admin_public_ips) > 0 ~}
+		%{ if length(local.admin_public_ips) > 0 ~}
 		[admin]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "admin") ~}
@@ -34,7 +49,7 @@ resource "null_resource" "ansible_hosts" {
 		%{ endfor ~}
 		%{ endif ~}
 		
-		%{ if length(var.lead_public_ips) > 0 ~}
+		%{ if length(local.lead_public_ips) > 0 ~}
 		[lead]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "lead") ~}
@@ -43,7 +58,7 @@ resource "null_resource" "ansible_hosts" {
 		%{ endfor ~}
 		%{ endif ~}
 		
-		%{ if length(var.db_public_ips) > 0 ~}
+		%{ if length(local.db_public_ips) > 0 ~}
 		[db]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "db") ~}
@@ -52,7 +67,7 @@ resource "null_resource" "ansible_hosts" {
 		%{ endfor ~}
 		%{ endif ~}
 		
-		%{ if length(var.build_public_ips) > 0 ~}
+		%{ if length(local.build_public_ips) > 0 ~}
 		[build]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "build") ~}

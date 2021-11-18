@@ -2,6 +2,7 @@
 # Boils down to, the server/ip var.root_domain_name points to, needs a proxy for port 80/http initially
 # After getting certs, restart then supports https and http -> https
 # TODO: Better support potential downtime when replacing certs
+variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 
 variable "is_only_leader_count" {}
@@ -14,8 +15,18 @@ variable "additional_ssl" {}
 variable "root_domain_name" {}
 variable "contact_email" {}
 
-variable "admin_public_ips" {}
-variable "lead_public_ips" {}
+locals {
+    admin_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "admin")
+    ]
+    lead_public_ips = [
+        for HOST in var.ansible_hosts:
+        HOST.ip
+        if contains(HOST.roles, "lead")
+    ]
+}
 
 
 # TODO: Turn this into an ansible playbook
@@ -57,7 +68,7 @@ resource "null_resource" "setup_letsencrypt" {
     }
 
     connection {
-        host = element(concat(var.admin_public_ips, var.lead_public_ips), 0)
+        host = element(concat(local.admin_public_ips, local.lead_public_ips), 0)
         type = "ssh"
     }
 
@@ -94,7 +105,7 @@ resource "null_resource" "add_keys" {
         ]
     }
     connection {
-        host = element(tolist(setsubtract(var.lead_public_ips, var.admin_public_ips)), count.index)
+        host = element(tolist(setsubtract(local.lead_public_ips, local.admin_public_ips)), count.index)
         type = "ssh"
     }
 }
