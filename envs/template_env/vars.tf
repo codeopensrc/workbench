@@ -58,10 +58,6 @@ module "cloud" {
     config = local.config
 }
 
-###! When downsizing from 2 to 1 leader, set downsize = true, terraform apply. This adjusts app routing.
-###! Then comment/remove 2nd server, downsize = false, and terraform apply again to remove it
-variable "downsize" { default = false }
-
 ###! TODO: Use to lower dns TTL to 60 seconds and perform all backups initially
 ###! Anything that is done pre-system/machine migration should be done in a
 ###!  run once (backups) or toggleable (dns TTL) fashion with this setting
@@ -100,6 +96,10 @@ variable "downsize" { default = false }
 
 variable "servers" {
     ### NOTE: Do not add or remove roles from instances after they are launched
+    ### Fleets differ by either roles, size, or to use a specific image
+    ### When intending to replace machines instead of scaling up/down
+    ###  - Add a fleet, `terraform apply`, remove the old fleet, `terraform apply`
+    ###  - Supports replacing 'lead' and 'build' type fleets
     default = [
         {
             "count" = 1

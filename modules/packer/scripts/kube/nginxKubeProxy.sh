@@ -146,6 +146,19 @@ server {
     \n
 }\n'
 
+##! PodDisruptionBudget policy available in kubernetes 1.21
+##! #https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+#---
+#apiVersion: policy/v1
+#kind: PodDisruptionBudget
+#metadata:
+#  name: $APPNAME
+#spec:
+#  minAvailable: 1
+#  selector:
+#    matchLabels:
+#      app: $APPNAME
+
 ## Create a kubernetes service
 ## Create a kubernetes deployment
 kubectl apply -f - <<EOF
@@ -173,7 +186,12 @@ metadata:
   labels:
     app: $APPNAME
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: $APPNAME

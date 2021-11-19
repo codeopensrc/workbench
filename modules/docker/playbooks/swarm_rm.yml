@@ -1,0 +1,54 @@
+---
+- name: Remove nodes
+  hosts: "{{ groups.lead | first }}"
+  remote_user: root
+  vars:
+    current_names: "{{ lead_names | from_json  }}"
+    old_ansible_names: []
+    nodes_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_names: "{{ old_ansible_names + [hostvars[item].machine_name] }}"
+      with_items: "{{ groups['lead'] }}"
+    - set_fact:
+        nodes_to_remove: "{{ nodes_to_remove + [item] }}"
+      with_items: "{{ old_ansible_names | difference(current_names) }}"
+
+    - name: missing
+      debug:
+        msg: "{{ item }}"
+      with_items: "{{ nodes_to_remove }}"
+
+    - name: drain node
+      shell: "docker node update --availability='drain' {{ item }} && sleep 15"
+      with_items: "{{ nodes_to_remove }}"
+      when: nodes_to_remove | length > 0
+
+    - name: demote node
+      shell: "docker node demote {{ item }} && sleep 15"
+      with_items: "{{ nodes_to_remove }}"
+      when: nodes_to_remove | length > 0
+
+
+- name: Leave swarm
+  hosts: lead
+  remote_user: root
+  vars:
+    current_ips: "{{ lead_public_ips | from_json  }}"
+    old_ansible_ips: []
+    nodeips_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_ips: "{{ old_ansible_ips + [item] }}"
+      with_items: "{{ groups['lead'] }}"
+    - set_fact:
+        nodeips_to_remove: "{{ nodeips_to_remove + [item] }}"
+      with_items: "{{ old_ansible_ips | difference(current_ips) }}"
+
+    - name: swarm leave
+      shell: "docker swarm leave || echo"
+      when: ansible_default_ipv4.address in nodeips_to_remove
+
+    - name: ensure swarm leave
+      shell: "docker swarm leave --force || echo"
+      when: ansible_default_ipv4.address in nodeips_to_remove

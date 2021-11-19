@@ -105,6 +105,7 @@ resource "null_resource" "add_keys" {
         ]
     }
     connection {
+        ##TODO: tolist(setsubtract()) will always create an unpredictable ip order no matter previous sort until ansible
         host = element(tolist(setsubtract(local.lead_public_ips, local.admin_public_ips)), count.index)
         type = "ssh"
     }

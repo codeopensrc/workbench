@@ -74,7 +74,7 @@ resource "null_resource" "proxy_config" {
             root_domain_name = var.root_domain_name
             cert_port = var.cert_port
             cert_domain = "cert.${var.root_domain_name}"
-            kube_nginx_ip = element(local.lead_private_ips, length(local.lead_private_ips) - 1 )
+            kube_nginx_ip = element(local.lead_private_ips, 0)
             kube_nginx_port = "31000"  #Hardcoded nginx NodePort service atm
             subdomains = [
                 for HOST in var.additional_ssl:
@@ -87,6 +87,7 @@ resource "null_resource" "proxy_config" {
 
     connection {
         ## admin_ips and lead_ips NOT in admin_ips
+        ##TODO: tolist(setsubtract()) will always create an unpredictable ip order no matter previous sort until ansible
         host = element(concat(local.admin_public_ips, tolist(setsubtract(local.lead_public_ips, local.admin_public_ips))), count.index)
         type = "ssh"
     }
@@ -143,6 +144,7 @@ resource "null_resource" "tmp_install_nginx" {
         ]
     }
     connection {
+        ##TODO: tolist(setsubtract()) will always create an unpredictable ip order no matter previous sort until ansible
         host = element(tolist(setsubtract(local.lead_public_ips, local.admin_public_ips)), count.index)
         type = "ssh"
     }
@@ -205,6 +207,7 @@ resource "null_resource" "nginx_reload" {
     }
 
     connection {
+        ##TODO: tolist(setsubtract()) will always create an unpredictable ip order no matter previous sort until ansible
         host = element(tolist(setsubtract(local.lead_public_ips, local.admin_public_ips)), count.index)
         type = "ssh"
     }

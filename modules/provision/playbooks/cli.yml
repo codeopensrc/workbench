@@ -19,7 +19,7 @@
 
 
 - name: Get gitlab init pw
-  hosts: "{{ (groups['admin'] | default([])) | first }}"
+  hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), []) }}"
   remote_user: root
   gather_facts: false
   tasks:

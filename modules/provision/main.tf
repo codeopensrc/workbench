@@ -131,6 +131,7 @@ resource "null_resource" "consul_checks" {
         destination = "/etc/consul.d/conf.d/dns.json"
     }
 
+    ##TODO: Remove consul reload here when we provision it via ansible later in provisioning process
     provisioner "remote-exec" {
         inline = [
             "chmod 0755 /etc/consul.d/templates/pg.json",

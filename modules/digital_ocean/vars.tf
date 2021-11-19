@@ -3,6 +3,7 @@ variable "config" {}
 
 variable "stun_protos" { default = ["tcp", "udp"] }
 
+## input/config
 locals {
     is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
     ## Allows db with lead
@@ -81,6 +82,7 @@ locals {
     ])
 }
 
+## output/aggregation
 locals {
     admin_private_ips = data.digitalocean_droplets.admin.droplets[*].ipv4_address_private
     lead_private_ips = data.digitalocean_droplets.lead.droplets[*].ipv4_address_private
@@ -117,6 +119,7 @@ locals {
     all_ansible_hosts = concat(local.admin_ansible_hosts, local.lead_ansible_hosts, local.db_ansible_hosts, local.build_ansible_hosts)
 }
 
+## dns
 locals {
     cname_aliases = [
         for app in var.config.app_definitions:
@@ -138,7 +141,10 @@ locals {
         ]
     ])
     cname_misc_aliases = flatten(var.config.misc_cnames)
+}
 
+## packer
+locals {
     consul = "CN-${var.config.packer_config.consul_version}"
     docker = "DK-${var.config.packer_config.docker_version}"
     dockerc = "DKC-${var.config.packer_config.docker_compose_version}"

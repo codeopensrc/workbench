@@ -3,6 +3,7 @@ variable "config" {}
 
 variable "stun_protos" { default = ["tcp", "udp"] }
 
+## input/config
 locals {
     is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
     ## Allows db with lead
@@ -81,6 +82,7 @@ locals {
     ])
 }
 
+## output/aggregation
 locals {
     admin_private_ips = data.aws_instances.admin.private_ips[*]
     lead_private_ips = data.aws_instances.lead.private_ips[*]
@@ -129,6 +131,7 @@ locals {
     all_ansible_hosts = concat(local.admin_ansible_hosts, local.lead_ansible_hosts, local.db_ansible_hosts, local.build_ansible_hosts)
 }
 
+## dns
 locals {
     cname_aliases = [
         for app in var.config.app_definitions:
@@ -150,7 +153,10 @@ locals {
         ]
     ])
     cname_misc_aliases = flatten(var.config.misc_cnames)
+}
 
+## vpc for aws_instance
+locals {
     vpc = {
         aws_subnet = { public_subnet = aws_subnet.public_subnet }
         aws_route_table_association = { public_subnet_assoc = aws_route_table_association.public_subnet_assoc }

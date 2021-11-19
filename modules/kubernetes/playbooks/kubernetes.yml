@@ -1,6 +1,6 @@
 ---
 - name: Handle Kubernetes admin
-  hosts: "{{ (groups['admin'] | default([]) + groups['lead']) | first }}"
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
   vars:
     kubernetes_version: "{{ kubernetes_version }}"
@@ -55,9 +55,9 @@
 
 
 - name: Handle Kubernetes worker
-  ### Get all hosts that do NOT match kubernetes admin (verbose as a group could be absent)
+  ### Get all hosts that do NOT match kubernetes admin
   ### (lead+db+build) NOT IN (admin+lead | first)
-  hosts: "{{ ( groups.lead + (groups.db|default([])) + (groups.build|default([])) ) | difference( ((groups.admin|default([])) + groups.lead) | first) }}"
+  hosts: "{{ (groups.lead + groups.db + groups.build) | difference( ((groups.admin + groups.lead) | first) ) }}"
   remote_user: root
   gather_facts: no
   vars:
@@ -74,8 +74,7 @@
 
 
 - name: Reboot gitlab environments
-  ##TODO: Test if admin group is not present, error or empty
-  hosts: "{{ (groups['admin'] | default([])) | first }}"
+  hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), [] ) }}"
   remote_user: root
   vars:
     root_domain_name: "{{ root_domain_name }}"

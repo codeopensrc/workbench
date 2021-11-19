@@ -1,6 +1,6 @@
 ---
 - name: Remove nodes
-  hosts: "{{ (groups['admin'] | default([]) + groups['lead']) | first }}"
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
   vars:
     current_names: "{{ all_names | from_json  }}"
@@ -21,16 +21,25 @@
         msg: "{{ item }}"
       with_items: "{{ nodes_to_remove }}"
 
-    - name: drain nodes to remove
-      shell: "kubectl drain {{ item }} --ignore-daemonsets --force --delete-emptydir-data && sleep 10"
+    - name: untaint node if solo
+      shell: "kubectl taint nodes --all node-role.kubernetes.io/master- || echo"
+      changed_when: false
+      when: current_names | length == 1
+
+    - name: sleep1
+      command: sleep 20
+      when: current_names | length == 1
+
+    - name: drain nodes
+      shell: "kubectl drain {{ item }} --ignore-daemonsets --force --delete-emptydir-data --grace-period=300 && sleep 10"
       with_items: "{{ nodes_to_remove }}"
       when: nodes_to_remove | length > 0
 
-    - name: sleep
+    - name: sleep2
       command: sleep 10
       when: nodes_to_remove | length > 0
 
-    - name: delete nodes to remove
+    - name: delete nodes
       shell: "kubectl delete node {{ item }} && sleep 10"
       with_items: "{{ nodes_to_remove }}"
       when: nodes_to_remove | length > 0

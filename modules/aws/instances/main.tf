@@ -153,77 +153,17 @@ resource "aws_instance" "main" {
         }
     }
 
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            IS_LEAD=${contains(var.servers.roles, "lead") ? "true" : ""}
-
-            if [ "$IS_LEAD" = "true" ]; then
-                docker service update --constraint-add "node.hostname!=${self.tags.Name}" proxy_main
-                docker service update --constraint-rm "node.hostname!=${self.tags.Name}" proxy_main
-            fi
-
-        EOF
-        destination = "/tmp/dockerconstraint.sh"
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-            IS_LEAD=${var.servers.roles[0] == "lead" ? "true" : ""}
-            ADMIN_IP=${var.admin_ip_private}
-
-            if [ "$IS_LEAD" = "true" ]; then
-                sed -i "s|${self.private_ip}|${var.admin_ip_private}|" /etc/nginx/conf.d/proxy.conf
-                gitlab-ctl reconfigure
-            fi
-
-        EOF
-        destination = "/tmp/changeip-${self.tags.Name}.sh"
-        connection {
-            host     = var.admin_ip_public != "" ? var.admin_ip_public : self.public_ip
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            if [ "${length(regexall("lead", self.tags.Roles)) > 0}" = "true" ]; then
-               docker node update --availability="drain" ${self.tags.Name}
-               sleep 20;
-               docker node demote ${self.tags.Name}
-               sleep 5
-               docker swarm leave
-               docker swarm leave --force;
-               exit 0
-           fi
-        EOF
-        destination = "/tmp/remove.sh"
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
+    ##TODO: Will be replaced once runners handled via ansible
     provisioner "remote-exec" {
         when = destroy
         inline = [
             <<-EOF
                 consul leave;
                 if [ "${length( regexall("build", self.tags.Roles) ) > 0}" = "true" ]; then
+                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
+                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
+                fi
+                if [ "${length( regexall("lead", self.tags.Roles) ) > 0}" = "true" ]; then
                     chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
                     bash /home/gitlab-runner/rmscripts/rmrunners.sh;
                 fi

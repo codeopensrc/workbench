@@ -22,6 +22,18 @@
     - name: join_cmd output
       debug: msg={{ join_cmd.stdout }}
 
+    - name: get down nodes
+      register: found_down_nodes
+      shell: "docker node ls | grep 'Down' | cut -d ' ' -f1"
+      changed_when: false
+
+    - name: found_down_nodes output
+      debug: msg={{ found_down_nodes.stdout }}
+      when: found_down_nodes.stdout != ""
+
+    - name: rm down nodes
+      command: docker node rm --force {{ found_down_nodes.stdout }}
+      when: found_down_nodes.stdout != ""
 
 - name: Join docker swarm
   hosts: lead, !lead[0]
@@ -39,15 +51,6 @@
         - name: join swarm
           command: "{{ join_cmd }}"
           when: join_cmd != ""
-
-    - name: get down nodes
-      register: found_down_nodes
-      shell: "docker node ls | grep 'Down' | cut -d ' ' -f1"
-      changed_when: false
-
-    - name: rm down nodes
-      command: docker node rm --force {{ found_down_nodes }}
-      when: found_down_nodes.stdout != ""
 
 
 - name: Add labels

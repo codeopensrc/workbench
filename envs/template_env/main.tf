@@ -15,7 +15,7 @@ module "ansible" {
     depends_on = [ module.cloud ]
 
     ansible_hostfile = local.ansible_hostfile
-    ansible_hosts = local.ansible_hosts
+    ansible_hosts = module.cloud.ansible_hosts
 }
 
 ##NOTE: Uses ansible
@@ -28,7 +28,7 @@ module "gpg" {
         module.ansible,
     ]
 
-    ansible_hosts = local.ansible_hosts
+    ansible_hosts = module.cloud.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
 
     s3alias = local.s3alias
@@ -156,6 +156,7 @@ module "docker" {
 
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
+    predestroy_hostfile = local.predestroy_hostfile
 
     lead_servers = local.lead_servers
 
@@ -395,7 +396,7 @@ locals {
     predestroy_hostfile = "${local.ansible_hostfile}-predestroy"
     additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
 
-    ansible_hosts = module.cloud.ansible_hosts
+    ansible_hosts = module.ansible.hosts
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
     runners_per_machine = local.lead_servers + local.build_servers == 1 ? 4 : local.num_runners_per_machine
 
@@ -487,7 +488,6 @@ locals {
         local_ssh_key_file = var.local_ssh_key_file
 
         servers = var.servers
-        downsize = var.downsize
 
         stun_port = var.stun_port
         docker_machine_ip = var.docker_machine_ip

@@ -55,6 +55,10 @@ resource "null_resource" "consul_file_admin" {
 resource "null_resource" "consul_file_leader" {
     count = var.role == "lead" ? 1 : 0
 
+    triggers = {
+        consul_lan_leader_ip = var.consul_lan_leader_ip
+    }
+
     provisioner "file" {
         # NOTE: bootstrap_expect should be at most 1 per DATACENTER OR BAD STUFF HAPPENS
         # TODO: Review if if joining the wan is enough or do we need to bootstrap in each dc
@@ -99,6 +103,10 @@ resource "null_resource" "consul_file_leader" {
 
 resource "null_resource" "consul_file" {
     count = var.role == "db" || var.role == "build" ? 1 : 0
+
+    triggers = {
+        consul_lan_leader_ip = var.consul_lan_leader_ip
+    }
 
     provisioner "file" {
         content = <<-EOF
@@ -201,4 +209,29 @@ resource "null_resource" "consul_service" {
         type = "ssh"
     }
 
+}
+
+####TODO: Temporary until ansible provisioning
+resource "null_resource" "reload" {
+    depends_on = [
+        null_resource.consul_file_admin,
+        null_resource.consul_file_leader,
+        null_resource.consul_file,
+        null_resource.consul_service
+    ]
+    triggers = {
+        consul_lan_leader_ip = var.consul_lan_leader_ip
+    }
+    ##TODO: A leave might be necessary.
+    provisioner "remote-exec" {
+        inline = [
+            "systemctl daemon-reload",
+            "consul reload",
+            "consul join ${var.consul_lan_leader_ip}",
+        ]
+    }
+    connection {
+        host = var.public_ip
+        type = "ssh"
+    }
 }

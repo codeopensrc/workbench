@@ -107,77 +107,17 @@ resource "digitalocean_droplet" "main" {
         }
     }
 
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            IS_LEAD=${contains(var.servers.roles, "lead") ? "true" : ""}
-
-            if [ "$IS_LEAD" = "true" ]; then
-                docker service update --constraint-add "node.hostname!=${self.name}" proxy_main
-                docker service update --constraint-rm "node.hostname!=${self.name}" proxy_main
-            fi
-
-        EOF
-        destination = "/tmp/dockerconstraint.sh"
-        connection {
-            host     = self.ipv4_address
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-            IS_LEAD=${var.servers.roles[0] == "lead" ? "true" : ""}
-            ADMIN_IP=${var.admin_ip_private}
-
-            if [ "$IS_LEAD" = "true" && -n "$ADMIN_IP" ]; then
-                sed -i "s|${self.ipv4_address_private}|${var.admin_ip_private}|" /etc/nginx/conf.d/proxy.conf
-                gitlab-ctl reconfigure
-            fi
-
-        EOF
-        destination = "/tmp/changeip-${self.name}.sh"
-        connection {
-            host     = var.admin_ip_public != "" ? var.admin_ip_public : self.ipv4_address
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-    ###! TODO: Update to use kubernetes instead of docker swarm
-    ## Runs when `var.config.downsize` is true
-    provisioner "file" {
-        content = <<-EOF
-
-            if [ "${length( regexall("lead", join(",", self.tags)) ) > 0}" = "true" ]; then
-               docker node update --availability="drain" ${self.name}
-               sleep 20;
-               docker node demote ${self.name}
-               sleep 5
-               docker swarm leave
-               docker swarm leave --force;
-               exit 0
-           fi
-        EOF
-        destination = "/tmp/remove.sh"
-        connection {
-            host     = self.ipv4_address
-            type     = "ssh"
-            user     = "root"
-            private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
+    ##TODO: Will be replaced once runners handled via ansible
     provisioner "remote-exec" {
         when = destroy
         inline = [
             <<-EOF
                 consul leave;
                 if [ "${length( regexall("build", join(",", self.tags)) ) > 0}" = "true" ]; then
+                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
+                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
+                fi
+                if [ "${length( regexall("lead", join(",", self.tags)) ) > 0}" = "true" ]; then
                     chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
                     bash /home/gitlab-runner/rmscripts/rmrunners.sh;
                 fi

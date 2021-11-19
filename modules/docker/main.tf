@@ -1,5 +1,6 @@
 variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
+variable "predestroy_hostfile" {}
 
 variable "lead_servers" {}
 variable "region" { default = "" }
@@ -22,11 +23,34 @@ locals {
         HOST.ip
         if contains(HOST.roles, "lead")
     ]
+    lead_names = [
+        for HOST in var.ansible_hosts:
+        HOST.name
+        if contains(HOST.roles, "lead")
+    ]
 }
 
+resource "null_resource" "swarm_rm_nodes" {
+    count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
+
+    triggers = {
+        names = join(",", local.lead_names)
+    }
+
+    ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them
+    provisioner "local-exec" {
+        command = <<-EOF
+            if [ -f "${var.predestroy_hostfile}" ]; then
+                ansible-playbook ${path.module}/playbooks/swarm_rm.yml -i ${var.predestroy_hostfile} \
+                    --extra-vars 'lead_names=${jsonencode(local.lead_names)} lead_public_ips=${jsonencode(local.lead_public_ips)}';
+            fi
+        EOF
+    }
+}
 
 resource "null_resource" "swarm" {
     count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
+    depends_on = [null_resource.swarm_rm_nodes]
     triggers = {
         lead_public_ips = join(",", local.lead_public_ips)
     }
@@ -40,7 +64,10 @@ resource "null_resource" "swarm" {
 ## TODO: Use for_each to use keys instead of indexes
 resource "null_resource" "pull_images" {
     count = contains(var.container_orchestrators, "docker_swarm") ? var.lead_servers : 0
-    depends_on = [null_resource.swarm]
+    depends_on = [
+        null_resource.swarm_rm_nodes,
+        null_resource.swarm,
+    ]
 
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -116,6 +143,7 @@ resource "null_resource" "pull_images" {
 resource "null_resource" "start_containers" {
     count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
     depends_on = [
+        null_resource.swarm_rm_nodes,
         null_resource.swarm,
         null_resource.pull_images,
     ]
