@@ -43,7 +43,8 @@ locals {
         SERVER.count
         if contains(SERVER.roles, "build")
     ])))
-
+    ##TODO: Attempt to support "pet_names" or uuids instead of -nIND after fully converted to ansible provisioning
+    ## https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/pet
     admin_cfg_servers = flatten([
         for ind, SERVER in var.config.servers: [
             for num in range(0, SERVER.count): {

@@ -1,0 +1,134 @@
+##TODO: Two playbooks, one for admin and one for lead. Import similar tasks/roles
+##   and use plays with notifiers and handlers. Because we're mixing groups with similar
+##   but slightly different plays and we only want to run reload/reconfigure once, and handlers
+##   are per play, it would make it very complicated with variables and facts everywhere
+## TLDR: We're grouping on hosts when we should probably instead group tasks/roles and run play/playbooks per group
+##  Haven't started using imports/roles in ansible yet so this is a good first one once we start learning
+##TODO: Create an http template and ssl template, only adding the ssl one if we have letsencrypt dir
+##  instead of using sed to replace the ssl comments. Its extra templates to maintain but I think better long term
+---
+- name: Nginx
+  hosts: "{{ groups.admin + groups.lead }}"
+  remote_user: root
+  gather_facts: false
+  vars:
+    root_domain_name: "{{ root_domain_name }}"
+    proxy_ip: "{{ proxy_ip }}"
+    cert_port: "{{ cert_port }}"
+    cert_domain: "{{ cert_domain }}"
+    subdomains: "{{ docker_subdomains | from_json }}"
+    services: "{{ docker_services | from_json }}"
+
+    kube_nginx_ip: "{{ kubernetes_nginx_ip }}"
+    kube_nginx_port: "{{ kubernetes_nginx_port }}"
+    kube_subdomains: "{{ kubernetes_subdomains | from_json }}"
+  tasks:
+    - name: Make conf dir
+      file:
+        path: /etc/nginx/conf.d
+        state: directory
+
+    - name: docker_services template
+      template:
+        src: ansiblefiles/mainproxy.tmpl
+        dest: /etc/nginx/conf.d/proxy.conf
+
+    - name: kube_services template
+      template:
+        src: ansiblefiles/kube_services.tmpl
+        dest: /etc/nginx/conf.d/kube_services.conf
+
+
+- name: Nginx additional
+  hosts: "{{ groups.admin }}"
+  remote_user: root
+  gather_facts: false
+  vars:
+    domains: "{{ additional_domains | from_json }}"
+    cert_port: "{{ cert_port }}"
+  tasks:
+    - name: Make conf dir
+      file:
+        path: /etc/nginx/conf.d
+        state: directory
+
+    - name: get old additional_domains
+      find:
+        paths: /etc/nginx/conf.d/
+        patterns: "additional*.conf"
+      register: files_to_delete
+  
+    - name: rm old additional_domains
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ files_to_delete.files }}"
+
+    - name: additional_domains templates
+      template:
+        src: ansiblefiles/additional.tmpl
+        dest: /etc/nginx/conf.d/additional-{{ my_idx }}.conf
+      loop: "{{ domains | list }}"
+      loop_control:
+        index_var: my_idx
+
+
+- name: Nginx Install
+  hosts: "{{ groups.lead | difference(groups.admin) }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    ##TODO: Do this this "ansible way"
+    - name: install nginx
+      shell: |
+        sudo apt install curl gnupg2 ca-certificates lsb-release ubuntu-keyring -y
+        sudo apt update
+        sudo apt install nginx -y
+
+
+- name: Gitlab Nginx reconfigure
+  hosts: "{{ groups.admin }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: check letsencrypt dir
+      stat:
+        path: "/etc/letsencrypt/live/{{ root_domain_name }}"
+      register: letsencrypt_dir
+
+    ##TODO: Can we notify from shell directive or does it need to be command
+    - name: update ssl in conf
+      shell: |
+        sed -i "s|#ssl_certificate|ssl_certificate|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#ssl_certificate_key|ssl_certificate_key|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#listen 443 ssl|listen 443 ssl|" /etc/nginx/conf.d/*.conf
+      when: letsencrypt_dir.stat.exists
+
+    ##TODO: Do this the "ansible way"
+    ##TODO: Turn into handler and run when notified
+    - name: reconfigure gitlab nginx
+      shell: "gitlab-ctl reconfigure"
+
+
+- name: Nginx reload
+  hosts: "{{ groups.lead | difference(groups.admin) }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: check letsencrypt dir
+      stat:
+        path: "/etc/letsencrypt/live/{{ root_domain_name }}"
+      register: letsencrypt_dir
+
+    ##TODO: Can we notify from shell directive or does it need to be command
+    - name: update ssl in conf
+      shell: |
+        sed -i "s|#ssl_certificate|ssl_certificate|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#ssl_certificate_key|ssl_certificate_key|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#listen 443 ssl|listen 443 ssl|" /etc/nginx/conf.d/*.conf
+      when: letsencrypt_dir.stat.exists
+
+    ##TODO: Do this the "ansible way"
+    ##TODO: Turn into handler and run when notified
+    - name: reload nginx
+      shell: "sudo systemctl reload nginx"

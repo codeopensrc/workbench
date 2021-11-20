@@ -15,6 +15,7 @@ module "ansible" {
     depends_on = [ module.cloud ]
 
     ansible_hostfile = local.ansible_hostfile
+    predestroy_hostfile = local.predestroy_hostfile
     ansible_hosts = module.cloud.ansible_hosts
 }
 
@@ -100,9 +101,6 @@ module "nginx" {
     ]
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
-
-    admin_servers = local.admin_servers
-    is_only_lead_servers = local.is_only_leader_count
 
     root_domain_name = local.root_domain_name
     app_definitions = var.app_definitions

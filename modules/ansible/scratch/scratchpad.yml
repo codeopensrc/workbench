@@ -111,3 +111,32 @@
 #       current_names: "{{ current_names + [hostvars[item].machine_name] }}"
 #     with_items: #"{{ g.results }}"
 #       - "{{ ( (groups['admin']|default([])) + (groups['lead']|default([])) + (groups['db'] | default([])) + (groups['build'] | default([])) ) | unique }}"
+#
+#   - name: Make conf dir
+#     file:
+#       path: /etc/nginx/conf.d
+#       state: directory
+
+#       #- name: rm old additional_domains
+#       #  command: rm /etc/nginx/conf.d/addtional*.conf
+
+#   - name: additional_domains template
+#     template:
+#       src: ansiblefiles/additional.tmpl
+#       dest: /etc/nginx/conf.d/additional-{{ my_idx }}.conf
+#     loop: "{{ domains | list }}"
+#     loop_control:
+#       index_var: my_idx
+#
+#
+#   - name: get old additional_domains
+#     find:
+#       paths: /etc/nginx/conf.d/
+#       patterns: "additional*.conf"
+#     register: files_to_delete
+# 
+#   - name: rm old additional_domains
+#     file:
+#       path: "{{ item.path }}"
+#       state: absent
+#     with_items: "{{ files_to_delete.files }}"

@@ -1,4 +1,3 @@
-#TODO: How best to determine THE node to start swarm besides first index
 #TODO: Incorporate docker version if necessary "docker -v | cut -d ' ' -f 3 | cut -d ',' -f 1"
 ---
 - name: Start docker swarm

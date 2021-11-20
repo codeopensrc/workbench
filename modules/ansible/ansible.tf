@@ -1,5 +1,12 @@
 variable "ansible_hostfile" { default = "" }
+variable "predestroy_hostfile" { default = "" }
 variable "ansible_hosts" { default = "" }
+
+##TODO: Test sorting by descending creation_time so scaling up adds machines
+##  but scaling down removes the oldest node - builds or leads servers that are not kube admins
+## Dont think its fully achievable until almost ALL provisioning done via ansible due to terraform
+##   needing the exact resource count and any random names/uuids known before apply, otherwise we're
+##   just doing more complicated indexed based provisioning
 
 locals {
     time_grouped_hosts = {
@@ -78,6 +85,18 @@ resource "null_resource" "ansible_hosts" {
     provisioner "local-exec" {
         when = destroy
         command = "rm ./${self.triggers.hostfile}"
+        on_failure = continue
+    }
+}
+
+## Should only trigger on `terraform destroy` to cleanup
+resource "null_resource" "rm_predestroy_file" {
+    triggers = {
+        predestroy_hostfile = var.predestroy_hostfile
+    }
+    provisioner "local-exec" {
+        when = destroy
+        command = "rm ./${self.triggers.predestroy_hostfile}"
         on_failure = continue
     }
 }
