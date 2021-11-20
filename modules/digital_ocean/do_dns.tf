@@ -1,7 +1,7 @@
 resource "digitalocean_domain" "additional" {
     for_each = var.config.additional_domains
     name = each.key
-    ip_address  = data.digitalocean_droplets.admin.droplets[0].ipv4_address
+    ip_address  = local.admin_public_ips[0]
 }
 
 resource "digitalocean_record" "additional_cname" {
@@ -61,7 +61,7 @@ resource "digitalocean_record" "default_stun_a" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = data.digitalocean_droplets.lead.droplets[0].ipv4_address
+    value  = local.lead_public_ips[0]
 }
 
 resource "digitalocean_record" "default_cname" {
@@ -88,7 +88,7 @@ resource "digitalocean_record" "default_a_admin" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : data.digitalocean_droplets.lead.droplets[0].ipv4_address
+    value = local.admin_servers > 0 ? local.admin_public_ips[0] : local.lead_public_ips[0]
 }
 
 resource "digitalocean_record" "default_a_db" {
@@ -97,7 +97,7 @@ resource "digitalocean_record" "default_a_db" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = data.digitalocean_droplets.db.droplets[0].ipv4_address
+    value  = local.db_public_ips[0]
 }
 
 resource "digitalocean_record" "default_a_leader" {
@@ -106,7 +106,7 @@ resource "digitalocean_record" "default_a_leader" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = data.digitalocean_droplets.lead.droplets[0].ipv4_address
+    value  = local.lead_public_ips[0]
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
@@ -115,7 +115,7 @@ resource "digitalocean_record" "default_a_leader_root" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = data.digitalocean_droplets.lead.droplets[0].ipv4_address
+    value  = local.lead_public_ips[0]
     # records = slice([
     #     for SERVER in aws_instance.main[*]:
     #     SERVER.public_ip

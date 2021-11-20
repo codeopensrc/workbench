@@ -90,10 +90,22 @@ locals {
     db_private_ips = data.digitalocean_droplets.db.droplets[*].ipv4_address_private
     build_private_ips = data.digitalocean_droplets.build.droplets[*].ipv4_address_private
 
-    admin_public_ips = data.digitalocean_droplets.admin.droplets[*].ipv4_address
-    lead_public_ips = data.digitalocean_droplets.lead.droplets[*].ipv4_address
-    db_public_ips = data.digitalocean_droplets.db.droplets[*].ipv4_address
-    build_public_ips = data.digitalocean_droplets.build.droplets[*].ipv4_address
+    admin_public_ips = flatten([
+        for host in local.sorted_hosts: host.ip
+        if contains(host.roles, "admin")
+    ])
+    lead_public_ips = flatten([
+        for host in local.sorted_hosts: host.ip
+        if contains(host.roles, "lead")
+    ])
+    db_public_ips = flatten([
+        for host in local.sorted_hosts: host.ip
+        if contains(host.roles, "db")
+    ])
+    build_public_ips = flatten([
+        for host in local.sorted_hosts: host.ip
+        if contains(host.roles, "build")
+    ])
 
     admin_names = data.digitalocean_droplets.admin.droplets[*].name
     lead_names = data.digitalocean_droplets.lead.droplets[*].name
@@ -118,6 +130,32 @@ locals {
     all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
     all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
     all_ansible_hosts = concat(local.admin_ansible_hosts, local.lead_ansible_hosts, local.db_ansible_hosts, local.build_ansible_hosts)
+}
+
+##TODO: Test sorting by descending creation_time so scaling up adds machines
+##  but scaling down removes the oldest node - builds or leads servers that are not kube admins
+## Dont think its fully achievable until almost ALL provisioning done via ansible due to terraform
+##   needing the exact resource count and any random names/uuids known before apply, otherwise we're
+##   just doing more complicated indexed based provisioning
+
+## sorted machines by creation time then size
+locals {
+    time_grouped_hosts = {
+        for ind, host in local.all_ansible_hosts: (host.creation_time) => host...
+    }
+    time_then_size_grouped_hosts = {
+        for time, hosts in local.time_grouped_hosts:
+        (time) => { for host in hosts: (host.size_priority) => host... }
+    }
+    sorted_times = sort(distinct(local.all_ansible_hosts[*].creation_time))
+    sorted_sizes = reverse(sort(distinct(local.all_ansible_hosts[*].size_priority)))
+    sorted_hosts = flatten([
+        for time in local.sorted_times: [
+            for size in local.sorted_sizes:
+            local.time_then_size_grouped_hosts[time][size]
+            if lookup(local.time_then_size_grouped_hosts[time], size, "") != ""
+        ]
+    ])
 }
 
 ## dns

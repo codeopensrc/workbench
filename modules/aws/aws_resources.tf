@@ -77,11 +77,8 @@ module "build" {
 ### Its better to use remote_state data source, will need to investigate 
 # https://www.terraform.io/docs/language/state/remote-state-data.html
 
-##NOTE: The sorting of the returned droplets actually matters to a degree
-## We cannot rely on it as we cannot sort returned aws_instances and need to find out
-##  if aws has a default return order
-## This should all be a non-issue once ansible is up and running
-
+##NOTE: Reason not using data resource for ips anymore, using the data resource reads before destroy
+##  so its unaware which IP will be gone and causes an outage if replacing the first/older machine
 data "aws_instances" "admin" {
     depends_on = [ module.admin.id, ]
     instance_tags = {

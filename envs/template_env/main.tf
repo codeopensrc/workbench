@@ -16,7 +16,7 @@ module "ansible" {
 
     ansible_hostfile = local.ansible_hostfile
     predestroy_hostfile = local.predestroy_hostfile
-    ansible_hosts = module.cloud.ansible_hosts
+    ansible_hosts = local.ansible_hosts
 }
 
 ##NOTE: Uses ansible
@@ -394,7 +394,7 @@ locals {
     predestroy_hostfile = "${local.ansible_hostfile}-predestroy"
     additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
 
-    ansible_hosts = module.ansible.hosts
+    ansible_hosts = module.cloud.ansible_hosts
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
     runners_per_machine = local.lead_servers + local.build_servers == 1 ? 4 : local.num_runners_per_machine
 
