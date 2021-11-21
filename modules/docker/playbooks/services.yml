@@ -1,0 +1,109 @@
+## TODO: Have production always pull stable
+##
+## TODO: Need to use correct Docker Registry credentials per Docker Image to log in to that registry
+## TODO: make sure we're also using the correct login region
+##
+## TODO: Seperate out docker credentials from git credentials. docker pull vs git clone
+---
+- name: Pull images
+  hosts: lead
+  remote_user: root
+  gather_facts: false
+  vars:
+    apps: "{{ app_definitions | from_json }}"
+    aws_ecr_region: "{{ aws_ecr_region }}"
+  tasks:
+    - name: pull docker images
+      register: images
+      shell: |
+        PULL={{ apps[item].pull }}
+        STABLE_VER={{ apps[item].stable_version }}
+        USE_STABLE={{ apps[item].use_stable }}
+        REPO_URL={{ apps[item].repo_url }}
+        REPO_NAME={{ apps[item].repo_name }}
+        DOCKER_REGISTRY={{ apps[item].docker_registry }}
+        DOCKER_IMAGE={{ apps[item].docker_registry_image }}
+        DOCKER_REGISTRY_URL={{ apps[item].docker_registry_url }}
+        DOCKER_USER={{ apps[item].docker_registry_user }}
+        DOCKER_PW={{ apps[item].docker_registry_pw }}
+
+        if [ "$PULL" = "true" ]; then
+            if [ "$DOCKER_REGISTRY" = "aws_ecr" ]; then
+                LOGIN=$(aws ecr get-login --region {{ aws_ecr_region }} --no-include-email)
+                $LOGIN
+            fi
+            if [ "$DOCKER_REGISTRY" = "docker_hub" ] && [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PW" ]; then
+                docker login -u $DOCKER_USER -p $DOCKER_PW
+            fi
+            if [ "$DOCKER_REGISTRY" = "gitlab" ] && [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PW" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
+                # TODO: Registry Url or create deploy token for each repo
+                docker login -u $DOCKER_USER -p $DOCKER_PW $DOCKER_REGISTRY_URL
+            fi
+            git clone $REPO_URL /root/repos/$REPO_NAME
+            [ -n "$DOCKER_IMAGE" ] && docker pull $DOCKER_IMAGE:latest
+            (cd /root/repos/$REPO_NAME && git checkout master);
+
+            if [ -n "$STABLE_VER" ]; then
+                docker pull $DOCKER_IMAGE:$STABLE_VER;
+            fi
+            if [ "$USE_STABLE" = "true" ]; then
+                (cd /root/repos/$REPO_NAME && git checkout tags/$STABLE_VER);
+            fi
+        fi
+      loop: "{{ apps | list }}"
+
+
+- name: Start services
+  hosts: lead[0]
+  remote_user: root
+  gather_facts: false
+  vars:
+    apps: "{{ app_definitions | from_json }}"
+  tasks:
+    ## TODO: Deprecate
+    - name: create overlay subnet (old proxy network)
+      shell: |
+        DOCKER_OVERLAY_SUBNET="192.168.0.0/16"
+        NET_UP=$(docker network inspect proxy)
+        if [ $? -eq 1 ]; then docker network create --attachable --driver overlay --subnet $DOCKER_OVERLAY_SUBNET proxy; fi
+
+    - name: start docker services
+      register: image2
+      shell: |
+        CLEAN_SERVICE_NAME=$(echo {{ apps[item].green_service }} | grep -Eo "[a-z_]+")
+        REPO_NAME={{ apps[item].repo_name }}
+        SERVICE_NAME={{ apps[item].service_name }}
+
+        if [ "$REPO_NAME" = "wekan" ]; then
+            MONGO_IP=$(curl -sS "http://localhost:8500/v1/catalog/service/mongo" | jq -r ".[].Address")
+            if [ -n "$MONGO_IP" ]; then
+                sed -i "s|mongodb://mongo_url:27017|mongodb://$MONGO_IP:27017|" /root/repos/$REPO_NAME/docker-compose.yml;
+            fi
+
+            FQDN=$(consul kv get domainname);
+            sed -i "s|http://wekan.example.com|https://wekan.$FQDN|" /root/repos/$REPO_NAME/docker-compose.yml;
+            sed -i "s|https://gitlab.example.com|https://gitlab.$FQDN|" /root/repos/$REPO_NAME/docker-compose.yml;
+
+            APP_ID=$(consul kv get wekan/app_id);
+            SECRET=$(consul kv get wekan/secret);
+            sed -i "s|OAUTH2_CLIENT_ID=.*|OAUTH2_CLIENT_ID=$APP_ID|g" /root/repos/$REPO_NAME/docker-compose.yml;
+            sed -i "s|OAUTH2_SECRET=.*|OAUTH2_SECRET=$SECRET|g" /root/repos/$REPO_NAME/docker-compose.yml;
+
+            sed -i "s|OAUTH2_ENABLED=false|OAUTH2_ENABLED=true|" /root/repos/$REPO_NAME/docker-compose.yml;
+        fi
+
+        APP_UP=$(docker service ps $CLEAN_SERVICE_NAME);
+        if [ -z "$APP_UP" ] && [ "$SERVICE_NAME" != "custom" ]; then
+            sed -i "s/condition: on-failure/condition: any/" /root/repos/$REPO_NAME/docker-compose.yml
+            (cd /root/repos/$REPO_NAME && docker stack deploy --compose-file docker-compose.yml $SERVICE_NAME --with-registry-auth)
+        fi
+
+        if [ "$SERVICE_NAME" = "custom" ]; then
+            (cd /root/repos/$REPO_NAME && echo "{{ apps[item].custom_vars }}" >> .custom_env && bash "{{ apps[item].custom_init }}")
+        fi
+
+        if [ "{{ apps[item].use_custom_restore }}" = "true" ]; then
+            sleep 10;
+            (cd /root/repos/$REPO_NAME && bash "{{ apps[item].custom_restore_file }}")
+        fi
+      loop: "{{ apps | list }}"

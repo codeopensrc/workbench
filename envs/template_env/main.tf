@@ -143,7 +143,7 @@ module "clusterdb" {
     vpc_private_iface = local.vpc_private_iface
 }
 
-##NOTE: Uses (some) ansible
+##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "docker" {
     source = "../../modules/docker"
@@ -167,7 +167,6 @@ module "docker" {
     app_definitions = var.app_definitions
     aws_ecr_region   = var.aws_ecr_region
 
-    root_domain_name = local.root_domain_name
     container_orchestrators = var.container_orchestrators
 }
 
@@ -458,13 +457,6 @@ locals {
         HOST.ip
         if contains(HOST.roles, "build")
     ]
-
-    ## Allows db with lead
-    is_only_leader_count = sum(concat([0], tolist([
-        for SERVER in var.servers:
-        SERVER.count
-        if contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
-    ])))
 }
 
 locals {
