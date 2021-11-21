@@ -1,0 +1,38 @@
+---
+- name: Setup letsencrypt
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  gather_facts: false
+  vars:
+    fqdn: "{{ fqdn }}"
+    email: "{{ email }}"
+    dry_run: "{{ dry_run }}"
+    app_definitions: "{{ apps | from_json }}"
+    additional_ssl: "{{ ssl | from_json }}"
+  tasks:
+    - name: letsencrypt_vars template
+      template:
+        src: ansiblefiles/letsencrypt_vars.tmpl
+        dest: /root/code/scripts/letsencrypt_vars.sh
+
+    - name: letsencrypt template
+      template:
+        src: ansiblefiles/letsencrypt.tmpl
+        dest: /root/code/scripts/letsencrypt.sh
+
+    - name: run script
+      shell: |
+        chmod +x /root/code/scripts/letsencrypt.sh
+        export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh
+        sed -i "s|#ssl_certificate|ssl_certificate|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#ssl_certificate_key|ssl_certificate_key|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#listen 443 ssl|listen 443 ssl|" /etc/nginx/conf.d/*.conf
+
+
+- name: Gitlab reconfigure
+  hosts: "{{ groups.admin }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: reconfigure
+      command: gitlab-ctl reconfigure

@@ -29,8 +29,11 @@ module "gpg" {
         module.ansible,
     ]
 
-    ansible_hosts = module.cloud.ansible_hosts
+    ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
+
+    admin_servers = local.admin_servers
+    db_servers = local.db_servers
 
     s3alias = local.s3alias
     s3bucket = local.s3bucket
@@ -90,6 +93,8 @@ module "gitlab" {
     wekan_subdomain = var.wekan_subdomain
 }
 
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "nginx" {
     source = "../../modules/nginx"
     depends_on = [
@@ -185,6 +190,8 @@ resource "null_resource" "gpg_remove_key" {
     }
 }
 
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "letsencrypt" {
     source = "../../modules/letsencrypt"
     depends_on = [
@@ -201,9 +208,7 @@ module "letsencrypt" {
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
 
-    is_only_leader_count = local.is_only_leader_count
     lead_servers = local.lead_servers
-    admin_servers = local.admin_servers
 
     app_definitions = var.app_definitions
     additional_ssl = var.additional_ssl
@@ -212,6 +217,8 @@ module "letsencrypt" {
     contact_email = var.contact_email
 }
 
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "cirunners" {
     source = "../../modules/cirunners"
     depends_on = [
@@ -231,7 +238,6 @@ module "cirunners" {
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
 
-    admin_servers = local.admin_servers
     lead_servers = local.lead_servers
     build_servers = local.build_servers
 
@@ -265,6 +271,8 @@ resource "null_resource" "install_unity" {
     }
 }
 
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 ## NOTE: Kubernetes admin requires 2 cores and 2 GB of ram
 module "kubernetes" {
     source = "../../modules/kubernetes"
@@ -359,7 +367,7 @@ resource "null_resource" "enable_autoupgrade" {
     ]
 
     triggers = {
-        ips = join(",", local.ansible_hosts[*].ip)
+        num_hosts = length(local.ansible_hosts[*].ip)
         hostfile = local.ansible_hostfile
         predestroy_hostfile = local.predestroy_hostfile
     }
@@ -402,15 +410,20 @@ locals {
         for SERVER in var.servers:
         SERVER.count
     ]))
+    admin_servers = sum(concat([0], tolist([
+        for SERVER in var.servers:
+        SERVER.count
+        if contains(SERVER.roles, "admin")
+    ])))
     lead_servers = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
         if contains(SERVER.roles, "lead")
     ])))
-    admin_servers = sum(concat([0], tolist([
+    db_servers = sum(concat([0], tolist([
         for SERVER in var.servers:
         SERVER.count
-        if contains(SERVER.roles, "admin")
+        if contains(SERVER.roles, "db")
     ])))
     build_servers = sum(concat([0], tolist([
         for SERVER in var.servers:

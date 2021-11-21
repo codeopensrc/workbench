@@ -22,7 +22,7 @@ resource "null_resource" "kubernetes_rm_nodes" {
     count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
 
     triggers = {
-        names = join(",", local.all_names)
+        num_nodes = length(local.all_names)
     }
 
     ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them
@@ -41,7 +41,7 @@ resource "null_resource" "kubernetes" {
     depends_on = [null_resource.kubernetes_rm_nodes]
 
     triggers = {
-        names = join(",", local.all_names)
+        num_nodes = length(local.all_names)
     }
 
     ##  digitaloceans private iface = eth1

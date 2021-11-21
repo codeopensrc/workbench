@@ -34,7 +34,7 @@ resource "null_resource" "swarm_rm_nodes" {
     count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
 
     triggers = {
-        names = join(",", local.lead_names)
+        num_lead = var.lead_servers
     }
 
     ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them
@@ -52,7 +52,7 @@ resource "null_resource" "swarm" {
     count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
     depends_on = [null_resource.swarm_rm_nodes]
     triggers = {
-        lead_public_ips = join(",", local.lead_public_ips)
+        num_lead = var.lead_servers
     }
     provisioner "local-exec" {
         command = "ansible-playbook ${path.module}/playbooks/swarm.yml -i ${var.ansible_hostfile} --extra-vars \"region=${var.region}\""

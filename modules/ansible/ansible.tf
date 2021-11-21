@@ -5,10 +5,15 @@ variable "ansible_hosts" { default = "" }
 ## Setting variables in ansible
 #https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#setting-variables
 
+## As a general note while repurposing to ansible - be sure review all bools in template scripts
+## Otherwise this can happen during variable templating/substitution/using jsonencode
+## CREATE_SSL=True;
+## if [ "$CREATE_SSL" = "true" ]; then
+
 ## NOTE: Not sure if we want/need to sort for trigger/servers group
 resource "null_resource" "ansible_hosts" {
     triggers = {
-        ansible_ips = join(",", var.ansible_hosts[*].ip)
+        num_hosts = length(var.ansible_hosts[*].ip)
         hostfile = var.ansible_hostfile
     }
 

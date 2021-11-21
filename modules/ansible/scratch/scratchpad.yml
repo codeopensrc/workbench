@@ -1,4 +1,4 @@
-
+#kubectl get nodes -o json | jq '.items[].spec.taints'
     ## Get ip from inventory file for first host in lead group
     #leader_ip: {{ hostvars[groups['lead'][0]]['ansible_default_ipv4']['address'] }}
       #when:  join_cmd.stdout == ''
@@ -140,3 +140,14 @@
 #       path: "{{ item.path }}"
 #       state: absent
 #     with_items: "{{ files_to_delete.files }}"
+#
+#
+#     loop: "{{ range(1, runners_per_machine|int + 1) | list }}"
+    - name: copy minio credentials
+      copy:
+        src: /root/.mc/config.json
+        dest: /home/gitlab-runner/.mc/config.json
+        remote_src: true
+
+
+    CURRENT_NUM_RUNNERS="{%raw%}${#RUNNERS_ON_MACHINE[@]}{%endraw%}"

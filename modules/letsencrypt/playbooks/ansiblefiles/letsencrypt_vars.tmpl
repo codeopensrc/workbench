@@ -1,0 +1,62 @@
+#!/bin/bash
+
+DOMAIN={{ fqdn }}
+WEBROOT=/var/www/html
+DRY_RUN={{ dry_run }}
+
+## Had an issue when adding a domain, a separate directory under /live was created with -0001 that doesnt work in our automation.
+## Conditions that created a separate cert seemed to be adding a domain AFTER or AT a renewal period
+##    which is relatively hard to replicate. For accurate testing we'd have to ensure --expand creates a separate
+##    certificate when adding a new domain to an existing certificate regardless of renewal. Only then
+##    can we test --cert-name under the same conditions and ensure it is the solution (most likely)
+
+## GOAL: Do not create a new cert
+## Renew and replace certificate if-
+##   Due for renewal
+##   Adding a domain
+## We found `--cert-name DOMAIN` and `--renew-with-new-domains` to not renew unless the specified
+##  domains are due for renewal or we add/remove a domain. It also correctly symlinks to the new cert 
+##  and does not place them in a separate directory when adding a domain.
+
+## My understanding is, using --expand will renew certs if the domains are the same but also create a separate
+##  directory if we add a domain (whether this is only during renewal or when adding a domain not sure)
+## However using --cert-name I believe forces the name of the cert name ensuring the directory name is the same
+##  and --new-with-new-domain renews/adds to the chain and properly symlinks to the new chain
+
+## https://certbot.eff.org/docs/using.html#changing-a-certificate-s-domains
+
+##  Old, was creating a new certificate if domains added (uses --expand)
+#RENEW=(sudo certbot certonly --webroot --expand --non-interactive --agree-tos --email {{ email }} -w $WEBROOT -d $DOMAIN)
+
+##  New, should update/replace domains of current certificate (uses --cert-name and --renew-with-new-domains)
+RENEW=(sudo certbot certonly --webroot --cert-name $DOMAIN --renew-with-new-domains --non-interactive --agree-tos --email {{ email }} -w $WEBROOT -d $DOMAIN)
+
+{% for APP in app_definitions %}
+
+CREATE_SSL={{ app_definitions[APP]["create_ssl_cert"] | lower }};
+CREATE_DEV={{ app_definitions[APP]["create_dev_dns"] | lower }};
+if [ "$CREATE_SSL" = "true" ]; then
+    RENEW+=(-d {{ app_definitions[APP]["subdomain_name"] }}.{{ fqdn }})
+    if [ "$CREATE_DEV" = "true" ]; then
+        RENEW+=(-d {{ app_definitions[APP]["subdomain_name"] }}.beta.{{ fqdn }})
+    fi
+fi
+{% endfor %}
+
+
+{% for APP in additional_ssl %}
+
+CREATE_SSL={{ APP["create_ssl_cert"] | lower }};
+CREATE_DEV={{ APP["create_dev_dns"] | lower }};
+if [ "$CREATE_SSL" = "true" ]; then
+    RENEW+=(-d {{ APP["subdomain_name"] }}.{{ fqdn }})
+    if [ "$CREATE_DEV" = "true" ]; then
+        RENEW+=(-d {{ APP["subdomain_name"] }}.beta.{{ fqdn }})
+    fi
+fi
+{% endfor %}
+
+
+if [ "$DRY_RUN" = "true" ]; then
+    RENEW+=(--dry-run)
+fi

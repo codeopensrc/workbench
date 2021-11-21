@@ -1,0 +1,53 @@
+#!/bin/bash
+
+CERT_PORT=7080
+
+while getopts "p:" flag; do
+    # These become set during 'getopts'  --- $OPTIND $OPTARG
+    case "$flag" in
+        p) CERT_PORT=${OPTARG};;
+    esac
+done
+
+source /root/code/scripts/letsencrypt_vars.sh
+
+sudo apt-get update
+sudo apt-get install software-properties-common -y
+
+## sudo add-apt-repository ppa:certbot/certbot -y
+## NOTE: This cmd causes problems on focal
+## E: The repository 'http://ppa.launchpad.net/certbot/certbot/ubuntu focal Release' does not have a Release file.
+## N: Updating from such a repository can't be done securely, and is therefore disabled by default.
+## N: See apt-secure(8) manpage for repository creation and user configuration details.
+## culprit ends up in this file   /etc/apt/sources.list.d/certbot-ubuntu-certbot-focal.list
+
+sudo apt-get update
+sudo apt-get install certbot -y
+
+WEBROOT=/var/www/html
+LETSENCRYPT_DIR=/etc/letsencrypt/live/$DOMAIN
+
+
+if [[ ! -d $LETSENCRYPT_DIR ]] || [[ $RUN_FROM_CRON ]]; then
+
+    docker run --name le_nginx \
+        -v $WEBROOT:/usr/share/nginx/html:ro \
+        -p $CERT_PORT:80 \
+        --rm \
+        -d nginx
+
+    "${RENEW[@]}"
+
+    docker stop le_nginx
+fi
+
+
+KEY=$(<$LETSENCRYPT_DIR/privkey.pem)
+FULLCHAIN=$(<$LETSENCRYPT_DIR/fullchain.pem)
+CHAIN=$(<$LETSENCRYPT_DIR/chain.pem)
+
+/usr/local/bin/consul kv put ssl/privkey "$KEY"
+/usr/local/bin/consul kv put ssl/fullchain "$FULLCHAIN"
+/usr/local/bin/consul kv put ssl/chain "$CHAIN"
+
+gitlab-ctl hup nginx || echo 0

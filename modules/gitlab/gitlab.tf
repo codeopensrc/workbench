@@ -30,7 +30,7 @@ resource "null_resource" "prometheus_targets" {
     count = var.admin_servers
 
     triggers = {
-        ips = join(",", var.ansible_hosts[*].ip)
+        num_targets = length(var.ansible_hosts[*].ip)
     }
 
     ## 9107 is consul exporter

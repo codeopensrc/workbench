@@ -1,0 +1,205 @@
+### https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-runnerscaches3-section
+### Setup caching using a cluster minio instance
+### Will allow runners across machines to share cache instead of each machine
+
+## TODO: Big obstacle is figuring out the different types of runners we want and how many per and per machine
+## Where does the prod runner run vs a build runner vs a generic vs a scheduled vs a unity builder etc.
+
+## /etc/gitlab-runner/config.toml   set concurrent to number of runners
+## https://docs.gitlab.com/runner/configuration/advanced-configuration.html
+
+## TODO: var.gitlab_enabled ? var.servers : 0;
+## TODO: On import remove old runners
+---
+- name: Get gitlab runner token
+  hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), []) }}"
+  remote_user: root
+  gather_facts: false
+  vars:
+    gitlab_tokens: "{{ gitlab_runner_tokens | from_json }}"
+    runner_token: "{{ gitlab_tokens['service'] }}"
+    root_domain_name: "{{ root_domain_name }}"
+  tasks:
+    - name: set runner_token fact if exists
+      set_fact:
+        runner_token: "{{ runner_token }}"
+      when: runner_token != ""
+
+    - name: end play if token exists
+      meta: end_play
+      when: runner_token != ""
+
+    - name: check if pw exists
+      stat:
+        path: "/etc/gitlab/initial_root_password"
+      register: file_data
+
+    - name: get runner token
+      block:
+        - name: check if token in consul
+          register: consul_runner_token
+          command: consul kv get gitlab/runner_token
+          changed_when: false
+      rescue:
+        - name: fetch token with init pw
+          register: raw_runner_token
+          shell: |
+            TMP_ROOT_PW=$(sed -rn "s|Password: (.*)|\1|p" /etc/gitlab/initial_root_password)
+            bash $HOME/code/scripts/misc/getRunnerToken.sh -u root -p $TMP_ROOT_PW -d {{ root_domain_name }}
+          when: file_data.stat.exists
+
+    - name: set consul_runner_token fact
+      set_fact:
+        runner_token: "{{ consul_runner_token.stdout }}"
+      when: consul_runner_token.stdout != ""
+
+    - name: set raw_runner_token fact
+      set_fact:
+        runner_token: "{{ raw_runner_token.stdout }}"
+      when: runner_token == "" and file_data.stat.exists and raw_runner_token.stdout != ""
+
+    - name: set runner_token in consul
+      command: consul kv put gitlab/runner_token {{ runner_token }}
+      when: runner_token != "" and consul_runner_token.stdout == ""
+
+
+
+- name: Install cirunners
+  hosts: "{{ (groups.admin | length > 0) | ternary(groups.lead+groups.build, []) }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: install binary
+      shell: |
+        curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+        apt-cache madison gitlab-runner
+        sudo apt-get install gitlab-runner jq -y
+        sudo usermod -aG docker gitlab-runner
+
+    - name: Make runner dirs
+      file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - /home/gitlab-runner/.mc
+        - /home/gitlab-runner/rmscripts
+
+    - name: copy minio credentials
+      copy:
+        src: /root/.mc/config.json
+        dest: /home/gitlab-runner/.mc/config.json
+        remote_src: true
+
+    - name: ensure runner owns dir
+      command: chown -R gitlab-runner:gitlab-runner /home/gitlab-runner
+
+    - name: modify concurrent runners
+      command: sed -i "s|concurrent = 1|concurrent = 3|" /etc/gitlab-runner/config.toml
+
+
+
+### TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
+- name: Handle runners
+  hosts: "{{ (groups.admin | length > 0) | ternary(groups.lead+groups.build, []) }}"
+  remote_user: root
+  #gather_facts: false
+  vars:
+    runner_token: "{{ hostvars[groups.admin[0]]['runner_token'] }}"
+    runners_per_machine: "{{ runners_per_machine }}"
+    root_domain_name: "{{ root_domain_name }}"
+  tasks:
+    - name: register shell runners
+      shell: |
+        MACHINE_NAME={{ machine_name }}
+        RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$");
+        FULL_NAME="${RUNNER_NAME}_shell_{{ item }}";
+        FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg");
+        TAG="";
+        ACCESS_LEVEL="not_protected";
+        RUN_UNTAGGED="true";
+        LOCKED="false";
+
+        if [ {{ item }} = 1 ]; then
+            case "$MACHINE_NAME" in
+                *build*) TAG=unity ;;
+                *admin*) TAG=prod ;;
+                *lead*) TAG=prod ;;
+                *) TAG="" ;;
+            esac
+        fi
+        if [ "$TAG" = "prod" ]; then
+            ACCESS_LEVEL="ref_protected";
+            RUN_UNTAGGED="false";
+            #LOCKED="true"; ## When we need to worry about it
+        fi
+
+        if [ -z "$FOUND_NAME" ]; then
+            sudo gitlab-runner register -n \
+                --url "https://gitlab.{{ root_domain_name }}" \
+                --registration-token "{{ runner_token }}" \
+                --executor shell \
+                --run-untagged="$RUN_UNTAGGED" \
+                --locked="$LOCKED" \
+                --access-level="$ACCESS_LEVEL" \
+                --name "$FULL_NAME" \
+                --tag-list "$TAG"
+        fi
+      loop: "{{ range(1, runners_per_machine|int + 1) | list }}"
+      when: runner_token != ""
+
+    # https://gitlab.com/gitlab-org/gitlab-runner/issues/1316
+    - name: delete old runners
+      command: gitlab-runner verify --delete
+
+    - name: add self-deregister script
+      copy:
+        dest: "/home/gitlab-runner/rmscripts/rmrunners.sh"
+        content: |
+          #!/bin/bash
+          MACHINE_NAME={{ machine_name }}
+          RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
+          NAMES=( $(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg") )
+          for NAME in "${NAMES[@]}"; do
+              sudo gitlab-runner unregister --name $NAME
+          done
+
+    #Scale down runners based on num of runners and active names/ip addresses
+    #Deregisters excess runners per machine
+    - name: add deregister excess runners script
+      copy:
+        dest: "/home/gitlab-runner/rmscripts/deregister.sh"
+        content: |
+          #!/bin/bash
+          MACHINE_NAME={{ machine_name }}
+          RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
+          RUNNERS_ON_MACHINE=($(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg"))
+          CURRENT_NUM_RUNNERS="{%raw%}${#RUNNERS_ON_MACHINE[@]}{%endraw%}"
+          MAX_RUNNERS_PER_MACHINE={{ runners_per_machine }}
+          RM_INDEX_START=$(( $MAX_RUNNERS_PER_MACHINE+1 ))
+
+          for NUM in $(seq $RM_INDEX_START $CURRENT_NUM_RUNNERS); do
+              SINGLE_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "shell_${NUM}" | jq -r ".msg")
+              [ "$SINGLE_NAME" ] && sudo gitlab-runner unregister --name $SINGLE_NAME
+          done
+      when: runner_token != ""
+
+    - name: deregister excess runners
+      command: bash /home/gitlab-runner/rmscripts/deregister.sh
+      when: runner_token != ""
+
+
+
+## Whenever we start registering docker runners
+        # sudo gitlab-runner register \
+        #     --non-interactive \
+        #     --url "https://gitlab.${var.root_domain_name}" \
+        #     --registration-token "${REGISTRATION_TOKEN}" \
+        #     --description "docker-runner" \
+        #     --tag-list "docker" \
+        #     --run-untagged="true" \
+        #     --locked="false" \
+        #     --executor "docker" \
+        #     --docker-image "docker:19.03.1" \
+        #     --docker-privileged \
+        #     --docker-volumes "/certs/client"
+

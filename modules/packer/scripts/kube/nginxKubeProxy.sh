@@ -200,6 +200,18 @@ spec:
       labels:
         app: $APPNAME
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - $APPNAME
       containers:
       - name: $APPNAME
         image: $IMAGE:$TAG

@@ -15,11 +15,6 @@ variable "app_definitions" {
 }
 
 locals {
-    admin_public_ips = [
-        for HOST in var.ansible_hosts:
-        HOST.ip
-        if contains(HOST.roles, "admin")
-    ]
     lead_private_ips = [
         for HOST in var.ansible_hosts:
         HOST.private_ip

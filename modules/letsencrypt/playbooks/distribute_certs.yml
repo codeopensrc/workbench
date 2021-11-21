@@ -1,0 +1,25 @@
+---
+- name: Distribute certs
+  hosts: "{{ groups.lead | difference(groups.admin) }}"
+  remote_user: root
+  gather_facts: false
+  vars:
+    root_domain_name: "{{ fqdn }}"
+  tasks:
+    - name: make ssl dir
+      file:
+        path: /etc/letsencrypt/live/{{ root_domain_name }}
+        state: directory
+
+    - name: write ssl certs
+      shell: "{{ item }}"
+      with_items:
+        - consul kv get ssl/fullchain > /etc/letsencrypt/live/{{ root_domain_name }}/fullchain.pem
+        - consul kv get ssl/privkey > /etc/letsencrypt/live/{{ root_domain_name }}/privkey.pem
+
+    - name: run script
+      shell: |
+        sed -i "s|#ssl_certificate|ssl_certificate|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#ssl_certificate_key|ssl_certificate_key|" /etc/nginx/conf.d/*.conf
+        sed -i "s|#listen 443 ssl|listen 443 ssl|" /etc/nginx/conf.d/*.conf
+        sudo systemctl reload nginx
