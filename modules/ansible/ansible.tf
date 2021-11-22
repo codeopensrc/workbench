@@ -22,34 +22,34 @@ resource "null_resource" "ansible_hosts" {
 		cat <<-EOLF > ${var.ansible_hostfile}
 		[servers]
 		%{ for ind, HOST in var.ansible_hosts ~}
-		${HOST.ip} machine_name=${HOST.name}
+		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endfor ~}
 		
 		[admin]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "admin") ~}
-		${HOST.ip} machine_name=${HOST.name}
+		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}
 		%{ endfor ~}
 		
 		[lead]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "lead") ~}
-		${HOST.ip} machine_name=${HOST.name}
+		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}
 		%{ endfor ~}
 		
 		[db]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "db") ~}
-		${HOST.ip} machine_name=${HOST.name}
+		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}
 		%{ endfor ~}
 		
 		[build]
 		%{ for ind, HOST in var.ansible_hosts ~}
 		%{ if contains(HOST.roles, "build") ~}
-		${HOST.ip} machine_name=${HOST.name}
+		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}
 		%{ endfor ~}
 		

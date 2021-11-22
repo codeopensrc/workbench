@@ -10,6 +10,9 @@ variable "placeholder_reusable_delegationset_id" { default = "" }
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
 variable "stun_port" { default = "" }
+variable "postgres_port" { default = "5432" } ## Not fully implemented - consulchecks atm
+variable "redis_port" { default = "6379" } ## Not fully implemented - consulchecks atm
+variable "mongo_port" { default = "27017" } ## Not fully implemented - consulchecks atm
 
 variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }
@@ -17,17 +20,22 @@ variable "import_gitlab_version" { default = "" }
 variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "install_unity3d" { default = false }
 
+variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }## kubernetes and/or docker_swarm
+
+########## SOFTWARE VERSIONS ##########
+#######################################
+## Provisioned after launch
 ##NOTE: Latest kubernetes: 1.22.3-00
 variable "kubernetes_version" { default = "1.20.11-00" }## Gitlab 14.3.0 supports kubernetes 1.20.11-00
 variable "nodeexporter_version" { default = "1.2.2" }
 variable "promtail_version" { default = "2.4.1" }
 variable "consulexporter_version" { default = "0.7.1" }
 variable "loki_version" { default = "2.4.1" }
+variable "postgres_version" { default = "9.5" } ## Not fully implemented - consulchecks atm
+variable "mongo_version" { default = "4.4.6" } ## Not fully implemented - consulchecks atm
+variable "redis_version" { default = "5.0.9" } ## Not fully implemented - consulchecks atm
 
-variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }## kubernetes and/or docker_swarm
-
-########## SOFTWARE VERSIONS ##########
-#######################################
+## Baked into image
 variable "packer_config" {
     default = {
         gitlab_version = "14.4.2-ce.0"
@@ -68,12 +76,6 @@ module "cloud" {
 ## None of the matrices support more than 1 db role in a cluster
 ## None of the matrices support more than 1 admin role in a cluster
 
-##NOTE: 100% for digital ocean. AWS may have issues when not having an admin and having
-##  multiple leaders as the IPs return order has not been fully audited (creation time, size etc).
-## Digital ocean allows for sorting by created_at and size to reliably determine the
-##  correct "pseudo admin" (kubernetes intialization, consul bootstrapping etc)
-## As we start implementing ansible this *should* be a non-issue
-
 # 1 node  - (admin + lead + db)  -- Confirmed
 # 1 node  - (lead + db)          -- Confirmed
 
@@ -94,6 +96,11 @@ module "cloud" {
 # 3 nodes - (admin + lead + db), (lead), (lead) -- Confirmed
 
 
+## New long term goal - taint based replacement of nodes
+## Number is how many machines you want. When you want to replace a node, you `terraform taint` it
+## Terraform and ansible should handle the graceful replacement of that node after `terraform apply`
+##   (Would need at least 2 of that type of fleet to do so gracefully)
+## Should work as easily/seemlessly as docker and kubernetes replacing containers/pods
 variable "servers" {
     ### NOTE: Do not add or remove roles from instances after they are launched
     ### Fleets differ by either roles, size, or to use a specific image

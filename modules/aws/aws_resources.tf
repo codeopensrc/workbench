@@ -32,7 +32,6 @@ module "lead" {
     vpc = local.vpc
 
     admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
-    admin_ip_private = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0] : ""
     consul_lan_leader_ip = (local.admin_servers > 0
         ? data.aws_instances.admin.private_ips[0]
         : (each.value.ind == 0 ? "" : data.aws_instances.lead.private_ips[0])
@@ -52,7 +51,6 @@ module "db" {
     vpc = local.vpc
 
     admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
-    admin_ip_private = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0] : ""
     consul_lan_leader_ip = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0]: data.aws_instances.lead.private_ips[0]
 }
 module "build" {
@@ -68,7 +66,6 @@ module "build" {
     vpc = local.vpc
 
     admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
-    admin_ip_private = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0] : ""
     consul_lan_leader_ip = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0]: data.aws_instances.lead.private_ips[0]
 }
 

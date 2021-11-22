@@ -1,0 +1,13 @@
+[Unit]
+Description=Prometheus Consul Exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=root
+Restart=on-failure
+
+ExecStart=/usr/local/bin/consul_exporter
+
+[Install]
+WantedBy=multi-user.target

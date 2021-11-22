@@ -1,0 +1,15 @@
+{
+  "service": {
+    "name": "redis",
+    "tags": ["_port={{ redis_port }}", "_version={{ redis_version }}"],
+    "address": "",
+    "port": {{ redis_port }},
+    "enable_tag_override": false,
+    "checks": [
+      {
+        "args": ["redis-cli", "ping"],
+        "interval": "30s"
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "service": {
+    "name": "pg",
+    "tags": ["_port={{ postgres_port }}", "_version={{ postgres_version }}"],
+    "address": "",
+    "port": {{ postgres_port }},
+    "enable_tag_override": false,
+    "checks": [
+      {
+        "args": ["echo", "'\\q'", "|", "psql", "postgresql://pgcheck:{{ pg_read_only_pw }}@{{ private_ip }}/postgres"],
+        "interval": "30s"
+      }
+    ]
+  }
+}

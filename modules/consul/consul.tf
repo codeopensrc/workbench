@@ -227,7 +227,7 @@ resource "null_resource" "reload" {
         inline = [
             "systemctl daemon-reload",
             "consul reload",
-            "consul join ${var.consul_lan_leader_ip}",
+            #"consul join ${var.consul_lan_leader_ip}",
         ]
     }
     connection {

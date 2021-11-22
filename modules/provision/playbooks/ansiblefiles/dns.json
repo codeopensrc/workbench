@@ -1,0 +1,8 @@
+{
+  "check": {
+    "name": "DNS",
+    "http": "http://google.com",
+    "interval": "60s",
+    "timeout": "2s"
+  }
+}

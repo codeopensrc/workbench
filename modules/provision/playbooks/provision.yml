@@ -1,0 +1,181 @@
+---
+- name: Provision files
+  hosts: all
+  remote_user: root
+  vars:
+    deploy_key_location: "{{ deploy_key_location }}"
+    known_hosts: "{{ known_hosts_json | from_json }}"
+    sshconfig_hosts: "{{ sshconfig_hosts_json | from_json }}"
+    fqdn: "{{ fqdn }}"
+    #pg
+    pg_read_only_pw: "{{ pg_read_only_pw }}"
+    postgres_port: "{{ postgres_port }}"
+    postgres_version: "{{ postgres_version }}"
+    #mongo
+    mongo_port: "{{ mongo_port }}"
+    mongo_version: "{{ mongo_version }}"
+    #redis
+    redis_port: "{{ redis_port }}"
+    redis_version: "{{ redis_version }}"
+  tasks:
+    - name: sshconfig template
+      template:
+        src: ansiblefiles/sshconfig
+        dest: /root/.ssh/config
+
+    - name: known_hosts template
+      template:
+        src: ansiblefiles/known_hosts
+        dest: /root/.ssh/known_hosts
+
+    ## TODO: Put deploy.key in s3 encrypted or plain text
+    ## If ".gpg" extension decrypt it later etc
+    - name: add deploy.key
+      copy:
+        src: "{{ deploy_key_location }}" ##An absolute filepath atm
+        dest: /root/.ssh/deploy.key
+        mode: '0600'
+
+    ## Maybe do this in terraform, ansible.copy doesnt like lots of files
+    ## Takes about 2.5 minutes atm
+    ##https://docs.ansible.com/ansible/latest/collections/ansible/builtin/copy_module.html#notes
+    - name: reprovision scripts dir
+      copy:
+        src: ../../packer/scripts/
+        dest: /root/code/scripts
+
+    - name: make consul dirs
+      file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - /etc/consul.d/conf.d
+        - /etc/consul.d/templates
+
+    ## TODO: Loop ansiblefiles/consul*.json
+    - name: postgres template
+      template:
+        src: ansiblefiles/consul_pg.json
+        dest: /etc/consul.d/templates/pg.json
+        mode: '0755'
+
+    - name: mongo template
+      template:
+        src: ansiblefiles/consul_mongo.json
+        dest: /etc/consul.d/templates/mongo.json
+        mode: '0755'
+
+    - name: redis template
+      template:
+        src: ansiblefiles/consul_redis.json
+        dest: /etc/consul.d/templates/redis.json
+        mode: '0755'
+
+    - name: dns template
+      copy:
+        src: ansiblefiles/dns.json
+        dest: /etc/consul.d/conf.d/dns.json
+        mode: '0755'
+
+    ##TODO Good choice for notify/hander
+    - name: reload consul
+      command: consul reload
+
+
+
+- name: Provision exporters
+  hosts: all
+  remote_user: root
+  vars:
+    nodeexporter_version: "{{ nodeexporter_version }}"
+    promtail_version: "{{ promtail_version }}"
+    consulexporter_version: "{{ consulexporter_version }}"
+    loki_version: "{{ loki_version }}"
+    admin_private_ip: "{{ (groups.admin | length > 0) | ternary(hostvars[groups.admin[0]].private_ip, '') }}"
+  tasks:
+    - name: end_play if no admin ip
+      meta: end_play
+      when: admin_private_ip == ""
+
+    ## TODO: Loop ansiblefiles/*.service
+    - name: nodeexporter template
+      copy:
+        src: ansiblefiles/nodeexporter.service
+        dest: /etc/systemd/system/nodeexporter.service
+
+    - name: consulexporter template
+      copy:
+        src: ansiblefiles/consulexporter.service
+        dest: /etc/systemd/system/consulexporter.service
+
+    - name: promtail template
+      copy:
+        src: ansiblefiles/promtail.service
+        dest: /etc/systemd/system/promtail.service
+
+    - name: loki template
+      copy:
+        src: ansiblefiles/loki.service
+        dest: /etc/systemd/system/loki.service
+
+    ##TODO: Ansible way
+    - name: download nodeexporter
+      shell: |
+        FILENAME1=node_exporter-{{ nodeexporter_version }}.linux-amd64.tar.gz
+        [ ! -f /tmp/$FILENAME1 ] && wget https://github.com/prometheus/node_exporter/releases/download/v{{ nodeexporter_version }}/$FILENAME1 -P /tmp
+        tar xvfz /tmp/$FILENAME1 --wildcards --strip-components=1 -C /usr/local/bin */node_exporter
+
+    - name: download promtail
+      shell: |
+        FILENAME2=promtail-linux-amd64.zip
+        [ ! -f /tmp/$FILENAME2 ] && wget https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/$FILENAME2 -P /tmp
+        unzip -o /tmp/$FILENAME2 -d /usr/local/bin && chmod a+x /usr/local/bin/promtail*amd64
+
+        FILENAME3=promtail-local-config.yaml
+        mkdir -p /etc/promtail.d
+        [ ! -f /etc/promtail.d/$FILENAME3 ] && wget https://raw.githubusercontent.com/grafana/loki/main/clients/cmd/promtail/$FILENAME3 -P /etc/promtail.d
+        sed -i "s/localhost:/{{ admin_private_ip }}:/" /etc/promtail.d/$FILENAME3
+        sed -ni '/nodename:/!p; $ a \\      nodename: {{ machine_name }}' /etc/promtail.d/$FILENAME3
+
+    - name: download consulexporter
+      shell: |
+        FILENAME4=consul_exporter-{{ consulexporter_version }}.linux-amd64.tar.gz
+        [ ! -f /tmp/$FILENAME4 ] && wget https://github.com/prometheus/consul_exporter/releases/download/v{{ consulexporter_version }}/$FILENAME4 -P /tmp
+        tar xvfz /tmp/$FILENAME4 --wildcards --strip-components=1 -C /usr/local/bin */consul_exporter
+
+    - name: download loki
+      shell: |
+        FILENAME5="loki-linux-$(dpkg --print-architecture)"
+        sudo mkdir -p /etc/loki.d
+        [ ! -f /tmp/$FILENAME5.zip ] && curl -L https://github.com/grafana/loki/releases/download/v{{ loki_version }}/$FILENAME5.zip -o /tmp/$FILENAME5.zip
+        unzip -o /tmp/$FILENAME5.zip -d /etc/loki.d/
+        sudo mv /etc/loki.d/$FILENAME5 /usr/local/bin/loki
+        wget https://raw.githubusercontent.com/grafana/loki/v{{ loki_version }}/cmd/loki/loki-local-config.yaml -P /etc/loki.d
+
+    ## TODO: Ansible way
+    - name: start promtail
+      command: "{{ item }}"
+      with_items:
+        - sudo systemctl start promtail
+        - sudo systemctl enable promtail
+
+    - name: start loki
+      command: "{{ item }}"
+      with_items:
+        - sudo systemctl start loki.service
+        - sudo systemctl enable loki.service
+      when: "'admin' in machine_name"
+
+    - name: start consulexporter
+      command: "{{ item }}"
+      with_items:
+        - sudo systemctl start consulexporter
+        - sudo systemctl enable consulexporter
+      when: "'admin' in machine_name"
+
+    - name: start nodeexporter
+      command: "{{ item }}"
+      with_items:
+        - sudo systemctl start nodeexporter
+        - sudo systemctl enable nodeexporter
+      when: "'admin' not in machine_name"

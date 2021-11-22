@@ -1,0 +1,15 @@
+[Unit]
+Description=Loki Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=root
+Restart=on-failure
+
+ExecStart=/usr/local/bin/loki \
+    -config.file=/etc/loki.d/loki-local-config.yaml
+
+[Install]
+WantedBy=mutli-user.target
+

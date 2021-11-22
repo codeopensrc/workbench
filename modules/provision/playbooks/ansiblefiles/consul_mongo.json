@@ -1,0 +1,15 @@
+{
+  "service": {
+    "name": "mongo",
+    "tags": ["_port={{ mongo_port }}", "_version={{ mongo_version }}"],
+    "address": "",
+    "port": {{ mongo_port }},
+    "enable_tag_override": false,
+    "checks": [
+      {
+        "args": ["mongo", "--host", "{{ private_ip }}", "--eval", "'exit'"],
+        "interval": "30s"
+      }
+    ]
+  }
+}

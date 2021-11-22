@@ -1,0 +1,15 @@
+Host bitbucket.org
+Identityfile ~/.ssh/deploy.key
+IdentitiesOnly yes
+
+{% for HOST in sshconfig_hosts %}
+
+Host {{ HOST }}
+Identityfile ~/.ssh/deploy.key
+IdentitiesOnly yes
+
+{% endfor %}
+
+Host gitlab.{{ fqdn }}
+Identityfile ~/.ssh/deploy.key
+IdentitiesOnly yes

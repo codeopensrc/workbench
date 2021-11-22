@@ -90,8 +90,18 @@
         dest: /home/gitlab-runner/.mc/config.json
         remote_src: true
 
+    ##TODO: Will this force traversing ALL builds dirs on consecutive runs? (dont want)
+    ## Maybe check if /home/gitlab-runner corectly owned and NOT run again if so
+    ## Review if mod and access time help/hurt
     - name: ensure runner owns dir
-      command: chown -R gitlab-runner:gitlab-runner /home/gitlab-runner
+      file:
+        path: /home/gitlab-runner
+        state: directory
+        recurse: yes
+        owner: gitlab-runner
+        group: gitlab-runner
+        modification_time: preserve
+        access_time: preserve
 
     - name: modify concurrent runners
       command: sed -i "s|concurrent = 1|concurrent = 3|" /etc/gitlab-runner/config.toml

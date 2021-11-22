@@ -13,3 +13,4 @@
          gpg --batch --yes --delete-secret-key $BOT_FPR || echo 0
          rm $HOME/{{ bot_gpg_name }}
       when: use_gpg == "true"
+      ignore_errors: true

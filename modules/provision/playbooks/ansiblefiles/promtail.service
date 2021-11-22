@@ -1,0 +1,14 @@
+[Unit]
+Description=Promtail Exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=root
+Restart=on-failure
+
+ExecStart=/usr/local/bin/promtail-linux-amd64 \
+    -config.file=/etc/promtail.d/promtail-local-config.yaml
+
+[Install]
+WantedBy=multi-user.target

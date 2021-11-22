@@ -21,12 +21,43 @@ module "ansible" {
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
+module "provision" {
+    source = "../../modules/provision"
+    depends_on = [
+        module.cloud,
+        module.ansible
+    ]
+    ansible_hostfile = local.ansible_hostfile
+
+    server_count = local.server_count
+
+    known_hosts = var.known_hosts
+    root_domain_name = local.root_domain_name
+    deploy_key_location = var.deploy_key_location
+
+    nodeexporter_version = var.nodeexporter_version
+    promtail_version = var.promtail_version
+    consulexporter_version = var.consulexporter_version
+    loki_version = var.loki_version
+
+    pg_read_only_pw = var.pg_read_only_pw
+    postgres_version = var.postgres_version
+    postgres_port = var.postgres_port
+    mongo_version = var.mongo_version
+    mongo_port = var.mongo_port
+    redis_version = var.redis_version
+    redis_port = var.redis_port
+}
+
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "gpg" {
     source = "../../modules/gpg"
     count = var.use_gpg ? 1 : 0
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
     ]
 
     ansible_hosts = local.ansible_hosts
@@ -49,6 +80,7 @@ module "clusterkv" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg
     ]
 
@@ -68,6 +100,7 @@ module "gitlab" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv
     ]
@@ -100,6 +133,7 @@ module "nginx" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -122,6 +156,7 @@ module "clusterdb" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -150,6 +185,7 @@ module "docker" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -174,6 +210,7 @@ resource "null_resource" "gpg_remove_key" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -181,6 +218,10 @@ resource "null_resource" "gpg_remove_key" {
         module.clusterdb,
         module.docker,
     ]
+    triggers = {
+        admin_servers = local.admin_servers
+        db_servers = local.db_servers
+    }
     provisioner "local-exec" {
         command = <<-EOF
             ansible-playbook ../../modules/gpg/playbooks/gpg_rmkey.yml -i ${local.ansible_hostfile} \
@@ -196,6 +237,7 @@ module "letsencrypt" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -223,6 +265,7 @@ module "cirunners" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -278,6 +321,7 @@ module "kubernetes" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -310,6 +354,7 @@ resource "null_resource" "configure_smtp" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -352,6 +397,7 @@ resource "null_resource" "enable_autoupgrade" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -517,15 +563,6 @@ locals {
         redis_dbs = local.redis_dbs
         pg_dbs = local.pg_dbs
         mongo_dbs = local.mongo_dbs
-
-        known_hosts = var.known_hosts
-        deploy_key_location = var.deploy_key_location
-        pg_read_only_pw = var.pg_read_only_pw
-
-        nodeexporter_version = var.nodeexporter_version
-        promtail_version = var.promtail_version
-        consulexporter_version = var.consulexporter_version
-        loki_version = var.loki_version
     }
 }
 

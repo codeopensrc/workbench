@@ -211,26 +211,3 @@ module "cron" {
     mongo_dbs = var.config.mongo_dbs
     pg_dbs = var.config.pg_dbs
 }
-
-module "provision" {
-    source = "../../provision"
-    depends_on = [module.init, module.consul, module.hostname, module.cron]
-
-    name = digitalocean_droplet.main.name
-    public_ip = digitalocean_droplet.main.ipv4_address
-
-    known_hosts = var.config.known_hosts
-    root_domain_name = var.config.root_domain_name
-    deploy_key_location = var.config.deploy_key_location
-
-    nodeexporter_version = var.config.nodeexporter_version
-    promtail_version = var.config.promtail_version
-    consulexporter_version = var.config.consulexporter_version
-    loki_version = var.config.loki_version
-
-    # DB checks
-    pg_read_only_pw = var.config.pg_read_only_pw
-    private_ip = digitalocean_droplet.main.ipv4_address_private
-
-    admin_ip_private = contains(var.servers.roles, "admin") ? digitalocean_droplet.main.ipv4_address_private : var.admin_ip_private
-}
