@@ -1,0 +1,100 @@
+---
+- name: Configure admin cron
+  hosts: admin
+  remote_user: root
+  gather_facts: false
+  vars:
+    s3alias: "{{ s3alias }}"
+    s3bucket: "{{ s3bucket }}"
+    use_gpg: "{{ use_gpg }}"
+    gitlab_backups_enabled: "{{ gitlab_backups_enabled }}"
+  tasks:
+    - name: make cron dir
+      file:
+        path: /root/code/cron
+        state: directory
+
+    - name: admin template
+      template:
+        src: ansiblefiles/admin.tmpl
+        dest: /root/code/cron/admin.cron
+
+
+- name: Configure lead cron
+  hosts: lead
+  remote_user: root
+  gather_facts: false
+  vars:
+    s3alias: "{{ s3alias }}"
+    s3bucket: "{{ s3bucket }}"
+    allow_cron_backups: "{{ allow_cron_backups }}"
+    check_ssl: true
+    app_definitions: "{{ app_definitions_json | from_json }}"
+  tasks:
+    - name: make cron dir
+      file:
+        path: /root/code/cron
+        state: directory
+
+    - name: lead template
+      template:
+        src: ansiblefiles/leader.tmpl
+        dest: /root/code/cron/leader.cron
+
+    - name: apps template
+      template:
+        src: ansiblefiles/app.tmpl
+        dest: /root/code/cron/app.cron
+
+
+- name: Configure db cron
+  hosts: db
+  remote_user: root
+  gather_facts: false
+  vars:
+    s3alias: "{{ s3alias }}"
+    s3bucket: "{{ s3bucket }}"
+    allow_cron_backups: "{{ allow_cron_backups }}"
+    use_gpg: "{{ use_gpg }}"
+
+    pg_dbs: "{{ pg_dbs_json | from_json }}"
+    mongo_dbs: "{{ mongo_dbs_json | from_json }}"
+    redis_dbs: "{{ redis_dbs_json | from_json }}"
+    mongo_host: "{{ mongo_host }}"
+  tasks:
+    - name: make cron dir
+      file:
+        path: /root/code/cron
+        state: directory
+
+    - name: redis template
+      template:
+        src: ansiblefiles/redisdb.tmpl
+        dest: /root/code/cron/redisdb.cron
+
+    - name: mongo template
+      template:
+        src: ansiblefiles/mongodb.tmpl
+        dest: /root/code/cron/mongodb.cron
+
+    - name: postgres template
+      template:
+        src: ansiblefiles/pgdb.tmpl
+        dest: /root/code/cron/pgdb.cron
+
+
+- name: Configure cron
+  hosts: "{{ groups.admin + groups.lead + groups.db }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: rm all.cron file
+      file:
+        path: /root/code/cron/all.cron
+        state: absent
+
+    - name: combine cron files
+      shell: "cat /root/code/cron/*.cron > /root/code/cron/all.cron"
+
+    - name: update crontab
+      command: crontab /root/code/cron/all.cron

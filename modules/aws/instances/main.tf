@@ -237,25 +237,3 @@ module "hostname" {
     public_ip = aws_instance.main.public_ip
     private_ip = aws_instance.main.private_ip
 }
-
-module "cron" {
-    source = "../../cron"
-    depends_on = [module.init, module.consul, module.hostname]
-
-    public_ip = aws_instance.main.public_ip
-    roles = var.servers.roles
-    s3alias = var.config.s3alias
-    s3bucket = var.config.s3bucket
-    use_gpg = var.config.use_gpg
-
-    # Leader specific
-    app_definitions = var.config.app_definitions
-
-    # Admin specific
-    gitlab_backups_enabled = var.config.gitlab_backups_enabled
-
-    # DB specific
-    redis_dbs = var.config.redis_dbs
-    mongo_dbs = var.config.mongo_dbs
-    pg_dbs = var.config.pg_dbs
-}

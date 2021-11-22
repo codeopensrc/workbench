@@ -1,0 +1,14 @@
+{% for DB in redis_dbs %}
+######## ===== Redis DB ===== ########
+# Name: Backup '{{ DB.name }}' Redis DB
+SHELL="/bin/bash"
+HOME="/root"
+{{ ( (DB.backups_enabled|bool) and (allow_cron_backups|bool) ) | ternary("", "#") }}0 22 * * * bash $HOME/code/scripts/db/backupRedis.sh -a {{ s3alias }} -b {{ s3bucket }} -d {{ DB.name }} -c {{ (use_gpg|bool) | ternary("-e", "") }} >> /dev/null 2>>$HOME/code/logs/errors.log
+
+# Name: Remove '{{ DB.name }}' Redis Backups
+SHELL="/bin/bash"
+HOME="/root"
+{{ ( (DB.backups_enabled|bool) and (allow_cron_backups|bool) ) | ternary("", "#") }}0 2 * * 6 bash $HOME/code/scripts/db/removeDBBackups.sh -d {{ DB.name }} >> /dev/null 2>>$HOME/code/logs/errors.log
+
+
+{% endfor %}

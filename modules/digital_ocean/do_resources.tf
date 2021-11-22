@@ -174,6 +174,7 @@ data "digitalocean_droplets" "build" {
     }
 }
 
+##TODO: Ansible playbook to run at end like kubernetes/docker or in mod.consul itself
 resource "null_resource" "cleanup_consul" {
     count = 1
     depends_on = [

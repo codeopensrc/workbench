@@ -1,0 +1,16 @@
+######## ===== Leader ===== ########
+# Name: Cleanup Minio Temp Object Storage
+MAILTO="root"
+SHELL="/bin/bash"
+HOME="/root"
+#50 4,12 * * 2-5 /usr/local/bin/mc rm --recursive --force local/tmp && /usr/local/bin/mc admin bucket quota local/tmp --hard 5GB
+
+# Name: Check SSL
+MAILTO="root"
+SHELL="/bin/bash"
+HOME="/root"
+# 15 min after checking renewal on admin
+{{ (check_ssl|bool) | ternary("", "#") }}15 3 1,10,20 * * bash $HOME/code/scripts/misc/checkssl.sh
+
+
+

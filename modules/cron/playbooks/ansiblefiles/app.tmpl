@@ -1,0 +1,10 @@
+{% for APP in app_definitions %}
+######## ===== APP ==== ########
+# Name: Backup {{ app_definitions[APP].repo_name }}
+MAILTO="root"
+SHELL="/bin/bash"
+HOME="/root"
+{{ ( (app_definitions[APP].use_custom_backup|bool) and (allow_cron_backups|bool) ) | ternary("", "#") }}{{ app_definitions[APP].backup_frequency }} bash $HOME/repos/{{ app_definitions[APP].repo_name }}/{{ app_definitions[APP].custom_backup_file }} -a {{ s3alias }} -b {{ s3bucket }} -c >> /dev/null 2>>$HOME/code/logs/errors.log
+
+
+{% endfor %}

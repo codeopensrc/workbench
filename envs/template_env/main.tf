@@ -21,10 +21,35 @@ module "ansible" {
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
+module "cron" {
+    source = "../../modules/cron"
+    depends_on = [ module.cloud ]
+    ansible_hostfile = local.ansible_hostfile
+
+    admin_servers = local.admin_servers
+    lead_servers = local.lead_servers
+    db_servers = local.db_servers
+
+    s3alias = local.s3alias
+    s3bucket = local.s3bucket
+    use_gpg = var.use_gpg
+    # Admin specific
+    gitlab_backups_enabled = var.gitlab_backups_enabled
+    # Leader specific
+    app_definitions = var.app_definitions
+    # DB specific
+    redis_dbs = local.redis_dbs
+    mongo_dbs = local.mongo_dbs
+    pg_dbs = local.pg_dbs
+}
+
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "provision" {
     source = "../../modules/provision"
     depends_on = [
         module.cloud,
+        module.cron,
         module.ansible
     ]
     ansible_hostfile = local.ansible_hostfile
@@ -57,6 +82,7 @@ module "gpg" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
     ]
 
@@ -80,6 +106,7 @@ module "clusterkv" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg
     ]
@@ -100,6 +127,7 @@ module "gitlab" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv
@@ -133,6 +161,7 @@ module "nginx" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -156,6 +185,7 @@ module "clusterdb" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -185,6 +215,7 @@ module "docker" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -210,6 +241,7 @@ resource "null_resource" "gpg_remove_key" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -237,6 +269,7 @@ module "letsencrypt" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -265,6 +298,7 @@ module "cirunners" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -321,6 +355,7 @@ module "kubernetes" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -354,6 +389,7 @@ resource "null_resource" "configure_smtp" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -397,6 +433,7 @@ resource "null_resource" "enable_autoupgrade" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.cron,
         module.provision,
         module.gpg,
         module.clusterkv,
@@ -517,9 +554,6 @@ locals {
 
         region = local.region
 
-        s3alias = local.s3alias
-        s3bucket = local.s3bucket
-
         do_token = var.do_token
         do_region = var.do_region
         do_ssh_fingerprint = var.do_ssh_fingerprint
@@ -556,13 +590,6 @@ locals {
         placeholder_reusable_delegationset_id = var.placeholder_reusable_delegationset_id
 
         misc_cnames = concat([], local.misc_cnames)
-
-        gitlab_backups_enabled = var.gitlab_backups_enabled
-        use_gpg = var.use_gpg
-
-        redis_dbs = local.redis_dbs
-        pg_dbs = local.pg_dbs
-        mongo_dbs = local.mongo_dbs
     }
 }
 
