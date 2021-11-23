@@ -1,0 +1,35 @@
+---
+- name: INIT
+  hosts: all
+  remote_user: root
+  gather_facts: false
+  vars:
+    aws_bot_access_key: "{{ aws_bot_access_key }}"
+    aws_bot_secret_key: "{{ aws_bot_secret_key }}"
+    do_spaces_region: "{{ do_spaces_region }}"
+    do_spaces_access_key: "{{ do_spaces_access_key }}"
+    do_spaces_secret_key: "{{ do_spaces_secret_key }}"
+  tasks:
+    # Temporarily disable for initial install - can lock dkpg file if enabled
+    - name: temp disable autoupgrade
+      replace:
+        path: /etc/apt/apt.conf.d/20auto-upgrades
+        regexp: '"1"'
+        replace: '"0"'
+
+    - name: aws credentials
+      copy:
+        dest: "/root/.aws/credentials"
+        content: |
+          [default]
+          aws_access_key_id = {{ aws_bot_access_key }}
+          aws_secret_access_key = {{ aws_bot_secret_key }}
+      when: aws_bot_access_key != ""
+
+    - name: add aws mc alias
+      command: mc alias set s3 https://s3.amazonaws.com {{ aws_bot_access_key }} {{ aws_bot_secret_key }}
+      when: aws_bot_access_key != ""
+
+    - name: add do mc alias
+      command: mc alias set spaces https://{{ do_spaces_region }}.digitaloceanspaces.com {{ do_spaces_access_key }} {{ do_spaces_secret_key }}
+      when: do_spaces_access_key != ""

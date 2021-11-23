@@ -194,24 +194,8 @@ resource "aws_instance" "main" {
 }
 
 
-### TODO: Most or all of the modules will not have a count attribute
-## once we scale machines one level higher at the module level
-
-module "init" {
-    source = "../../init"
-
-    public_ip = aws_instance.main.public_ip
-    do_spaces_region = var.config.do_spaces_region
-    do_spaces_access_key = var.config.do_spaces_access_key
-    do_spaces_secret_key = var.config.do_spaces_secret_key
-
-    aws_bot_access_key = var.config.aws_bot_access_key
-    aws_bot_secret_key = var.config.aws_bot_secret_key
-}
-
 module "consul" {
     source = "../../consul"
-    depends_on = [module.init]
 
     role = var.servers.roles[0]
     region = var.config.region

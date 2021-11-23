@@ -21,11 +21,53 @@ module "ansible" {
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
+module "init" {
+    source = "../../modules/init"
+    depends_on = [
+        module.cloud,
+        module.ansible,
+    ]
+    ansible_hostfile = local.ansible_hostfile
+
+    server_count = local.server_count
+    do_spaces_region = var.do_spaces_region
+    do_spaces_access_key = var.do_spaces_access_key
+    do_spaces_secret_key = var.do_spaces_secret_key
+
+    aws_bot_access_key = var.aws_bot_access_key
+    aws_bot_secret_key = var.aws_bot_secret_key
+}
+
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
+#module "consul" {
+#    source = "../../modules/consul"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#    ]
+#
+#    role = var.servers.roles[0]
+#    region = var.config.region
+#    datacenter_has_admin = var.admin_ip_public != "" || var.consul_lan_leader_ip != "" ? true : false
+#    consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : digitalocean_droplet.main.ipv4_address_private
+#    #consul_wan_leader_ip = var.consul_wan_leader_ip
+#
+#    name = digitalocean_droplet.main.name
+#    public_ip = digitalocean_droplet.main.ipv4_address
+#    private_ip = digitalocean_droplet.main.ipv4_address_private
+#}
+
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "hostname" {
     source = "../../modules/hostname"
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
     ]
     ansible_hostfile = local.ansible_hostfile
 
@@ -43,6 +85,8 @@ module "cron" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
     ]
     ansible_hostfile = local.ansible_hostfile
@@ -71,6 +115,8 @@ module "provision" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
     ]
@@ -104,6 +150,8 @@ module "gpg" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -129,6 +177,8 @@ module "clusterkv" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -151,6 +201,8 @@ module "gitlab" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -186,6 +238,8 @@ module "nginx" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -211,6 +265,8 @@ module "clusterdb" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -242,6 +298,8 @@ module "docker" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -269,6 +327,8 @@ resource "null_resource" "gpg_remove_key" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -298,6 +358,8 @@ module "letsencrypt" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -328,6 +390,8 @@ module "cirunners" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -386,6 +450,8 @@ module "kubernetes" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -421,6 +487,8 @@ resource "null_resource" "configure_smtp" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -466,6 +534,8 @@ resource "null_resource" "enable_autoupgrade" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.init,
+        #module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -610,16 +680,11 @@ locals {
         do_token = var.do_token
         do_region = var.do_region
         do_ssh_fingerprint = var.do_ssh_fingerprint
-        do_spaces_region = var.do_spaces_region
-        do_spaces_access_key = var.do_spaces_access_key
-        do_spaces_secret_key = var.do_spaces_secret_key
 
         aws_key_name = var.aws_key_name
         aws_access_key = var.aws_access_key
         aws_secret_key = var.aws_secret_key
         aws_region = var.aws_region
-        aws_bot_access_key = var.aws_bot_access_key
-        aws_bot_secret_key = var.aws_bot_secret_key
     }
 }
 
