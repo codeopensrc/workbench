@@ -21,9 +21,30 @@ module "ansible" {
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
+module "hostname" {
+    source = "../../modules/hostname"
+    depends_on = [
+        module.cloud,
+        module.ansible,
+    ]
+    ansible_hostfile = local.ansible_hostfile
+
+    server_count = local.server_count
+    region = local.region
+    server_name_prefix = local.server_name_prefix
+    root_domain_name = local.root_domain_name
+    hostname = "${var.gitlab_subdomain}.${local.root_domain_name}"
+}
+
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "cron" {
     source = "../../modules/cron"
-    depends_on = [ module.cloud ]
+    depends_on = [
+        module.cloud,
+        module.ansible,
+        module.hostname,
+    ]
     ansible_hostfile = local.ansible_hostfile
 
     admin_servers = local.admin_servers
@@ -49,8 +70,9 @@ module "provision" {
     source = "../../modules/provision"
     depends_on = [
         module.cloud,
+        module.ansible,
+        module.hostname,
         module.cron,
-        module.ansible
     ]
     ansible_hostfile = local.ansible_hostfile
 
@@ -82,6 +104,7 @@ module "gpg" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
     ]
@@ -106,6 +129,7 @@ module "clusterkv" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg
@@ -127,6 +151,7 @@ module "gitlab" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -161,6 +186,7 @@ module "nginx" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -185,6 +211,7 @@ module "clusterdb" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -215,6 +242,7 @@ module "docker" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -241,6 +269,7 @@ resource "null_resource" "gpg_remove_key" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -269,6 +298,7 @@ module "letsencrypt" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -298,6 +328,7 @@ module "cirunners" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -355,6 +386,7 @@ module "kubernetes" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -389,6 +421,7 @@ resource "null_resource" "configure_smtp" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -433,6 +466,7 @@ resource "null_resource" "enable_autoupgrade" {
     depends_on = [
         module.cloud,
         module.ansible,
+        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -545,15 +579,34 @@ locals {
 locals {
     ##! local.config is a wrapper to pass into module.cloud in vars.tf
     config = {
-        root_domain_name = local.root_domain_name
-        gitlab_subdomain = var.gitlab_subdomain
-        additional_domains = local.additional_domains
-        additional_ssl = var.additional_ssl
+        ## Machine/Misc
+        servers = var.servers
+        region = local.region
         server_name_prefix = local.server_name_prefix
         active_env_provider = var.active_env_provider
+        local_ssh_key_file = var.local_ssh_key_file
+        app_definitions = var.app_definitions
+        packer_config = var.packer_config
 
-        region = local.region
+        ## DNS
+        root_domain_name = local.root_domain_name
+        additional_domains = local.additional_domains
+        additional_ssl = var.additional_ssl
+        admin_arecord_aliases = var.admin_arecord_aliases
+        db_arecord_aliases = var.db_arecord_aliases
+        leader_arecord_aliases = var.leader_arecord_aliases
+        offsite_arecord_aliases = var.offsite_arecord_aliases
+        misc_cnames = concat([], local.misc_cnames)
+        placeholder_reusable_delegationset_id = var.placeholder_reusable_delegationset_id
 
+        ## Networking/VPC
+        stun_port = var.stun_port
+        docker_machine_ip = var.docker_machine_ip
+        cidr_block = local.cidr_block
+        app_ips = var.app_ips
+        station_ips = var.station_ips
+
+        ## Credentials/Cloud
         do_token = var.do_token
         do_region = var.do_region
         do_ssh_fingerprint = var.do_ssh_fingerprint
@@ -567,29 +620,6 @@ locals {
         aws_region = var.aws_region
         aws_bot_access_key = var.aws_bot_access_key
         aws_bot_secret_key = var.aws_bot_secret_key
-
-        local_ssh_key_file = var.local_ssh_key_file
-
-        servers = var.servers
-
-        stun_port = var.stun_port
-        docker_machine_ip = var.docker_machine_ip
-
-        admin_arecord_aliases = var.admin_arecord_aliases
-        db_arecord_aliases = var.db_arecord_aliases
-        leader_arecord_aliases = var.leader_arecord_aliases
-        offsite_arecord_aliases = var.offsite_arecord_aliases
-        app_definitions = var.app_definitions
-
-        cidr_block = local.cidr_block
-        app_ips = var.app_ips
-        station_ips = var.station_ips
-
-        packer_config = var.packer_config
-
-        placeholder_reusable_delegationset_id = var.placeholder_reusable_delegationset_id
-
-        misc_cnames = concat([], local.misc_cnames)
     }
 }
 

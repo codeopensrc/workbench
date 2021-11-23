@@ -175,17 +175,3 @@ module "consul" {
     public_ip = digitalocean_droplet.main.ipv4_address
     private_ip = digitalocean_droplet.main.ipv4_address_private
 }
-
-module "hostname" {
-    source = "../../hostname"
-    depends_on = [module.init, module.consul]
-
-    region = var.config.region
-    server_name_prefix = var.config.server_name_prefix
-    root_domain_name = var.config.root_domain_name
-    hostname = "${var.config.gitlab_subdomain}.${var.config.root_domain_name}"
-
-    name = digitalocean_droplet.main.name
-    public_ip = digitalocean_droplet.main.ipv4_address
-    private_ip = digitalocean_droplet.main.ipv4_address_private
-}

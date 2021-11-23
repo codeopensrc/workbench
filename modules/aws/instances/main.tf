@@ -223,17 +223,3 @@ module "consul" {
     public_ip = aws_instance.main.public_ip
     private_ip = aws_instance.main.private_ip
 }
-
-module "hostname" {
-    source = "../../hostname"
-    depends_on = [module.init, module.consul]
-
-    region = var.config.region
-    server_name_prefix = var.config.server_name_prefix
-    root_domain_name = var.config.root_domain_name
-    hostname = "${var.config.gitlab_subdomain}.${var.config.root_domain_name}"
-
-    name = aws_instance.main.tags.Name
-    public_ip = aws_instance.main.public_ip
-    private_ip = aws_instance.main.private_ip
-}
