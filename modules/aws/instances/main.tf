@@ -81,6 +81,7 @@ data "aws_ami" "new" {
     }
 }
 
+## Purely to display if an image will be built or not
 resource "null_resource" "image_status" {
     count = length(data.aws_ami_ids.latest.ids) >= 1 ? 0 : 1
     triggers = { needs_packer_build = length(data.aws_ami_ids.latest.ids) >= 1 ? false : true }

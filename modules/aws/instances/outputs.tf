@@ -16,6 +16,7 @@ resource "time_static" "creation_time" {}
 
 output "ansible_host" {
     value = {
+        machine_id = aws_instance.main.id
         name = aws_instance.main.tags.Name
         roles = var.servers.roles
         ip = aws_instance.main.public_ip

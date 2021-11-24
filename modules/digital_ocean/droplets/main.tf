@@ -66,6 +66,7 @@ data "digitalocean_images" "new" {
     }
 }
 
+## Purely to display if an image will be built or not
 resource "null_resource" "image_status" {
     count = length(data.digitalocean_images.latest.images) >= 1 ? 0 : 1
     triggers = { needs_packer_build = length(data.digitalocean_images.latest.images) >= 1 ? false : true }

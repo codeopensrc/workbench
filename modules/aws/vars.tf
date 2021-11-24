@@ -5,24 +5,6 @@ variable "stun_protos" { default = ["tcp", "udp"] }
 
 ## input/config
 locals {
-    is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
-    ## Allows db with lead
-    is_only_leader_count = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
-    ])))
-    is_only_db_count = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "db") && length(SERVER.roles) == 1
-    ])))
-    is_only_build_count = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "build") && length(SERVER.roles) == 1
-    ])))
-
     lead_servers = sum(concat([0], tolist([
         for SERVER in var.config.servers:
         SERVER.count
@@ -84,11 +66,6 @@ locals {
 
 ## output/aggregation
 locals {
-    admin_private_ips = data.aws_instances.admin.private_ips[*]
-    lead_private_ips = data.aws_instances.lead.private_ips[*]
-    db_private_ips = data.aws_instances.db.private_ips[*]
-    build_private_ips = data.aws_instances.build.private_ips[*]
-
     admin_public_ips = flatten([
         for host in local.sorted_hosts: host.ip
         if contains(host.roles, "admin")
@@ -106,40 +83,34 @@ locals {
         if contains(host.roles, "build")
     ])
 
-    admin_names = flatten(module.admin[*].tags.Name)
-    lead_names = flatten([
-        for mod in flatten([module.admin[*], module.lead[*]]):
-        mod.tags.Name  
-        if mod.tags.Lead == "true"
+    admin_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "admin")
     ])
-    db_names = flatten([
-        for mod in flatten([module.admin[*], module.db[*]]):
-        mod.tags.Name  
-        if mod.tags.DB == "true"
+    lead_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "lead")
     ])
-    build_names = flatten([
-        for mod in flatten([module.admin[*], module.build[*]]):
-        mod.tags.Name  
-        if mod.tags.Build == "true"
+    db_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "db")
     ])
-
-    admin_server_ids = [for v in module.admin : v.id]
-    lead_server_ids = [for v in module.lead : v.id]
-    db_server_ids = [for v in module.db : v.id]
-    build_server_ids = [for v in module.build : v.id]
+    build_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "build")
+    ])
+    all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
 
     admin_server_instances = [for v in module.admin : v.instance]
     lead_server_instances = [for v in module.lead : v.instance]
     db_server_instances = [for v in module.db : v.instance]
     build_server_instances = [for v in module.build : v.instance]
+    all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
 
     admin_ansible_hosts = [for v in module.admin : v.ansible_host]
     lead_ansible_hosts = [for v in module.lead : v.ansible_host]
     db_ansible_hosts = [for v in module.db : v.ansible_host]
     build_ansible_hosts = [for v in module.build : v.ansible_host]
-
-    all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
-    all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
     all_ansible_hosts = concat(local.admin_ansible_hosts, local.lead_ansible_hosts, local.db_ansible_hosts, local.build_ansible_hosts)
 }
 

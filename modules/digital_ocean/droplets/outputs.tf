@@ -17,6 +17,7 @@ resource "time_static" "creation_time" {}
 
 output "ansible_host" {
     value = {
+        machine_id = digitalocean_droplet.main.id
         name = digitalocean_droplet.main.name
         roles = var.servers.roles
         ip = digitalocean_droplet.main.ipv4_address

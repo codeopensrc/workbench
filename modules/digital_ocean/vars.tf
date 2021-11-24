@@ -5,24 +5,6 @@ variable "stun_protos" { default = ["tcp", "udp"] }
 
 ## input/config
 locals {
-    is_not_admin_count = sum([local.is_only_leader_count, local.is_only_db_count, local.is_only_build_count])
-    ## Allows db with lead
-    is_only_leader_count = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "lead") && !contains(SERVER.roles, "admin")
-    ])))
-    is_only_db_count = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "db") && length(SERVER.roles) == 1
-    ])))
-    is_only_build_count = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "build") && length(SERVER.roles) == 1
-    ])))
-
     lead_servers = sum(concat([0], tolist([
         for SERVER in var.config.servers:
         SERVER.count
@@ -85,11 +67,6 @@ locals {
 
 ## output/aggregation
 locals {
-    admin_private_ips = data.digitalocean_droplets.admin.droplets[*].ipv4_address_private
-    lead_private_ips = data.digitalocean_droplets.lead.droplets[*].ipv4_address_private
-    db_private_ips = data.digitalocean_droplets.db.droplets[*].ipv4_address_private
-    build_private_ips = data.digitalocean_droplets.build.droplets[*].ipv4_address_private
-
     admin_public_ips = flatten([
         for host in local.sorted_hosts: host.ip
         if contains(host.roles, "admin")
@@ -107,28 +84,35 @@ locals {
         if contains(host.roles, "build")
     ])
 
-    admin_names = data.digitalocean_droplets.admin.droplets[*].name
-    lead_names = data.digitalocean_droplets.lead.droplets[*].name
-    db_names = data.digitalocean_droplets.db.droplets[*].name
-    build_names = data.digitalocean_droplets.build.droplets[*].name
 
-    admin_server_ids = [for v in module.admin : v.id]
-    lead_server_ids = [for v in module.lead : v.id]
-    db_server_ids = [for v in module.db : v.id]
-    build_server_ids = [for v in module.build : v.id]
+    admin_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "admin")
+    ])
+    lead_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "lead")
+    ])
+    db_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "db")
+    ])
+    build_server_ids = flatten([
+        for host in local.sorted_hosts: host.machine_id
+        if contains(host.roles, "build")
+    ])
+    all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
 
     admin_server_instances = [for v in module.admin : v.instance]
     lead_server_instances = [for v in module.lead : v.instance]
     db_server_instances = [for v in module.db : v.instance]
     build_server_instances = [for v in module.build : v.instance]
+    all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
 
     admin_ansible_hosts = [for v in module.admin : v.ansible_host]
     lead_ansible_hosts = [for v in module.lead : v.ansible_host]
     db_ansible_hosts = [for v in module.db : v.ansible_host]
     build_ansible_hosts = [for v in module.build : v.ansible_host]
-
-    all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
-    all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
     all_ansible_hosts = concat(local.admin_ansible_hosts, local.lead_ansible_hosts, local.db_ansible_hosts, local.build_ansible_hosts)
 }
 

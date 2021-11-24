@@ -13,7 +13,7 @@ resource "digitalocean_vpc" "terraform_vpc" {
 resource "digitalocean_firewall" "db" {
     name = "${local.vpc_name}-db"
 
-    droplet_ids = data.digitalocean_droplets.db.droplets[*].id
+    droplet_ids = local.db_server_ids
 
     # description = "ssh"
     inbound_rule {
@@ -53,7 +53,7 @@ resource "digitalocean_firewall" "db" {
 resource "digitalocean_firewall" "app" {
     name = "${local.vpc_name}-app"
 
-    droplet_ids = data.digitalocean_droplets.lead.droplets[*].id
+    droplet_ids = local.lead_server_ids
 
     # description = "ssh"
     inbound_rule {
@@ -165,7 +165,7 @@ resource "digitalocean_firewall" "app" {
 resource "digitalocean_firewall" "admin" {
     name = "${local.vpc_name}-admin"
 
-    droplet_ids = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[*].id : data.digitalocean_droplets.lead.droplets[*].id
+    droplet_ids = local.admin_servers > 0 ? local.admin_server_ids : local.lead_server_ids
 
     # description = "ssh"
     inbound_rule {
@@ -232,7 +232,7 @@ resource "digitalocean_firewall" "admin" {
 resource "digitalocean_firewall" "default" {
     name = "${local.vpc_name}-default"
 
-    droplet_ids = concat(data.digitalocean_droplets.admin.droplets[*].id, data.digitalocean_droplets.lead.droplets[*].id, data.digitalocean_droplets.db.droplets[*].id, data.digitalocean_droplets.build.droplets[*].id)
+    droplet_ids = local.all_server_ids
 
     # description = "ssh"
     inbound_rule {
@@ -355,7 +355,7 @@ resource "digitalocean_firewall" "default" {
 resource "digitalocean_firewall" "ext_db" {
     name = "${local.vpc_name}-ext-db"
 
-    droplet_ids = data.digitalocean_droplets.db.droplets[*].id
+    droplet_ids = local.db_server_ids
 
     # description = "postgresql"
     inbound_rule {
@@ -395,7 +395,7 @@ resource "digitalocean_firewall" "ext_db" {
 resource "digitalocean_firewall" "ext_remote" {
     name = "${local.vpc_name}-ext-remote"
 
-    droplet_ids = concat(data.digitalocean_droplets.admin.droplets[*].id, data.digitalocean_droplets.lead.droplets[*].id, data.digitalocean_droplets.db.droplets[*].id, data.digitalocean_droplets.build.droplets[*].id)
+    droplet_ids = local.all_server_ids
 
     # description = "All Ports"
     inbound_rule {
