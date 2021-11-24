@@ -1,0 +1,24 @@
+{
+    "bootstrap": true,
+    "ui_config": {
+        "enabled": true
+    },
+    "datacenter": "{{ region }}",
+    "bind_addr": "{{ private_ip }}",
+    "client_addr": "0.0.0.0",
+    "data_dir": "/tmp/consul",
+    "log_level": "INFO",
+    "node_name": "{{ machine_name }}",
+    "server": true,
+    "translate_wan_addrs": true,
+    "advertise_addr_wan": "{{ private_ip }}",
+    "advertise_addr": "{{ private_ip }}",
+    "enable_local_script_checks": true,
+    "reconnect_timeout": "12h",
+    "autopilot": {
+        "cleanup_dead_servers": true,
+        "last_contact_threshold": "5s",
+        "max_trailing_logs": 250,
+        "server_stabilization_time": "10s"
+    }
+}

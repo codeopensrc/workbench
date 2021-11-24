@@ -20,6 +20,7 @@ variable "import_gitlab_version" { default = "" }
 variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "install_unity3d" { default = false }
 
+## NOTE: Kubernetes admin requires 2 cores and 2 GB of ram
 variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }## kubernetes and/or docker_swarm
 
 ########## SOFTWARE VERSIONS ##########

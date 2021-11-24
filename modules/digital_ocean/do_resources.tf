@@ -28,12 +28,6 @@ module "lead" {
     image_size = "s-1vcpu-1gb"
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
-
-    admin_ip_public = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : ""
-    consul_lan_leader_ip = (local.admin_servers > 0
-        ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private
-        : (each.value.ind == 0 ? "" : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private)
-    )
 }
 module "db" {
     source = "./droplets"
@@ -49,9 +43,6 @@ module "db" {
     image_size = "s-1vcpu-1gb"
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
-
-    admin_ip_public = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : ""
-    consul_lan_leader_ip = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private
 }
 module "build" {
     source = "./droplets"
@@ -66,9 +57,6 @@ module "build" {
     image_size = "s-1vcpu-1gb"
     tags = local.do_small_tags
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
-
-    admin_ip_public = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address : ""
-    consul_lan_leader_ip = local.admin_servers > 0 ? data.digitalocean_droplets.admin.droplets[0].ipv4_address_private : data.digitalocean_droplets.lead.droplets[0].ipv4_address_private
 }
 
 ### TODO: According to

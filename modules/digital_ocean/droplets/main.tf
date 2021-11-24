@@ -113,6 +113,7 @@ resource "digitalocean_droplet" "main" {
         inline = [
             <<-EOF
                 consul leave;
+                systemctl stop consul.service;
                 if [ "${length( regexall("build", join(",", self.tags)) ) > 0}" = "true" ]; then
                     chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
                     bash /home/gitlab-runner/rmscripts/rmrunners.sh;
@@ -144,19 +145,4 @@ resource "digitalocean_droplet" "main" {
         EOF
         on_failure = continue
     }
-}
-
-
-module "consul" {
-    source = "../../consul"
-
-    role = var.servers.roles[0]
-    region = var.config.region
-    datacenter_has_admin = var.admin_ip_public != "" || var.consul_lan_leader_ip != "" ? true : false
-    consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : digitalocean_droplet.main.ipv4_address_private
-    #consul_wan_leader_ip = var.consul_wan_leader_ip
-
-    name = digitalocean_droplet.main.name
-    public_ip = digitalocean_droplet.main.ipv4_address
-    private_ip = digitalocean_droplet.main.ipv4_address_private
 }

@@ -30,12 +30,6 @@ module "lead" {
     config = var.config
     image_size = "t3a.micro"
     vpc = local.vpc
-
-    admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
-    consul_lan_leader_ip = (local.admin_servers > 0
-        ? data.aws_instances.admin.private_ips[0]
-        : (each.value.ind == 0 ? "" : data.aws_instances.lead.private_ips[0])
-    )
 }
 module "db" {
     source = "./instances"
@@ -49,9 +43,6 @@ module "db" {
     config = var.config
     image_size = "t3a.micro"
     vpc = local.vpc
-
-    admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
-    consul_lan_leader_ip = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0]: data.aws_instances.lead.private_ips[0]
 }
 module "build" {
     source = "./instances"
@@ -64,9 +55,6 @@ module "build" {
     config = var.config
     image_size = "t3a.micro"
     vpc = local.vpc
-
-    admin_ip_public = local.admin_servers > 0 ? data.aws_instances.admin.public_ips[0] : ""
-    consul_lan_leader_ip = local.admin_servers > 0 ? data.aws_instances.admin.private_ips[0]: data.aws_instances.lead.private_ips[0]
 }
 
 ### TODO: According to

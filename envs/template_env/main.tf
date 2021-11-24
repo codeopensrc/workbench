@@ -40,24 +40,21 @@ module "init" {
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-#module "consul" {
-#    source = "../../modules/consul"
-#    depends_on = [
-#        module.cloud,
-#        module.ansible,
-#        module.init,
-#    ]
-#
-#    role = var.servers.roles[0]
-#    region = var.config.region
-#    datacenter_has_admin = var.admin_ip_public != "" || var.consul_lan_leader_ip != "" ? true : false
-#    consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : digitalocean_droplet.main.ipv4_address_private
-#    #consul_wan_leader_ip = var.consul_wan_leader_ip
-#
-#    name = digitalocean_droplet.main.name
-#    public_ip = digitalocean_droplet.main.ipv4_address
-#    private_ip = digitalocean_droplet.main.ipv4_address_private
-#}
+module "consul" {
+    source = "../../modules/consul"
+    depends_on = [
+        module.cloud,
+        module.ansible,
+        module.init,
+    ]
+    ansible_hostfile = local.ansible_hostfile
+
+    region = local.region
+    server_count = local.server_count
+    ## Deletes /tmp/consul datadir
+    ## Only use for testing/recovering from severely broken consul cluster config
+    force_consul_rebootstrap = false
+}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
@@ -67,7 +64,7 @@ module "hostname" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
     ]
     ansible_hostfile = local.ansible_hostfile
 
@@ -86,7 +83,7 @@ module "cron" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
     ]
     ansible_hostfile = local.ansible_hostfile
@@ -116,7 +113,7 @@ module "provision" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
     ]
@@ -151,7 +148,7 @@ module "gpg" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -178,7 +175,7 @@ module "clusterkv" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -202,7 +199,7 @@ module "gitlab" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -239,7 +236,7 @@ module "nginx" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -266,7 +263,7 @@ module "clusterdb" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -299,7 +296,7 @@ module "docker" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -328,7 +325,7 @@ resource "null_resource" "gpg_remove_key" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -359,7 +356,7 @@ module "letsencrypt" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -391,7 +388,7 @@ module "cirunners" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -451,7 +448,7 @@ module "kubernetes" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -488,7 +485,7 @@ resource "null_resource" "configure_smtp" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -535,7 +532,7 @@ resource "null_resource" "enable_autoupgrade" {
         module.cloud,
         module.ansible,
         module.init,
-        #module.consul,
+        module.consul,
         module.hostname,
         module.cron,
         module.provision,
@@ -592,28 +589,21 @@ locals {
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
     runners_per_machine = local.lead_servers + local.build_servers == 1 ? 4 : local.num_runners_per_machine
 
-    server_count = sum(tolist([
-        for SERVER in var.servers:
-        SERVER.count
-    ]))
+    server_count = sum(tolist([ for SERVER in var.servers: SERVER.count ]))
     admin_servers = sum(concat([0], tolist([
-        for SERVER in var.servers:
-        SERVER.count
+        for SERVER in var.servers: SERVER.count
         if contains(SERVER.roles, "admin")
     ])))
     lead_servers = sum(concat([0], tolist([
-        for SERVER in var.servers:
-        SERVER.count
+        for SERVER in var.servers: SERVER.count
         if contains(SERVER.roles, "lead")
     ])))
     db_servers = sum(concat([0], tolist([
-        for SERVER in var.servers:
-        SERVER.count
+        for SERVER in var.servers: SERVER.count
         if contains(SERVER.roles, "db")
     ])))
     build_servers = sum(concat([0], tolist([
-        for SERVER in var.servers:
-        SERVER.count
+        for SERVER in var.servers: SERVER.count
         if contains(SERVER.roles, "build")
     ])))
 

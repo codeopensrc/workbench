@@ -1,0 +1,110 @@
+# TODO: Review if if joining the wan is enough or do we need to bootstrap in each dc
+---
+- name: PROVISION ADMIN CONSUL FILES
+  hosts: admin
+  remote_user: root
+  vars:
+    region: "{{ region }}"
+  tasks:
+    - name: ensure consul dir
+      file:
+        path: /etc/consul.d
+        state: directory
+
+    # Obligitory note - will become something to think about once using AZs, DCs, and multiple clusters
+    #NOTE: bootstrap_expect should be at most 1 per DATACENTER OR BAD STUFF HAPPENS
+    - name: provision consul file
+      template:
+        src: ansiblefiles/admin.json
+        dest: "/etc/consul.d/consul.json"
+
+##NOTE: Some wan directives for later
+# "advertise_addr_wan": "${element(var.consul_lead_private_ipes, count.index)}",
+# "advertise_addr": "${element(var.consul_lead_private_ipes, count.index)}",
+- name: PROVISION LEAD CONSUL FILES
+  hosts: "{{ groups.lead | difference(groups.admin) }}"
+  remote_user: root
+  vars:
+    region: "{{ region }}"
+    cluster_leader_hostname: "{{ (groups.admin + groups.lead) | first }}"
+    consul_lan_leader_ip: "{{ hostvars[cluster_leader_hostname].private_ip }}"
+    #TODO: Will most likely be a group in ansible inventoryfile
+    consul_wan_leader_ip: ""
+  tasks:
+    - name: ensure consul dir
+      file:
+        path: /etc/consul.d
+        state: directory
+
+    ## Only issue I feel like is if we've previously bootstrapped from another server
+    ##  and swap the first server and indicate bootstrapping:true on the next, will cause issues
+    ## We cant check consul kv like other systems cause this IS the kv system
+    ## Probably have to learn effective use of facts instead of using them as temp vars
+    - name: provision consul file
+      template:
+        src: ansiblefiles/lead.json
+        dest: "/etc/consul.d/consul.json"
+
+
+- name: PROVISION DB+BUILD CONSUL FILES
+  hosts: "{{ (groups.db + groups.build) | difference(groups.admin + groups.lead) }}"
+  remote_user: root
+  vars:
+    region: "{{ region }}"
+    cluster_leader_hostname: "{{ (groups.admin + groups.lead) | first }}"
+    consul_lan_leader_ip: "{{ hostvars[cluster_leader_hostname].private_ip }}"
+  tasks:
+    - name: ensure consul dir
+      file:
+        path: /etc/consul.d
+        state: directory
+
+    - name: provision consul file
+      template:
+        src: ansiblefiles/db_or_build.json
+        dest: "/etc/consul.d/consul.json"
+
+        
+- name: START CONSUL SERVICE
+  hosts: all
+  remote_user: root
+  vars:
+    force_rebootstrap: "{{ force_rebootstrap | bool }}"
+    cluster_leader_hostname: "{{ (groups.admin + groups.lead) | first }}"
+    consul_lan_leader_ip: "{{ hostvars[cluster_leader_hostname].private_ip }}"
+  tasks:
+    - name: make consul conf dir
+      file:
+        path: /etc/consul.d/conf.d
+        state: directory
+
+    - name: add consul service file
+      copy:
+        dest: "/etc/systemd/system/consul.service"
+        content: |
+            [Service]
+            ExecStart = /usr/local/bin/consul agent --config-file=/etc/consul.d/consul.json --config-dir=/etc/consul.d/conf.d
+            ExecStop = /usr/local/bin/consul leave
+            Restart = always
+
+            [Install]
+            WantedBy = multi-user.target
+
+    ## Should only be used when the cluster in super unstable state 
+    ##  and starting from scratch is just easier, say for testing
+    - name: wipe consul cluster
+      command: "{{ item }}"
+      with_items:
+        - systemctl stop consul.service
+        - rm -rf /tmp/consul
+      when: force_rebootstrap | bool == true
+
+    ##TODO: Ansible way dealing with enabling services
+    - name: start service
+      command: "{{ item }}"
+      with_items:
+        - systemctl start consul.service
+        - systemctl enable consul.service
+        - systemctl daemon-reload
+        - consul reload
+        - consul join {{ consul_lan_leader_ip }}

@@ -159,6 +159,7 @@ resource "aws_instance" "main" {
         inline = [
             <<-EOF
                 consul leave;
+                systemctl stop consul.service;
                 if [ "${length( regexall("build", self.tags.Roles) ) > 0}" = "true" ]; then
                     chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
                     bash /home/gitlab-runner/rmscripts/rmrunners.sh;
@@ -191,19 +192,4 @@ resource "aws_instance" "main" {
         EOF
         on_failure = continue
     }
-}
-
-
-module "consul" {
-    source = "../../consul"
-
-    role = var.servers.roles[0]
-    region = var.config.region
-    datacenter_has_admin = var.admin_ip_public != "" ? true : false
-    consul_lan_leader_ip = var.consul_lan_leader_ip != "" ? var.consul_lan_leader_ip : aws_instance.main.private_ip
-    #consul_wan_leader_ip = var.consul_wan_leader_ip
-
-    name = aws_instance.main.tags.Name
-    public_ip = aws_instance.main.public_ip
-    private_ip = aws_instance.main.private_ip
 }
