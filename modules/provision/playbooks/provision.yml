@@ -40,7 +40,7 @@
     ## Takes about 2.5 minutes atm
     ##https://docs.ansible.com/ansible/latest/collections/ansible/builtin/copy_module.html#notes
     - name: reprovision scripts dir
-      copy:
+      synchronize:
         src: ../../packer/scripts/
         dest: /root/code/scripts
 
@@ -91,7 +91,8 @@
     promtail_version: "{{ promtail_version }}"
     consulexporter_version: "{{ consulexporter_version }}"
     loki_version: "{{ loki_version }}"
-    admin_private_ip: "{{ (groups.admin | length > 0) | ternary(hostvars[groups.admin[0]].private_ip, '') }}"
+    admin_ip: "{{ (groups.admin | length > 0) | ternary((groups.admin | first), '') }}"
+    admin_private_ip: "{{ (admin_ip != '') | ternary(hostvars[admin_ip].private_ip, '') }}"
   tasks:
     - name: end_play if no admin ip
       meta: end_play
