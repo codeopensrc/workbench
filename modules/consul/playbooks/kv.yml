@@ -1,5 +1,5 @@
 ---
-- name: Handle consul kv
+- name: HANDLE CONSUL KV
   hosts: "{{ (groups['admin'] | default([]) + groups['lead']) | first }}"
   remote_user: root
   gather_facts: no
@@ -7,7 +7,6 @@
     app: "{{ app_definitions }}"
     ssl: "{{ additional_ssl }}"
     root_domain_name: "{{ root_domain_name }}"
-    serverkey: "{{ serverkey }}"
     pg_password: "{{ pg_password }}"
     dev_pg_password: "{{ dev_pg_password }}"
   tasks:
@@ -29,6 +28,5 @@
     - name: write misc cluster kv
       shell: |
         consul kv put domainname {{ root_domain_name }}
-        consul kv put serverkey {{ serverkey }}
         consul kv put PG_PASSWORD {{ pg_password }}
         consul kv put DEV_PG_PASSWORD {{ dev_pg_password }}

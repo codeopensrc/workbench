@@ -74,6 +74,13 @@ module "consul" {
 
     region = local.region
     server_count = local.server_count
+
+    app_definitions = var.app_definitions
+    additional_ssl = var.additional_ssl
+    root_domain_name = local.root_domain_name
+    pg_password = var.pg_password
+    dev_pg_password = var.dev_pg_password
+
     ## Deletes /tmp/consul datadir
     ## Only use for testing/recovering from severely broken consul cluster config
     force_consul_rebootstrap = false
@@ -134,30 +141,6 @@ module "gpg" {
     bot_gpg_passphrase = var.bot_gpg_passphrase
 }
 
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "clusterkv" {
-    source = "../../modules/clusterkv"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg
-    ]
-
-    ansible_hostfile = local.ansible_hostfile
-
-    app_definitions = var.app_definitions
-    additional_ssl = var.additional_ssl
-
-    root_domain_name = local.root_domain_name
-    serverkey = var.serverkey
-    pg_password = var.pg_password
-    dev_pg_password = var.dev_pg_password
-}
-
 module "gitlab" {
     source = "../../modules/gitlab"
     depends_on = [
@@ -167,7 +150,6 @@ module "gitlab" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv
     ]
 
     ansible_hosts = local.ansible_hosts
@@ -202,7 +184,6 @@ module "nginx" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
     ]
     ansible_hosts = local.ansible_hosts
@@ -227,7 +208,6 @@ module "clusterdb" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
     ]
@@ -258,7 +238,6 @@ module "docker" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
         module.clusterdb,
@@ -285,7 +264,6 @@ resource "null_resource" "gpg_remove_key" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
         module.clusterdb,
@@ -314,7 +292,6 @@ module "letsencrypt" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
         module.clusterdb,
@@ -344,7 +321,6 @@ module "cirunners" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
         module.clusterdb,
@@ -403,7 +379,6 @@ module "kubernetes" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
         module.clusterdb,
@@ -438,7 +413,6 @@ resource "null_resource" "configure_smtp" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
         module.clusterdb,
@@ -483,7 +457,6 @@ resource "null_resource" "enable_autoupgrade" {
         module.consul,
         module.cron,
         module.gpg,
-        module.clusterkv,
         module.gitlab,
         module.nginx,
         module.clusterdb,

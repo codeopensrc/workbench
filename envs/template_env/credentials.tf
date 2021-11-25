@@ -28,9 +28,6 @@ variable "dev_pg_password" { default = "" }
 # Allow all port access to this workstation ip for this cluster
 variable "docker_machine_ip" { default = "" }
 
-# Random uuid in consul to use from a server/app/serivce to another for cluster communication
-variable "serverkey" { default = ""}
-
 variable "contact_email" { default = "your@email.com" }
 
 variable "use_gpg" { default = false }
