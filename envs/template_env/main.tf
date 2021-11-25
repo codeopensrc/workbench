@@ -41,6 +41,22 @@ module "init" {
 
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
+
+    known_hosts = var.known_hosts
+    deploy_key_location = var.deploy_key_location
+
+    nodeexporter_version = var.nodeexporter_version
+    promtail_version = var.promtail_version
+    consulexporter_version = var.consulexporter_version
+    loki_version = var.loki_version
+
+    pg_read_only_pw = var.pg_read_only_pw
+    postgres_version = var.postgres_version
+    postgres_port = var.postgres_port
+    mongo_version = var.mongo_version
+    mongo_port = var.mongo_port
+    redis_version = var.redis_version
+    redis_port = var.redis_port
 }
 
 ##NOTE: Uses ansible
@@ -94,39 +110,6 @@ module "cron" {
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "provision" {
-    source = "../../modules/provision"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-    ]
-    ansible_hostfile = local.ansible_hostfile
-
-    server_count = local.server_count
-
-    known_hosts = var.known_hosts
-    root_domain_name = local.root_domain_name
-    deploy_key_location = var.deploy_key_location
-
-    nodeexporter_version = var.nodeexporter_version
-    promtail_version = var.promtail_version
-    consulexporter_version = var.consulexporter_version
-    loki_version = var.loki_version
-
-    pg_read_only_pw = var.pg_read_only_pw
-    postgres_version = var.postgres_version
-    postgres_port = var.postgres_port
-    mongo_version = var.mongo_version
-    mongo_port = var.mongo_port
-    redis_version = var.redis_version
-    redis_port = var.redis_port
-}
-
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "gpg" {
     source = "../../modules/gpg"
     count = var.use_gpg ? 1 : 0
@@ -136,7 +119,6 @@ module "gpg" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
     ]
 
     ansible_hosts = local.ansible_hosts
@@ -162,7 +144,6 @@ module "clusterkv" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg
     ]
 
@@ -185,7 +166,6 @@ module "gitlab" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv
     ]
@@ -221,7 +201,6 @@ module "nginx" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -247,7 +226,6 @@ module "clusterdb" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -279,7 +257,6 @@ module "docker" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -307,7 +284,6 @@ resource "null_resource" "gpg_remove_key" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -337,7 +313,6 @@ module "letsencrypt" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -368,7 +343,6 @@ module "cirunners" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -428,7 +402,6 @@ module "kubernetes" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -464,7 +437,6 @@ resource "null_resource" "configure_smtp" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -510,7 +482,6 @@ resource "null_resource" "enable_autoupgrade" {
         module.init,
         module.consul,
         module.cron,
-        module.provision,
         module.gpg,
         module.clusterkv,
         module.gitlab,
@@ -531,7 +502,7 @@ resource "null_resource" "enable_autoupgrade" {
     }
 
     provisioner "local-exec" {
-        command = "ansible-playbook ../../modules/provision/playbooks/cli.yml -i ${local.ansible_hostfile}"
+        command = "ansible-playbook ../../modules/init/playbooks/end.yml -i ${local.ansible_hostfile}"
     }
 
     ## Copy old ansible file to preserve hosts before their destruction

@@ -1,5 +1,5 @@
 ---
-- name: Provision files
+- name: PROVISION FILES
   hosts: all
   remote_user: root
   vars:
@@ -77,13 +77,9 @@
         dest: /etc/consul.d/conf.d/dns.json
         mode: '0755'
 
-    ##TODO Good choice for notify/hander
-    - name: reload consul
-      command: consul reload
 
 
-
-- name: Provision exporters
+- name: PROVISION EXPORTERS
   hosts: all
   remote_user: root
   vars:
@@ -167,6 +163,7 @@
         - sudo systemctl enable loki.service
       when: "'admin' in machine_name"
 
+    ##TODO: Without consul bootstrapped yet - will this error
     - name: start consulexporter
       command: "{{ item }}"
       with_items:
