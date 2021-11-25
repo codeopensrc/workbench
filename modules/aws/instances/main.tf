@@ -159,8 +159,6 @@ resource "aws_instance" "main" {
         when = destroy
         inline = [
             <<-EOF
-                consul leave;
-                systemctl stop consul.service;
                 if [ "${length( regexall("build", self.tags.Roles) ) > 0}" = "true" ]; then
                     chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
                     bash /home/gitlab-runner/rmscripts/rmrunners.sh;

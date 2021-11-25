@@ -18,9 +18,8 @@ locals {
     all_names = [for h in var.ansible_hosts: h.name]
 }
 
-resource "null_resource" "kubernetes_rm_nodes" {
+resource "null_resource" "kubernetes" {
     count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
-
     triggers = {
         num_nodes = length(local.all_names)
     }
@@ -34,16 +33,6 @@ resource "null_resource" "kubernetes_rm_nodes" {
             fi
         EOF
     }
-}
-
-resource "null_resource" "kubernetes" {
-    count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
-    depends_on = [null_resource.kubernetes_rm_nodes]
-
-    triggers = {
-        num_nodes = length(local.all_names)
-    }
-
     ##  digitaloceans private iface = eth1
     ##  aws private iface = ens5
     provisioner "local-exec" {

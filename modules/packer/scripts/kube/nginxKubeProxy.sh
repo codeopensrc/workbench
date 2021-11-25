@@ -203,15 +203,15 @@ spec:
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              topologyKey: "kubernetes.io/hostname"
+          - podAffinityTerm:
               labelSelector:
                 matchExpressions:
                 - key: app
                   operator: In
                   values:
                   - $APPNAME
+              topologyKey: "kubernetes.io/hostname"
+            weight: 100
       containers:
       - name: $APPNAME
         image: $IMAGE:$TAG

@@ -113,8 +113,6 @@ resource "digitalocean_droplet" "main" {
         when = destroy
         inline = [
             <<-EOF
-                consul leave;
-                systemctl stop consul.service;
                 if [ "${length( regexall("build", join(",", self.tags)) ) > 0}" = "true" ]; then
                     chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
                     bash /home/gitlab-runner/rmscripts/rmrunners.sh;

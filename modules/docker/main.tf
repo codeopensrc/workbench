@@ -29,7 +29,7 @@ locals {
     ]
 }
 
-resource "null_resource" "swarm_rm_nodes" {
+resource "null_resource" "swarm" {
     count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
     triggers = {
         num_lead = var.lead_servers
@@ -43,14 +43,6 @@ resource "null_resource" "swarm_rm_nodes" {
             fi
         EOF
     }
-}
-
-resource "null_resource" "swarm" {
-    count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
-    depends_on = [null_resource.swarm_rm_nodes]
-    triggers = {
-        num_lead = var.lead_servers
-    }
     provisioner "local-exec" {
         command = "ansible-playbook ${path.module}/playbooks/swarm.yml -i ${var.ansible_hostfile} --extra-vars \"region=${var.region}\""
     }
@@ -59,7 +51,6 @@ resource "null_resource" "swarm" {
 resource "null_resource" "services" {
     count = contains(var.container_orchestrators, "docker_swarm") ? 1 : 0
     depends_on = [
-        null_resource.swarm_rm_nodes,
         null_resource.swarm,
     ]
     triggers = {

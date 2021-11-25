@@ -121,5 +121,9 @@
         - systemctl start consul.service
         - systemctl enable consul.service
         - systemctl daemon-reload
-        - consul reload
+
+    - name: join cluster
+      command: "{{ item }}"
+      with_items:
         - consul join {{ consul_lan_leader_ip }}
+        - consul reload

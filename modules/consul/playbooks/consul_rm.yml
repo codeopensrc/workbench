@@ -1,0 +1,45 @@
+---
+- name: LEAVE CONSUL CLUSTER
+  hosts: all
+  remote_user: root
+  vars:
+    current_ips: "{{ all_public_ips | from_json  }}"
+    old_ansible_ips: []
+    nodeips_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_ips: "{{ old_ansible_ips + [item] }}"
+      with_items: "{{ groups.lead + groups.db + groups.build  }}"
+    - set_fact:
+        nodeips_to_remove: "{{ nodeips_to_remove + [item] }}"
+      with_items: "{{ old_ansible_ips | difference(current_ips) }}"
+
+    - name: cluster leave
+      shell: "systemctl stop consul.service || echo"
+      when: ansible_default_ipv4.address in nodeips_to_remove
+
+
+- name: REMOVE CONSUL NODES
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  vars:
+    current_names: "{{ all_names | from_json  }}"
+    old_ansible_names: []
+    nodes_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_names: "{{ old_ansible_names + [hostvars[item].machine_name] }}"
+      with_items: "{{ groups.lead + groups.db + groups.build  }}"
+    - set_fact:
+        nodes_to_remove: "{{ nodes_to_remove + [item] }}"
+      with_items: "{{ old_ansible_names | difference(current_names) }}"
+
+    - name: missing
+      debug:
+        msg: "{{ item }}"
+      with_items: "{{ nodes_to_remove }}"
+
+    - name: force-leave nodes
+      shell: "consul force-leave -prune {{ item }}"
+      with_items: "{{ nodes_to_remove }}"
+      when: nodes_to_remove | length > 0

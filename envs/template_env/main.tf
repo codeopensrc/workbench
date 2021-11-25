@@ -47,7 +47,9 @@ module "consul" {
         module.ansible,
         module.init,
     ]
+    ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
+    predestroy_hostfile = local.predestroy_hostfile
 
     region = local.region
     server_count = local.server_count
