@@ -33,3 +33,34 @@
     - name: add do mc alias
       command: mc alias set spaces https://{{ do_spaces_region }}.digitaloceanspaces.com {{ do_spaces_access_key }} {{ do_spaces_secret_key }}
       when: do_spaces_access_key != ""
+
+
+- name: CHANGE HOSTNAME
+  hosts: all
+  remote_user: root
+  vars:
+    server_name_prefix: "{{ server_name_prefix }}"
+    region: "{{ region }}"
+    hostname: "{{ hostname }}"
+    root_domain_name: "{{ root_domain_name }}"
+  tasks:
+    - name: change hostname
+      command: sudo hostnamectl set-hostname {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}
+
+    - name: add hostname
+      lineinfile:
+        path: /etc/hosts
+        regexp: '.*{{ server_name_prefix }}-{{ region }}.*'
+        line: '127.0.1.1 {{ ("admin" in machine_name) | ternary(hostname, root_domain_name) }} {{ machine_name }}'
+
+    - name: add public_ip alias
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^{{ inventory_hostname }} {{ root_domain_name }} {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}'
+        line: '{{ inventory_hostname }} {{ root_domain_name }} {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}'
+
+    - name: add private_ip alias
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^{{ private_ip }} vpc.my_private_ip'
+        line: '{{ private_ip }} vpc.my_private_ip'

@@ -28,8 +28,13 @@ module "init" {
         module.ansible,
     ]
     ansible_hostfile = local.ansible_hostfile
-
     server_count = local.server_count
+
+    region = local.region
+    server_name_prefix = local.server_name_prefix
+    root_domain_name = local.root_domain_name
+    hostname = "${var.gitlab_subdomain}.${local.root_domain_name}"
+
     do_spaces_region = var.do_spaces_region
     do_spaces_access_key = var.do_spaces_access_key
     do_spaces_secret_key = var.do_spaces_secret_key
@@ -60,25 +65,6 @@ module "consul" {
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "hostname" {
-    source = "../../modules/hostname"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-    ]
-    ansible_hostfile = local.ansible_hostfile
-
-    server_count = local.server_count
-    region = local.region
-    server_name_prefix = local.server_name_prefix
-    root_domain_name = local.root_domain_name
-    hostname = "${var.gitlab_subdomain}.${local.root_domain_name}"
-}
-
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
 module "cron" {
     source = "../../modules/cron"
     depends_on = [
@@ -86,7 +72,6 @@ module "cron" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
     ]
     ansible_hostfile = local.ansible_hostfile
 
@@ -116,7 +101,6 @@ module "provision" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
     ]
     ansible_hostfile = local.ansible_hostfile
@@ -151,7 +135,6 @@ module "gpg" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
     ]
@@ -178,7 +161,6 @@ module "clusterkv" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg
@@ -202,7 +184,6 @@ module "gitlab" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -239,7 +220,6 @@ module "nginx" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -266,7 +246,6 @@ module "clusterdb" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -299,7 +278,6 @@ module "docker" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -328,7 +306,6 @@ resource "null_resource" "gpg_remove_key" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -359,7 +336,6 @@ module "letsencrypt" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -391,7 +367,6 @@ module "cirunners" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -452,7 +427,6 @@ module "kubernetes" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -489,7 +463,6 @@ resource "null_resource" "configure_smtp" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
@@ -536,7 +509,6 @@ resource "null_resource" "enable_autoupgrade" {
         module.ansible,
         module.init,
         module.consul,
-        module.hostname,
         module.cron,
         module.provision,
         module.gpg,
