@@ -50,7 +50,8 @@ resource "null_resource" "start" {
 ####   pre-determined  20/80 split etc. or part of slow rollout
 #### TODO: We already register a check/service with consul.. maybe have the app also
 ####   register its consul endpoints as well?
-resource "null_resource" "consul_kv" {
+resource "null_resource" "kv" {
+    depends_on = [ null_resource.start ]
     triggers = {
         num_apps = length(keys(var.app_definitions))
         additional_ssl = join(",", [
