@@ -1,0 +1,32 @@
+---
+- name: REMOVE RUNNERS
+  hosts: "{{ groups.lead + groups.build }}"
+  remote_user: root
+  vars:
+    current_ips: "{{ public_ips | from_json  }}"
+    old_ansible_ips: []
+    nodeips_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_ips: "{{ old_ansible_ips + [item] }}"
+      with_items: "{{ groups.lead + groups.build }}"
+    - set_fact:
+        nodeips_to_remove: "{{ nodeips_to_remove + [item] }}"
+      with_items: "{{ old_ansible_ips | difference(current_ips) }}"
+
+    - name: add self-deregister script
+      copy:
+        dest: "/home/gitlab-runner/rmscripts/rmrunners.sh"
+        content: |
+          #!/bin/bash
+          MACHINE_NAME={{ machine_name }}
+          RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$")
+          NAMES=( $(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$RUNNER_NAME" | jq -r ".msg") )
+          for NAME in "${NAMES[@]}"; do
+              sudo gitlab-runner unregister --name $NAME
+          done
+      when: ansible_default_ipv4.address in nodeips_to_remove
+
+    - name: remove runners
+      shell: "bash /home/gitlab-runner/rmscripts/rmrunners.sh"
+      when: ansible_default_ipv4.address in nodeips_to_remove

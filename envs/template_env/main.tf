@@ -405,6 +405,7 @@ module "cirunners" {
 
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
+    predestroy_hostfile = local.predestroy_hostfile
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
 

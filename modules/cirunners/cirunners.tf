@@ -1,5 +1,7 @@
 variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
+variable "predestroy_hostfile" {}
+
 variable "gitlab_runner_tokens" {}
 
 variable "lead_servers" {}
@@ -8,6 +10,12 @@ variable "build_servers" {}
 variable "runners_per_machine" {}
 variable "root_domain_name" {}
 
+locals {
+    public_ips = distinct([
+        for HOST in var.ansible_hosts: HOST.ip
+        if contains(HOST.roles, "lead") || contains(HOST.roles, "build")
+    ])
+}
 
 ### Older comments - revisit in future
 ##### NOTE: After obtaining the token we register the runner from the page
@@ -23,6 +31,14 @@ resource "null_resource" "provision" {
     triggers = {
         num_machines = sum([var.lead_servers + var.build_servers])
         num_runners = sum([var.lead_servers + var.build_servers]) * var.runners_per_machine
+    }
+    provisioner "local-exec" {
+        command = <<-EOF
+            if [ -f "${var.predestroy_hostfile}" ]; then
+                ansible-playbook ${path.module}/playbooks/cirunners_rm.yml -i ${var.predestroy_hostfile} \
+                    --extra-vars 'public_ips=${jsonencode(local.public_ips)}';
+            fi
+        EOF
     }
     provisioner "local-exec" {
         command = <<-EOF

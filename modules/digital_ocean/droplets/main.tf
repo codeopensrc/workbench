@@ -71,10 +71,9 @@ resource "null_resource" "image_status" {
     count = length(data.digitalocean_images.latest.images) >= 1 ? 0 : 1
     triggers = { needs_packer_build = length(data.digitalocean_images.latest.images) >= 1 ? false : true }
 }
-resource "random_uuid" "server" {}
 
 resource "digitalocean_droplet" "main" {
-    name     = "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(random_uuid.server.id, 0, 4)}"
+    name     = "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(uuid(), 0, 4)}"
     #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
     image = (var.servers.image != ""
         ? var.servers.image
@@ -85,7 +84,6 @@ resource "digitalocean_droplet" "main" {
     size     = var.servers.size["digital_ocean"]
     ssh_keys = [var.config.do_ssh_fingerprint]
     tags = compact(flatten([
-        "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(random_uuid.server.id, 0, 4)}",
         contains(var.servers.roles, "admin") ? "gitlab-${replace(var.config.root_domain_name, ".", "-")}" : "",
         var.servers.roles,
         var.tags
@@ -105,29 +103,6 @@ resource "digitalocean_droplet" "main" {
             type     = "ssh"
             user     = "root"
             private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
-    ##TODO: Will be replaced once runners handled via ansible
-    provisioner "remote-exec" {
-        when = destroy
-        inline = [
-            <<-EOF
-                if [ "${length( regexall("build", join(",", self.tags)) ) > 0}" = "true" ]; then
-                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
-                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
-                fi
-                if [ "${length( regexall("lead", join(",", self.tags)) ) > 0}" = "true" ]; then
-                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
-                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
-                fi
-            EOF
-        ]
-        on_failure = continue
-        connection {
-            host     = self.ipv4_address
-            type     = "ssh"
-            user     = "root"
         }
     }
 

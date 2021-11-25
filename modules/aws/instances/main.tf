@@ -86,7 +86,6 @@ resource "null_resource" "image_status" {
     count = length(data.aws_ami_ids.latest.ids) >= 1 ? 0 : 1
     triggers = { needs_packer_build = length(data.aws_ami_ids.latest.ids) >= 1 ? false : true }
 }
-resource "random_uuid" "server" {}
 
 ## We use to indirectly depend on vpc which is necesssary to destroy aws_instance
 resource "null_resource" "vpc_dependencies" {
@@ -114,7 +113,7 @@ resource "aws_instance" "main" {
     instance_type = var.servers.size["aws"]
 
     tags = {
-        Name = "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(random_uuid.server.id, 0, 4)}",
+        Name = "${var.config.server_name_prefix}-${var.config.region}-${var.servers.roles[0]}-${substr(uuid(), 0, 4)}",
         Domain = contains(var.servers.roles, "admin") ? "gitlab-${replace(var.config.root_domain_name, ".", "-")}" : "",
         Roles = join(",", var.servers.roles)
         Prefix = "${var.config.server_name_prefix}-${var.config.region}"
@@ -151,29 +150,6 @@ resource "aws_instance" "main" {
             type     = "ssh"
             user     = "ubuntu"
             private_key = file(var.config.local_ssh_key_file)
-        }
-    }
-
-    ##TODO: Will be replaced once runners handled via ansible
-    provisioner "remote-exec" {
-        when = destroy
-        inline = [
-            <<-EOF
-                if [ "${length( regexall("build", self.tags.Roles) ) > 0}" = "true" ]; then
-                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
-                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
-                fi
-                if [ "${length( regexall("lead", self.tags.Roles) ) > 0}" = "true" ]; then
-                    chmod +x /home/gitlab-runner/rmscripts/rmrunners.sh;
-                    bash /home/gitlab-runner/rmscripts/rmrunners.sh;
-                fi
-            EOF
-        ]
-        on_failure = continue
-        connection {
-            host     = self.public_ip
-            type     = "ssh"
-            user     = "root"
         }
     }
 

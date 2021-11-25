@@ -18,13 +18,11 @@ variable "app_definitions" {
 
 locals {
     lead_public_ips = [
-        for HOST in var.ansible_hosts:
-        HOST.ip
+        for HOST in var.ansible_hosts: HOST.ip
         if contains(HOST.roles, "lead")
     ]
     lead_names = [
-        for HOST in var.ansible_hosts:
-        HOST.name
+        for HOST in var.ansible_hosts: HOST.name
         if contains(HOST.roles, "lead")
     ]
 }
