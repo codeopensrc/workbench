@@ -10,6 +10,13 @@ variable "ansible_hosts" { default = "" }
 ## CREATE_SSL=True;
 ## if [ "$CREATE_SSL" = "true" ]; then
 
+## From ansible.cfg regarding caching facts:     NOTE: default is memory
+# If set to a persistent type (not 'memory', for example 'redis') fact values
+# from previous runs in Ansible will be stored.
+
+## Review adding custom facts in facts.d dir
+# https://docs.ansible.com/ansible/latest/user_guide/playbooks_vars_facts.html#adding-custom-facts
+
 ## NOTE: Not sure if we want/need to sort for trigger/servers group
 resource "null_resource" "ansible_hosts" {
     triggers = {

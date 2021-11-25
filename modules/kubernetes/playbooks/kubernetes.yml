@@ -1,3 +1,5 @@
+## NOTE: Ansible has a clustering module for kubernetes we can get to later
+# https://docs.ansible.com/ansible/2.9/modules/list_of_clustering_modules.html
 ---
 - name: Handle Kubernetes admin
   hosts: "{{ (groups.admin + groups.lead) | first }}"

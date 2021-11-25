@@ -1,5 +1,5 @@
 {
-    "bootstrap": {{ (cluster_leader_hostname == inventory_hostname) | ternary('true', 'false') }},
+    "bootstrap": {{ (bootstrap | bool == true) | ternary('true', 'false') }},
     "ui_config": {
         "enabled": {{ (cluster_leader_hostname == inventory_hostname) | ternary('true', 'false') }}
     },

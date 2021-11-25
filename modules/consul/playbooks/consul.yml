@@ -1,4 +1,13 @@
-# TODO: Review if if joining the wan is enough or do we need to bootstrap in each dc
+## NOTE: Ansible has a clustering module for consul we can get to later
+##  https://docs.ansible.com/ansible/2.9/modules/list_of_clustering_modules.html
+
+## NOTE: Relevant bootstrapping details:
+##  https://www.consul.io/docs/agent/options#_bootstrap
+##  https://www.consul.io/docs/install/bootstrapping
+## Its recommended to use bootstrap-expect over bootstrap - but bootstrap-expect=1 causes split-brain behaviour
+##  https://stackoverflow.com/a/34245527
+
+# TODO: Review if joining the wan is enough or do we need to bootstrap in each dc
 ---
 - name: PROVISION ADMIN CONSUL FILES
   hosts: admin
@@ -11,8 +20,6 @@
         path: /etc/consul.d
         state: directory
 
-    # Obligitory note - will become something to think about once using AZs, DCs, and multiple clusters
-    #NOTE: bootstrap_expect should be at most 1 per DATACENTER OR BAD STUFF HAPPENS
     - name: provision consul file
       template:
         src: ansiblefiles/admin.json
@@ -28,44 +35,26 @@
     region: "{{ region }}"
     cluster_leader_hostname: "{{ (groups.admin + groups.lead) | first }}"
     consul_lan_leader_ip: "{{ hostvars[cluster_leader_hostname].private_ip }}"
+    bootstrap: false
     #TODO: Will most likely be a group in ansible inventoryfile
     consul_wan_leader_ip: ""
   tasks:
-      ### My logic on what we could hopefully accomplish with ansible facts
-      #
-      #
-      #if not first then bootstrap=false
-      #check fact 'clustered' on first
-      #if 'clustered'=true then bootstrap=false
-      #
-      #if first and fact 'clustered' not set then bootstrap=true 
-      #    bootstrap on first
-      #    set fact 'clustered'=true on ALL nodes
-      #
-      #
-      #Now below will happen on all following old nodes
-      # if decomissioning/swapping and 2nd node becomes first
-      # check fact 'clustered'=true on NEW first
-      # if 'clustered'=true then bootstrap=false
-      # 'clustered'=true so bootstrap=false
-      #
-      #
-      #Below will happen on all following new nodes
-      # if not first then bootstrap=false
-      # not first so bootstrap=false
-      # ez
-      #
-      #now no more servers will attempt to bootstrap
+    - name: check consul cluster
+      block:
+        - name: check cluster started
+          command: consul members
+          changed_when: false
+      rescue:
+        - name: set config to bootstrap
+          set_fact:
+            bootstrap: true
+      when: inventory_hostname == cluster_leader_hostname
 
     - name: ensure consul dir
       file:
         path: /etc/consul.d
         state: directory
 
-    ## Only issue I feel like is if we've previously bootstrapped from another server
-    ##  and swap the first server and indicate bootstrapping:true on the next, will cause issues
-    ## We cant check consul kv like other systems cause this IS the kv system
-    ## Probably have to learn effective use of facts instead of using them as temp vars
     - name: provision consul file
       template:
         src: ansiblefiles/lead.json
