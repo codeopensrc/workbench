@@ -1,6 +1,6 @@
 ---
 - name: REMOVE RUNNERS
-  hosts: "{{ groups.lead + groups.build }}"
+  hosts: "{{ (groups.admin | length > 0) | ternary(groups.lead+groups.build, []) }}"
   remote_user: root
   vars:
     current_ips: "{{ public_ips | from_json  }}"

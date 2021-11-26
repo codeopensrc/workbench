@@ -13,7 +13,10 @@ resource "digitalocean_vpc" "terraform_vpc" {
 resource "digitalocean_firewall" "db" {
     name = "${local.vpc_name}-db"
 
-    droplet_ids = local.db_server_ids
+    droplet_ids  = [
+        for h in digitalocean_droplet.main: h.id
+        if contains(h.tags, "db")
+    ]
 
     # description = "ssh"
     inbound_rule {
@@ -53,7 +56,10 @@ resource "digitalocean_firewall" "db" {
 resource "digitalocean_firewall" "app" {
     name = "${local.vpc_name}-app"
 
-    droplet_ids = local.lead_server_ids
+    droplet_ids  = [
+        for h in digitalocean_droplet.main: h.id
+        if contains(h.tags, "lead")
+    ]
 
     # description = "ssh"
     inbound_rule {
@@ -165,7 +171,10 @@ resource "digitalocean_firewall" "app" {
 resource "digitalocean_firewall" "admin" {
     name = "${local.vpc_name}-admin"
 
-    droplet_ids = local.admin_servers > 0 ? local.admin_server_ids : local.lead_server_ids
+    droplet_ids  = [
+        for h in digitalocean_droplet.main: h.id
+        if contains(h.tags, (contains(flatten(local.cfg_servers[*].roles), "admin") ? "admin" : "lead"))
+    ]
 
     # description = "ssh"
     inbound_rule {
@@ -232,7 +241,7 @@ resource "digitalocean_firewall" "admin" {
 resource "digitalocean_firewall" "default" {
     name = "${local.vpc_name}-default"
 
-    droplet_ids = local.all_server_ids
+    droplet_ids  = [ for h in digitalocean_droplet.main: h.id ]
 
     # description = "ssh"
     inbound_rule {
@@ -355,7 +364,10 @@ resource "digitalocean_firewall" "default" {
 resource "digitalocean_firewall" "ext_db" {
     name = "${local.vpc_name}-ext-db"
 
-    droplet_ids = local.db_server_ids
+    droplet_ids  = [
+        for h in digitalocean_droplet.main: h.id
+        if contains(h.tags, "db")
+    ]
 
     # description = "postgresql"
     inbound_rule {
@@ -395,7 +407,7 @@ resource "digitalocean_firewall" "ext_db" {
 resource "digitalocean_firewall" "ext_remote" {
     name = "${local.vpc_name}-ext-remote"
 
-    droplet_ids = local.all_server_ids
+    droplet_ids  = [ for h in digitalocean_droplet.main: h.id ]
 
     # description = "All Ports"
     inbound_rule {

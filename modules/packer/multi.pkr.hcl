@@ -1,4 +1,7 @@
-
+variable "packer_image_name" {
+  type    = string
+  default = ""
+}
 variable "ami_source" {
   type    = string
   default = ""
@@ -24,10 +27,6 @@ variable "aws_secret_key" {
   default = ""
 }
 variable "consul_version" {
-  type    = string
-  default = ""
-}
-variable "digitalocean_image_name" {
   type    = string
   default = ""
 }
@@ -68,11 +67,10 @@ variable "packer_dir" {
   default = ""
 }
 
-locals { timestamp = regex_replace(timestamp(), "[- TZ:]", "") }
 
 source "amazon-ebs" "main" {
     access_key    = "${var.aws_access_key}"
-    ami_name      = "packer-ami_${local.timestamp}-${substr(uuidv4(), 0, 4)}"
+    ami_name      = "${var.packer_image_name}"
     instance_type = "${var.aws_instance_type}"
     region        = "${var.aws_region}"
     secret_key    = "${var.aws_secret_key}"
@@ -95,7 +93,7 @@ source "digitalocean" "main" {
     image         = "${var.digitalocean_image_os}"
     region        = "${var.digitalocean_region}"
     size          = "${var.digitalocean_image_size}"
-    snapshot_name = "${var.digitalocean_image_name}"
+    snapshot_name = "${var.packer_image_name}"
     ssh_username  = "root"
 }
 

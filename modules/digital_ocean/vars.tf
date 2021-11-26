@@ -5,115 +5,27 @@ variable "stun_protos" { default = ["tcp", "udp"] }
 
 ## input/config
 locals {
-    lead_servers = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "lead")
-    ])))
-    admin_servers = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "admin")
-    ])))
-    db_servers = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "db")
-    ])))
-    build_servers = sum(concat([0], tolist([
-        for SERVER in var.config.servers:
-        SERVER.count
-        if contains(SERVER.roles, "build")
-    ])))
+    ##TODO: Dynamic or list all sizes
+    size_priority = {
+        "s-1vcpu-1gb" = "1",
+        "s-1vcpu-2gb" = "2",
+        "s-2vcpu-2gb" = "3",
+        "s-2vcpu-4gb" = "4",
+        "s-4vcpu-8gb" = "5",
+    }
     ##TODO: Attempt to support "pet_names" or uuids instead of -nIND after fully converted to ansible provisioning
     ## https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/pet
-    admin_cfg_servers = flatten([
+    cfg_servers = flatten([
         for ind, SERVER in var.config.servers: [
             for num in range(0, SERVER.count): {
                 key = "${SERVER.fleet}-n${num}"
                 server = SERVER
+                role = SERVER.roles[0]
+                roles = SERVER.roles
+                size_priority = local.size_priority[SERVER.size["digital_ocean"]]
             }
-            if SERVER.roles[0] == "admin"
         ]
     ])
-    lead_cfg_servers = flatten([
-        for ind, SERVER in var.config.servers: [
-            for num in range(0, SERVER.count): {
-                key = "${SERVER.fleet}-n${num}"
-                server = SERVER
-            }
-            if SERVER.roles[0] == "lead"
-        ]
-    ])
-    db_cfg_servers = flatten([
-        for ind, SERVER in var.config.servers: [
-            for num in range(0, SERVER.count): {
-                key = "${SERVER.fleet}-n${num}"
-                server = SERVER
-            }
-            if SERVER.roles[0] == "db"
-        ]
-    ])
-    build_cfg_servers = flatten([
-        for ind, SERVER in var.config.servers: [
-            for num in range(0, SERVER.count): {
-                key = "${SERVER.fleet}-n${num}"
-                server = SERVER
-            }
-            if SERVER.roles[0] == "build"
-        ]
-    ])
-}
-
-## output/aggregation
-locals {
-    admin_public_ips = flatten([
-        for host in local.sorted_hosts: host.ip
-        if contains(host.roles, "admin")
-    ])
-    lead_public_ips = flatten([
-        for host in local.sorted_hosts: host.ip
-        if contains(host.roles, "lead")
-    ])
-    db_public_ips = flatten([
-        for host in local.sorted_hosts: host.ip
-        if contains(host.roles, "db")
-    ])
-    build_public_ips = flatten([
-        for host in local.sorted_hosts: host.ip
-        if contains(host.roles, "build")
-    ])
-
-
-    admin_server_ids = flatten([
-        for host in local.sorted_hosts: host.machine_id
-        if contains(host.roles, "admin")
-    ])
-    lead_server_ids = flatten([
-        for host in local.sorted_hosts: host.machine_id
-        if contains(host.roles, "lead")
-    ])
-    db_server_ids = flatten([
-        for host in local.sorted_hosts: host.machine_id
-        if contains(host.roles, "db")
-    ])
-    build_server_ids = flatten([
-        for host in local.sorted_hosts: host.machine_id
-        if contains(host.roles, "build")
-    ])
-    all_server_ids = distinct(concat(local.admin_server_ids, local.lead_server_ids, local.db_server_ids, local.build_server_ids))
-
-    admin_server_instances = [for v in module.admin : v.instance]
-    lead_server_instances = [for v in module.lead : v.instance]
-    db_server_instances = [for v in module.db : v.instance]
-    build_server_instances = [for v in module.build : v.instance]
-    all_server_instances = concat(local.admin_server_instances, local.lead_server_instances, local.db_server_instances, local.build_server_instances)
-
-    admin_ansible_hosts = [for v in module.admin : v.ansible_host]
-    lead_ansible_hosts = [for v in module.lead : v.ansible_host]
-    db_ansible_hosts = [for v in module.db : v.ansible_host]
-    build_ansible_hosts = [for v in module.build : v.ansible_host]
-    all_ansible_hosts = concat(local.admin_ansible_hosts, local.lead_ansible_hosts, local.db_ansible_hosts, local.build_ansible_hosts)
 }
 
 ##TODO: Test sorting by descending creation_time so scaling up adds machines
@@ -124,6 +36,17 @@ locals {
 
 ## sorted machines by creation time then size
 locals {
+    all_ansible_hosts = tolist([
+        for CFG in local.cfg_servers: {
+            machine_id = digitalocean_droplet.main[CFG.key].id
+            name = digitalocean_droplet.main[CFG.key].name
+            roles = CFG.roles
+            ip = digitalocean_droplet.main[CFG.key].ipv4_address
+            private_ip = digitalocean_droplet.main[CFG.key].ipv4_address_private
+            creation_time = time_static.creation_time[CFG.key].id
+            size_priority = CFG.size_priority
+        }
+    ])
     time_grouped_hosts = {
         for ind, host in local.all_ansible_hosts: (host.creation_time) => host...
     }
@@ -189,6 +112,26 @@ locals {
         "${replace(local.dockerc, ".", "-")}",
         "${replace(local.redis, ".", "-")}"
     ]
+
+    tags = {
+        "admin" = local.do_tags
+        "lead" = local.do_small_tags
+        "db" = local.do_small_tags
+        "build" = local.do_small_tags
+    }
+    ##NOTE: image_size is packer snapshot size, not instance size
+    image_size = {
+        "admin" = "s-2vcpu-4gb"
+        "lead" = "s-1vcpu-1gb"
+        "db" = "s-1vcpu-1gb"
+        "build" = "s-1vcpu-1gb"
+    }
+    image_name = {
+        "admin" = local.do_image_name
+        "lead" = local.do_image_small_name
+        "db" = local.do_image_small_name
+        "build" = local.do_image_small_name
+    }
 }
 
 terraform {

@@ -1,7 +1,10 @@
 resource "digitalocean_domain" "additional" {
     for_each = var.config.additional_domains
     name = each.key
-    ip_address  = local.admin_public_ips[0]
+    ip_address  = element([
+        for h in digitalocean_droplet.main: h.ipv4_address
+        if contains(h.tags, "admin")
+    ], 0)
 }
 
 resource "digitalocean_record" "additional_cname" {
@@ -61,7 +64,10 @@ resource "digitalocean_record" "default_stun_a" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.lead_public_ips[0]
+    value  = element([
+        for h in digitalocean_droplet.main: h.ipv4_address
+        if contains(h.tags, "lead")
+    ], 0)
 }
 
 resource "digitalocean_record" "default_cname" {
@@ -88,43 +94,50 @@ resource "digitalocean_record" "default_a_admin" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value = local.admin_servers > 0 ? local.admin_public_ips[0] : local.lead_public_ips[0]
+    value  = element([
+        for h in digitalocean_droplet.main: h.ipv4_address
+        if contains(h.tags, (contains(flatten(local.cfg_servers[*].roles), "admin") ? "admin" : "lead"))
+    ], 0)
 }
 
 resource "digitalocean_record" "default_a_db" {
-    count  = local.db_servers > 0 ? length(compact(var.config.db_arecord_aliases)) : 0
+    count  = contains(flatten(local.cfg_servers[*].roles), "db") ? length(compact(var.config.db_arecord_aliases)) : 0
     name   = compact(flatten(var.config.db_arecord_aliases))[count.index]
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.db_public_ips[0]
+    value  = element([
+        for h in digitalocean_droplet.main: h.ipv4_address
+        if contains(h.tags, "db")
+    ], 0)
 }
 
 resource "digitalocean_record" "default_a_leader" {
-    count  = local.lead_servers > 0 ? length(compact(var.config.leader_arecord_aliases)) : 0
+    count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? length(compact(var.config.leader_arecord_aliases)) : 0
     name   = compact(flatten(var.config.leader_arecord_aliases))[count.index]
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.lead_public_ips[0]
+    value  = element([
+        for h in digitalocean_droplet.main: h.ipv4_address
+        if contains(h.tags, "lead")
+    ], 0)
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
-    count  = local.lead_servers > 0 ? 1 : 0
+    count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name   = "@"
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.lead_public_ips[0]
-    # records = slice([
-    #     for SERVER in aws_instance.main[*]:
-    #     SERVER.public_ip
-    #     if length(regexall("lead", SERVER.tags.Roles)) > 0
-    # ], 0, 1)
+    value  = element([
+        for h in digitalocean_droplet.main: h.ipv4_address
+        if contains(h.tags, "lead")
+    ], 0)
 }
 
 resource "digitalocean_record" "additional_ssl" {
-    count  = local.lead_servers > 0 ? length(var.config.additional_ssl) : 0
+    count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? length(var.config.additional_ssl) : 0
     name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
     domain = digitalocean_domain.default.name
     type   = "CNAME"

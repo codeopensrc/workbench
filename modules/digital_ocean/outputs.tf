@@ -1,14 +1,8 @@
 output "instances" {
-    value = zipmap(
-        flatten([
-            for SERVER in local.all_server_instances[*]:
-            keys(SERVER)
-        ]),
-        flatten([
-            for SERVER in local.all_server_instances[*]:
-            values(SERVER)
-        ])
-    )
+    value = {
+        for h in digitalocean_droplet.main:
+        (h.name) => "ssh root@${h.ipv4_address}"
+    }
 }
 
 output "ansible_hosts" {

@@ -1,6 +1,8 @@
 variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 
+variable "lead_servers" {}
+
 variable "root_domain_name" { default = "" }
 variable "additional_domains" { default = {} }
 variable "additional_ssl" { default = [] }
@@ -16,8 +18,7 @@ variable "app_definitions" {
 
 locals {
     lead_private_ips = [
-        for HOST in var.ansible_hosts:
-        HOST.private_ip
+        for HOST in var.ansible_hosts: HOST.private_ip
         if contains(HOST.roles, "lead")
     ]
 }
@@ -28,7 +29,7 @@ resource "null_resource" "provision" {
     triggers = {
         num_apps = length(keys(var.app_definitions))
         num_ssl = length(var.additional_ssl)
-        num_ips = length(local.lead_private_ips)
+        lead_servers = var.lead_servers
         ## TODO: List all subdomains from each domain in additional_domains list and join
         #subdomains = join(",", keys(element(values(var.additional_domains), count.index)))
         num_domains = length(keys(var.additional_domains))

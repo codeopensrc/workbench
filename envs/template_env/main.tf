@@ -189,6 +189,8 @@ module "nginx" {
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
 
+    lead_servers = local.lead_servers
+
     root_domain_name = local.root_domain_name
     app_definitions = var.app_definitions
     additional_domains = local.additional_domains

@@ -1,3 +1,4 @@
+variable "packer_image_name" { default = "" }
 
 variable "aws_access_key" { default = "" }
 variable "aws_secret_key" { default = "" }
@@ -8,13 +9,11 @@ variable "aws_instance_type" { default = "" }
 variable "do_token" { default = "" }
 variable "digitalocean_region" { default = "" }
 variable "digitalocean_image_size" { default = "" }
-variable "digitalocean_image_name" { default = "" }
 
 variable "active_env_provider" {}
 variable "role" {}
 
 variable "packer_config" {}
-variable "build" {}
 
 ### TODO: Multiple images built if none are found and launching multiple machines that would all use that image
 # Example: Leader machine, DB machine, Build machine want to use img-14234, but isn't found
@@ -22,19 +21,17 @@ variable "build" {}
 # Need to create a more core data.image to query and only build ONE of that type of image
 #  while still allowing multiple types (admin w/gitlab, smaller w/o gitlab) of images to build in parallel
 
-resource "null_resource" "image" {
+resource "null_resource" "build" {
 
     provisioner "local-exec" {
 
         command = <<-EOF
-            if [ "${var.build}" = "false" ]; then
-                exit 0
-            fi
 
             export BUILDER_SOURCE=${var.active_env_provider == "aws" ? "amazon-ebs.*" : "digitalocean.*" }
             export CUR_DIR=$(realpath ${path.module})
 
             packer validate -only "$BUILDER_SOURCE" \
+                --var 'packer_image_name=${var.packer_image_name}' \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'consul_version=${var.packer_config.consul_version}' \
@@ -50,12 +47,12 @@ resource "null_resource" "image" {
                 --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os["main"]}' \
                 --var 'digitalocean_region=${var.digitalocean_region}' \
                 --var 'digitalocean_image_size=${var.digitalocean_image_size}' \
-                --var 'digitalocean_image_name=${var.digitalocean_image_name}' \
                 --var packer_dir=$CUR_DIR \
                 $CUR_DIR/multi.pkr.hcl
 
 
             packer build -timestamp-ui -only "$BUILDER_SOURCE" \
+                --var 'packer_image_name=${var.packer_image_name}' \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'consul_version=${var.packer_config.consul_version}' \
@@ -71,9 +68,12 @@ resource "null_resource" "image" {
                 --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os["main"]}' \
                 --var 'digitalocean_region=${var.digitalocean_region}' \
                 --var 'digitalocean_image_size=${var.digitalocean_image_size}' \
-                --var 'digitalocean_image_name=${var.digitalocean_image_name}' \
                 --var packer_dir=$CUR_DIR \
                 $CUR_DIR/multi.pkr.hcl
         EOF
     }
+}
+output "out" {
+    depends_on = [ null_resource.build ]
+    value = null_resource.build.id
 }
