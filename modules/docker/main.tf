@@ -17,14 +17,18 @@ variable "app_definitions" {
 }
 
 locals {
-    lead_public_ips = [
-        for HOST in var.ansible_hosts: HOST.ip
-        if contains(HOST.roles, "lead")
-    ]
-    lead_names = [
-        for HOST in var.ansible_hosts: HOST.name
-        if contains(HOST.roles, "lead")
-    ]
+    lead_public_ips = flatten([
+        for role, hosts in var.ansible_hosts: [
+            for HOST in hosts: HOST.ip
+            if contains(HOST.roles, "lead")
+        ]
+    ])
+    lead_names = flatten([
+        for role, hosts in var.ansible_hosts: [
+            for HOST in hosts: HOST.name
+            if contains(HOST.roles, "lead")
+        ]
+    ])
 }
 
 resource "null_resource" "swarm" {

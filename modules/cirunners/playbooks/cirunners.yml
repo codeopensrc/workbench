@@ -72,7 +72,7 @@
     - name: install binary
       shell: |
         curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
-        apt-cache madison gitlab-runner
+        sleep 5
         sudo apt-get install gitlab-runner jq -y
         sudo usermod -aG docker gitlab-runner
 

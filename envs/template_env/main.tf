@@ -471,7 +471,7 @@ resource "null_resource" "enable_autoupgrade" {
     ]
 
     triggers = {
-        num_hosts = length(local.ansible_hosts[*].ip)
+        num_hosts = length(flatten(values(local.ansible_hosts)))
         hostfile = local.ansible_hostfile
         predestroy_hostfile = local.predestroy_hostfile
     }
@@ -545,16 +545,18 @@ locals {
     ]
 
 
-    admin_public_ips = [
-        for HOST in module.cloud.ansible_hosts:
-        HOST.ip
-        if contains(HOST.roles, "admin")
-    ]
-    build_public_ips = [
-        for HOST in module.cloud.ansible_hosts:
-        HOST.ip
-        if contains(HOST.roles, "build")
-    ]
+    admin_public_ips = flatten([
+        for role, hosts in module.cloud.ansible_hosts: [
+            for HOST in hosts: HOST.ip
+            if contains(HOST.roles, "admin")
+        ]
+    ])
+    build_public_ips = flatten([
+        for role, hosts in module.cloud.ansible_hosts: [
+            for HOST in hosts: HOST.ip
+            if contains(HOST.roles, "build")
+        ]
+    ])
 }
 
 locals {

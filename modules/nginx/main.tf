@@ -17,10 +17,12 @@ variable "app_definitions" {
 }
 
 locals {
-    lead_private_ips = [
-        for HOST in var.ansible_hosts: HOST.private_ip
-        if contains(HOST.roles, "lead")
-    ]
+    lead_private_ips = flatten([
+        for role, hosts in var.ansible_hosts: [
+            for HOST in hosts: HOST.private_ip
+            if contains(HOST.roles, "lead")
+        ]
+    ])
 }
 
 

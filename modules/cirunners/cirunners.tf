@@ -11,9 +11,11 @@ variable "runners_per_machine" {}
 variable "root_domain_name" {}
 
 locals {
-    public_ips = distinct([
-        for HOST in var.ansible_hosts: HOST.ip
-        if contains(HOST.roles, "lead") || contains(HOST.roles, "build")
+    public_ips = flatten([
+        for role, hosts in var.ansible_hosts: [
+            for HOST in hosts: HOST.ip
+            if contains(HOST.roles, "lead") || contains(HOST.roles, "build")
+        ]
     ])
 }
 

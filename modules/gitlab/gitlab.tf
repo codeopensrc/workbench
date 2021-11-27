@@ -19,18 +19,20 @@ variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
 
 locals {
-    admin_public_ips = [
-        for HOST in var.ansible_hosts:
-        HOST.ip
-        if contains(HOST.roles, "admin")
-    ]
+    admin_public_ips = flatten([
+        for role, hosts in var.ansible_hosts: [
+            for HOST in hosts: HOST.ip
+            if contains(HOST.roles, "admin")
+        ]
+    ])
+    hosts = flatten(values(var.ansible_hosts))
 }
 
 resource "null_resource" "prometheus_targets" {
     count = var.admin_servers
 
     triggers = {
-        num_targets = length(var.ansible_hosts[*].ip)
+        num_targets = length(flatten(values(var.ansible_hosts)))
     }
 
     ## 9107 is consul exporter
@@ -40,7 +42,7 @@ resource "null_resource" "prometheus_targets" {
             #}
         content = <<-EOF
         [
-        %{ for ind, HOST in var.ansible_hosts }
+        %{ for ind, HOST in local.hosts }
             {
                 "targets": ["${contains(HOST.roles, "admin") ? "localhost" : HOST.private_ip}:9100"],
                 "labels": {
@@ -49,7 +51,7 @@ resource "null_resource" "prometheus_targets" {
                     "private_ip": "${HOST.private_ip}",
                     "nodename": "${HOST.name}"
                 }
-            }${ind < length(var.ansible_hosts) - 1 ? "," : ""}
+            }${ind < length(local.hosts) - 1 ? "," : ""}
         %{ endfor }
         ]
         EOF

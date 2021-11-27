@@ -17,10 +17,12 @@ variable "ansible_hosts" { default = "" }
 ## Review adding custom facts in facts.d dir
 # https://docs.ansible.com/ansible/latest/user_guide/playbooks_vars_facts.html#adding-custom-facts
 
+locals { hosts = flatten(values(var.ansible_hosts)) }
+
 ## NOTE: Not sure if we want/need to sort for trigger/servers group
 resource "null_resource" "ansible_hosts" {
     triggers = {
-        num_hosts = length(var.ansible_hosts[*].ip)
+        num_hosts = length(local.hosts)
         hostfile = var.ansible_hostfile
     }
 
@@ -28,33 +30,33 @@ resource "null_resource" "ansible_hosts" {
         command = <<-EOF
 		cat <<-EOLF > ${var.ansible_hostfile}
 		[servers]
-		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ for ind, HOST in local.hosts ~}
 		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endfor ~}
 		
 		[admin]
-		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ for ind, HOST in local.hosts ~}
 		%{ if contains(HOST.roles, "admin") ~}
 		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}
 		%{ endfor ~}
 		
 		[lead]
-		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ for ind, HOST in local.hosts ~}
 		%{ if contains(HOST.roles, "lead") ~}
 		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}
 		%{ endfor ~}
 		
 		[db]
-		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ for ind, HOST in local.hosts ~}
 		%{ if contains(HOST.roles, "db") ~}
 		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}
 		%{ endfor ~}
 		
 		[build]
-		%{ for ind, HOST in var.ansible_hosts ~}
+		%{ for ind, HOST in local.hosts ~}
 		%{ if contains(HOST.roles, "build") ~}
 		${HOST.ip} machine_name=${HOST.name} private_ip=${HOST.private_ip}
 		%{ endif ~}

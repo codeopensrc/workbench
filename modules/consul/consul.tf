@@ -13,8 +13,8 @@ variable "pg_password" { default = "" }
 variable "dev_pg_password" { default = "" }
 
 locals {
-    all_names = [for h in var.ansible_hosts: h.name]
-    all_public_ips = [ for h in var.ansible_hosts: h.ip ]
+    all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
+    all_public_ips = flatten([for role, hosts in var.ansible_hosts: hosts[*].ip])
 }
 
 resource "null_resource" "start" {

@@ -15,7 +15,7 @@ variable "kubernetes_version" {}
 variable "container_orchestrators" {}
 
 locals {
-    all_names = [for h in var.ansible_hosts: h.name]
+    all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
 }
 
 resource "null_resource" "kubernetes" {

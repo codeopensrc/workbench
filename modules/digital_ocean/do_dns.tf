@@ -1,10 +1,7 @@
 resource "digitalocean_domain" "additional" {
     for_each = var.config.additional_domains
     name = each.key
-    ip_address  = element([
-        for h in digitalocean_droplet.main: h.ipv4_address
-        if contains(h.tags, "admin")
-    ], 0)
+    ip_address  = local.dns_admin
 }
 
 resource "digitalocean_record" "additional_cname" {
@@ -64,10 +61,7 @@ resource "digitalocean_record" "default_stun_a" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element([
-        for h in digitalocean_droplet.main: h.ipv4_address
-        if contains(h.tags, "lead")
-    ], 0)
+    value  = local.dns_lead
 }
 
 resource "digitalocean_record" "default_cname" {
@@ -94,10 +88,7 @@ resource "digitalocean_record" "default_a_admin" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element([
-        for h in digitalocean_droplet.main: h.ipv4_address
-        if contains(h.tags, (contains(flatten(local.cfg_servers[*].roles), "admin") ? "admin" : "lead"))
-    ], 0)
+    value  = local.has_admin ? local.dns_admin : local.dns_lead
 }
 
 resource "digitalocean_record" "default_a_db" {
@@ -106,10 +97,7 @@ resource "digitalocean_record" "default_a_db" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element([
-        for h in digitalocean_droplet.main: h.ipv4_address
-        if contains(h.tags, "db")
-    ], 0)
+    value  = local.dns_db
 }
 
 resource "digitalocean_record" "default_a_leader" {
@@ -118,10 +106,7 @@ resource "digitalocean_record" "default_a_leader" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element([
-        for h in digitalocean_droplet.main: h.ipv4_address
-        if contains(h.tags, "lead")
-    ], 0)
+    value  = local.dns_lead
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
@@ -130,10 +115,7 @@ resource "digitalocean_record" "default_a_leader_root" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = element([
-        for h in digitalocean_droplet.main: h.ipv4_address
-        if contains(h.tags, "lead")
-    ], 0)
+    value  = local.dns_lead
 }
 
 resource "digitalocean_record" "additional_ssl" {
