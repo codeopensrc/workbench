@@ -1,6 +1,7 @@
 variable "ansible_hostfile" { default = "" }
 variable "predestroy_hostfile" { default = "" }
 variable "ansible_hosts" { default = "" }
+variable "server_count" { default = "" }
 
 ## Setting variables in ansible
 #https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#setting-variables
@@ -22,7 +23,7 @@ locals { hosts = flatten(values(var.ansible_hosts)) }
 ## NOTE: Not sure if we want/need to sort for trigger/servers group
 resource "null_resource" "ansible_hosts" {
     triggers = {
-        num_hosts = length(local.hosts)
+        num_hosts = var.server_count
         hostfile = var.ansible_hostfile
     }
 

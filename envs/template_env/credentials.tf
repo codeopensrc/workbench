@@ -99,6 +99,7 @@ locals {
 ###! To create a local `terraform.tfstate` backup of the remote version: `terraform state pull > terraform.tfstate`
 ###! Values cannot be interpolated in the configuration below
 ###! https://www.terraform.io/docs/backends/config.html#first-time-configuration
+
 #terraform {
 #    backend "s3" {
 #        bucket = "bucket_name"
@@ -114,3 +115,60 @@ locals {
 #        # skip_metadata_api_check = true
 #    }
 #}
+
+locals {
+    backend_config = local.local_data_state
+    ##! If using s3 backend for terraform state, use remote_data_state for backend_config
+    #backend_config = local.remote_data_state
+
+    local_data_state = {
+        backend = "local"
+        workspace = "default"
+        outputname = "hosts"  ## Output name in main.tf that outputs module.cloud.ansible_hosts output
+        config = {
+            path = "./terraform.tfstate"
+        }
+    }
+    remote_data_state = {
+        backend = "s3"
+        workspace = terraform.workspace
+        outputname = "hosts"
+        config = {
+            key    = "terra_state/template_env"     ## Should match backend s3 key
+            workspace_key_prefix = "terra_state"    ## Should match backend s3 workspace_key_prefix
+            bucket = local.data_state_bucket[local.active_s3_provider]
+            region = local.data_state_bucketregion[local.active_s3_provider]
+            access_key = local.data_state_s3_access_key[local.active_s3_provider]
+            secret_key = local.data_state_s3_secret_key[local.active_s3_provider]
+
+            ###! Uncomment below to enable backend using digital ocean Spaces
+            #endpoint = local.data_state_remote_endpoint[local.active_s3_provider]
+            #skip_credentials_validation = true
+            #skip_metadata_api_check = true
+        }
+    }
+}
+
+locals {
+    data_state_s3_access_key = {
+        "aws" = var.aws_bot_access_key
+        "digital_ocean" = var.do_spaces_access_key
+    }
+    data_state_s3_secret_key = {
+        "aws" = var.aws_bot_secret_key
+        "digital_ocean" = var.do_spaces_secret_key
+    }
+    data_state_bucket = {
+        "aws" = var.aws_bucket_name
+        "digital_ocean" = var.do_spaces_name
+    }
+    ##! Must be valid aws region name even if digital ocean backend - so we use us-east-2 placeholder
+    data_state_bucketregion = {
+        "aws" = var.aws_region
+        "digital_ocean" = "us-east-2"
+    }
+    data_state_remote_endpoint = {
+        #"aws" = ""  ## s3 backend endpoint for aws shouldnt be needed
+        "digital_ocean" = "https://${var.do_region}.digitaloceanspaces.com"
+    }
+}

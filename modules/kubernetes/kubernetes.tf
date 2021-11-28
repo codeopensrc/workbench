@@ -2,7 +2,6 @@ variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 variable "predestroy_hostfile" {}
 
-##TODO: Remove these 2
 variable "admin_servers" {}
 variable "server_count" {}
 
@@ -21,7 +20,7 @@ locals {
 resource "null_resource" "kubernetes" {
     count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
     triggers = {
-        num_nodes = length(local.all_names)
+        num_nodes = var.server_count
     }
 
     ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them

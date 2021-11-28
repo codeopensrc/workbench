@@ -32,6 +32,12 @@ locals {
     ])
 }
 
+data "terraform_remote_state" "cloud" {
+    backend = var.config.remote_state.backend
+    config = var.config.remote_state.config
+    workspace = var.config.remote_state.workspace
+}
+
 ## sorted machines by creation time then size
 locals {
     has_admin = contains(flatten(local.cfg_servers[*].roles), "admin")
@@ -79,6 +85,7 @@ locals {
 
     ## Groups hosts back into {role1=[{host}...], role2=[{host}...]}
     ## Hosts grouped by role are sorted by creation_time first -> size
+    ## Intent is to have DNS point to the oldest/largest server
     sorted_hosts = {
         for role, times in local.sorted_times: (role) => flatten([
             for time in times: [
@@ -90,7 +97,7 @@ locals {
     }
 
     ## To prevent noise in dns when adding/updating unrelated servers, we first check
-    ##  keys/role in sorted_hosts. If none are available THEN check if any hosts
+    ##  keys/role in remote_state_hosts. If none are available THEN check if any hosts
     ##  contain the role. It covers 95%+ of scenarios
     ## Reason being, sorting/aggregating based on resource data created at apply (time_static) causes anything
     ##  depending on that resource to not be known until apply. So if we aggregate build servers with web servers,
@@ -99,47 +106,45 @@ locals {
     ## This is probably here to stay until something like giant public vs private clusters with no server roles
     ##  and launching containers/pods on either public/private cluster and all servers the same
     
-    ## DNS will point to the oldest/largest server with the main role. If no main role, then a server containing that
-    ##  role. Thus never pointing to newly created servers. Also immediately changes to the oldest server
-    ##  that will still be active when scaling down, ensuring dns does not point to servers to be destroyed
-    
-    ## NEW WIP Issue-
-    ## If the dns points to a server that is not the main role (ie admin+lead+db) then booting up a new fleet
-    ##  with the main role (lead), the dns will choose the main role fleet first before its ready
-    ## The most ideal thing we could find is "if y does not already exist do x over y and DO NOT depend/wait on y"
-    ## The moment we attempt to use a var, it depends and waits on it. If we could detect if a resource/var exists before
-    ##  attempting to access it and ignore it if it does not exist before apply, its all simpler
+    ## When scaling up, use old remote hosts, when scaling down/no change, use current hosts
+    ## We dont want dns pointing to new servers as soon as theyre booted up, so point to remote_state_hosts
+    ## We dont want dns pointing to servers set for decommissioning, (ones to destroy wont be in sorted_hosts)
+    ##   so point to the current sorted_hosts
 
-    ## Leaning towards an optional dns_priorty/weight attribute that allows user to overridde the default mechanism
+    remote_state_hosts = data.terraform_remote_state.cloud.outputs[var.config.remote_state.outputname]
+    num_remote_hosts = length(flatten(values(local.remote_state_hosts)))
+    dnshosts = (local.num_remote_hosts > 0 && length(flatten(values(local.sorted_hosts))) > local.num_remote_hosts
+        ? local.remote_state_hosts : local.sorted_hosts)
 
-
-    ## Any use cases beyond what this is doing, get static load balancer IP(s) and point to those
-    dns_admin = (lookup(local.sorted_hosts, "admin", "") != "" ? local.sorted_hosts["admin"][0].ip
+    # Check for main role first, if no main role, check if role attached to another host
+    # Any use cases beyond what all this dns logic is doing, get static load balancer IP(s) and point to those
+    dns_admin = (lookup(local.dnshosts, "admin", null) != null ? local.dnshosts["admin"][0].ip
         : (length(local.sorted_admin) > 0 ? local.sorted_admin[0].ip : ""))
 
-    dns_lead = (lookup(local.sorted_hosts, "lead", "") != "" ? local.sorted_hosts["lead"][0].ip
+    dns_lead = (lookup(local.dnshosts, "lead", null) != null ? local.dnshosts["lead"][0].ip
         : (length(local.sorted_lead) > 0 ? local.sorted_lead[0].ip : ""))
 
-    dns_db = (lookup(local.sorted_hosts, "db", "") != "" ? local.sorted_hosts["db"][0].ip
+    dns_db = (lookup(local.dnshosts, "db", null) != null ? local.dnshosts["db"][0].ip
         : (length(local.sorted_db) > 0 ? local.sorted_db[0].ip : ""))
+
 
     ## Specific sorted lists per role for dns
     sorted_admin = flatten([
-        for role, hosts in local.sorted_hosts: [
+        for role, hosts in local.dnshosts: [
             for HOST in hosts: HOST
-            if contains(HOST.roles, "admin") && HOST.machine_id != ""
+            if contains(HOST.roles, "admin")
         ]
     ])
     sorted_lead = flatten([
-        for role, hosts in local.sorted_hosts: [
+        for role, hosts in local.dnshosts: [
             for HOST in hosts: HOST
-            if contains(HOST.roles, "lead") && HOST.machine_id != ""
+            if contains(HOST.roles, "lead")
         ]
     ])
     sorted_db = flatten([
-        for role, hosts in local.sorted_hosts: [
+        for role, hosts in local.dnshosts: [
             for HOST in hosts: HOST
-            if contains(HOST.roles, "db") && HOST.machine_id != ""
+            if contains(HOST.roles, "db")
         ]
     ])
 }
@@ -168,7 +173,7 @@ locals {
     cname_misc_aliases = flatten(var.config.misc_cnames)
 }
 
-## vpc for aws_instance
+## packer
 locals {
     consul = "CN-${var.config.packer_config.consul_version}"
     docker = "DK-${var.config.packer_config.docker_version}"

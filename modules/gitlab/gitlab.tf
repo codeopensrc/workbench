@@ -2,6 +2,7 @@ variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 
 variable "admin_servers" {}
+variable "server_count" {}
 
 variable "root_domain_name" {}
 variable "contact_email" {}
@@ -32,7 +33,7 @@ resource "null_resource" "prometheus_targets" {
     count = var.admin_servers
 
     triggers = {
-        num_targets = length(flatten(values(var.ansible_hosts)))
+        num_targets = var.server_count
     }
 
     ## 9107 is consul exporter

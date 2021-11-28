@@ -66,6 +66,7 @@ module "cloud" {
 
     config = local.config
 }
+locals { active_s3_provider = var.active_env_provider }
 
 ###! TODO: Use to lower dns TTL to 60 seconds and perform all backups initially
 ###! Anything that is done pre-system/machine migration should be done in a

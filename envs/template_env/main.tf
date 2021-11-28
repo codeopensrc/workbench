@@ -9,6 +9,11 @@ output "instances" {
     value = module.cloud.instances
 }
 
+output "hosts" {
+    value = module.cloud.ansible_hosts
+    ## Marked as sensitive to squelch verbose output
+    sensitive   = true
+}
 
 module "ansible" {
     source = "../../modules/ansible"
@@ -17,6 +22,8 @@ module "ansible" {
     ansible_hostfile = local.ansible_hostfile
     predestroy_hostfile = local.predestroy_hostfile
     ansible_hosts = local.ansible_hosts
+
+    server_count = local.server_count
 }
 
 ##NOTE: Uses ansible
@@ -156,6 +163,7 @@ module "gitlab" {
     ansible_hostfile = local.ansible_hostfile
 
     admin_servers = local.admin_servers
+    server_count = local.server_count
 
     root_domain_name = local.root_domain_name
     contact_email = var.contact_email
@@ -471,7 +479,7 @@ resource "null_resource" "enable_autoupgrade" {
     ]
 
     triggers = {
-        num_hosts = length(flatten(values(local.ansible_hosts)))
+        num_hosts = local.server_count
         hostfile = local.ansible_hostfile
         predestroy_hostfile = local.predestroy_hostfile
     }
@@ -497,8 +505,8 @@ locals {
     ###! provider based
     ## TODO: Map
     vpc_private_iface = var.active_env_provider == "digital_ocean" ? "eth1" : "ens5"
-    s3alias = var.active_env_provider == "digital_ocean" ? "spaces" : "s3"
-    s3bucket = var.active_env_provider == "digital_ocean" ? var.do_spaces_name : var.aws_bucket_name
+    s3alias = local.active_s3_provider == "digital_ocean" ? "spaces" : "s3"
+    s3bucket = local.active_s3_provider == "digital_ocean" ? var.do_spaces_name : var.aws_bucket_name
     region = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
 
     ###! workspace based
@@ -598,6 +606,8 @@ locals {
         aws_access_key = var.aws_access_key
         aws_secret_key = var.aws_secret_key
         aws_region = var.aws_region
+
+        remote_state = local.backend_config
     }
 }
 
