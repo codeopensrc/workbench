@@ -122,6 +122,9 @@
         - systemctl enable consul.service
         - systemctl daemon-reload
 
+    - name: wait for cluster start
+      command: sleep 10
+
     - name: join cluster
       command: "{{ item }}"
       with_items:

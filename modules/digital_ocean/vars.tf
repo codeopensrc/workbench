@@ -21,6 +21,7 @@ locals {
                 role = SERVER.roles[0]
                 roles = SERVER.roles
                 size_priority = local.size_priority[SERVER.size["digital_ocean"]]
+                image_alias = local.image_alias[SERVER.roles[0]]
             }
         ]
     ])
@@ -98,6 +99,15 @@ locals {
     ##  role. Thus never pointing to newly created servers. Also immediately changes to the oldest server
     ##  that will still be active when scaling down, ensuring dns does not point to servers to be destroyed
 
+    ## NEW WIP Issue-
+    ## If the dns points to a server that is not the main role (ie admin+lead+db) then booting up a new fleet
+    ##  with the main role (lead), the dns will choose the main role fleet first before its ready
+    ## The most ideal thing we could find is "if y does not already exist do x over y and DO NOT depend/wait on y"
+    ## The moment we attempt to use a var, it depends and waits on it. If we could detect if a resource/var exists before
+    ##  attempting to access it and ignore it if it does not exist before apply, its all simpler
+
+    ## Leaning towards an optional dns_priorty/weight attribute that allows user to overridde the default mechanism
+
     ## Any use cases beyond what this is doing, get static load balancer IP(s) and point to those
     dns_admin = (lookup(local.sorted_hosts, "admin", "") != "" ? local.sorted_hosts["admin"][0].ip
         : (length(local.sorted_admin) > 0 ? local.sorted_admin[0].ip : ""))
@@ -160,8 +170,8 @@ locals {
     dockerc = "DKC-${var.config.packer_config.docker_compose_version}"
     gitlab = "GL-${var.config.packer_config.gitlab_version}"
     redis = "R-${var.config.packer_config.redis_version}"
-    do_image_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.gitlab}_${local.redis}")
-    do_image_small_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.redis}")
+    large_image_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.gitlab}_${local.redis}")
+    small_image_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.redis}")
 
     do_tags = [
         "${replace(local.consul, ".", "-")}",
@@ -183,18 +193,21 @@ locals {
         "db" = local.do_small_tags
         "build" = local.do_small_tags
     }
-    ##NOTE: image_size is packer snapshot size, not instance size
-    image_size = {
-        "admin" = "s-2vcpu-4gb"
-        "lead" = "s-1vcpu-1gb"
-        "db" = "s-1vcpu-1gb"
-        "build" = "s-1vcpu-1gb"
+    image_alias = {
+        "admin" = "large"
+        "lead" = "small"
+        "db" = "small"
+        "build" = "small"
     }
-    image_name = {
-        "admin" = local.do_image_name
-        "lead" = local.do_image_small_name
-        "db" = local.do_image_small_name
-        "build" = local.do_image_small_name
+    packer_images = {
+        "large" = {
+            "name" = local.large_image_name,
+            "size" = "s-2vcpu-4gb"
+        }
+        "small" = {
+            "name" = local.small_image_name,
+            "size" = "s-1vcpu-1gb"
+        }
     }
 }
 

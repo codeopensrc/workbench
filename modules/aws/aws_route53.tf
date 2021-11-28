@@ -17,13 +17,13 @@ resource "aws_route53_zone" "additional" {
 
 
 resource "aws_route53_record" "additional_a_leader_root" {
-    for_each = local.lead_servers > 0 ? var.config.additional_domains : {}
+    for_each = contains(flatten(local.cfg_servers[*].roles), "lead") ? var.config.additional_domains : {}
     zone_id         = aws_route53_zone.additional[each.key].zone_id
     name            = each.key
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records  = [ local.lead_public_ips[0] ]
+    records  = [ local.dns_lead ]
 }
 
 resource "aws_route53_record" "additional_cname" {
@@ -79,7 +79,7 @@ resource "aws_route53_record" "default_stun_a" {
     allow_overwrite = true
     type            = "A"
     ttl             = "300"
-    records  = [ local.lead_public_ips[0] ]
+    records  = [ local.dns_lead ]
 }
 
 resource "aws_route53_record" "default_cname" {
@@ -109,58 +109,41 @@ resource "aws_route53_record" "default_a_admin" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records  = [ local.admin_servers > 0 ? local.admin_public_ips[0]: local.lead_public_ips[0] ]
-    # TODO: Check how we support tags changing while deployed as we have each aws_instance
-    #  lifecycle attr set to     ignore_changes= [ tags ]
+    records  = [ local.has_admin ? local.dns_admin : local.dns_lead ]
 }
 
 resource "aws_route53_record" "default_a_db" {
-    count           = local.db_servers > 0 ? length(compact(var.config.db_arecord_aliases)) : 0
+    count           = contains(flatten(local.cfg_servers[*].roles), "db") ? length(compact(var.config.db_arecord_aliases)) : 0
     zone_id         = aws_route53_zone.default.zone_id
     name            = compact(var.config.db_arecord_aliases)[count.index]
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records  = [ local.db_public_ips[0] ]
+    records  = [ local.dns_db ]
 }
 
 resource "aws_route53_record" "default_a_leader" {
-    count           = local.lead_servers > 0 ? length(compact(var.config.leader_arecord_aliases)) : 0
+    count           = contains(flatten(local.cfg_servers[*].roles), "lead") ? length(compact(var.config.leader_arecord_aliases)) : 0
     zone_id         = aws_route53_zone.default.zone_id
     name            = compact(var.config.leader_arecord_aliases)[count.index]
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    # If ip matches an admin, go with admin ip or lead ip.
-    # Atm choosing first lead ip due to docker proxy service listening port dependent on where it was originally launched
-    # Make sure this only points to leader ip after it's joined the swarm, if we cant guarantee, dont change
-    records  = [ local.lead_public_ips[0] ]
-
-    # Get first ip
-    # records = slice([
-    #     for SERVER in aws_instance.main[*]:
-    #     SERVER.public_ip
-    #     if length(regexall("lead", SERVER.tags.Roles)) > 0
-    # ], 0, 1)
-    # If we wanted the last ip
-    # records = slice(local.lead_server_ips,
-    #     (length(local.lead_server_ips) - 1 > 0 ? length(local.lead_server_ips) - 1 : 0),  #start index
-    #     (length(local.lead_server_ips) > 1 ? length(local.lead_server_ips) : 1)   #end index
-    # )
+    records  = [ local.dns_lead ]
 }
 
 resource "aws_route53_record" "default_a_leader_root" {
-    count           = local.lead_servers > 0 ? 1 : 0
+    count           = contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     zone_id         = aws_route53_zone.default.zone_id
     name            = var.config.root_domain_name
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
-    records  = [ local.lead_public_ips[0] ]
+    records  = [ local.dns_lead ]
 }
 
 resource "aws_route53_record" "additional_ssl" {
-    count  = local.lead_servers > 0 ? length(var.config.additional_ssl) : 0
+    count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? length(var.config.additional_ssl) : 0
     zone_id = aws_route53_zone.default.zone_id
     name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
     allow_overwrite = true

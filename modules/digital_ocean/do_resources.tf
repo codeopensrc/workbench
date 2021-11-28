@@ -2,12 +2,12 @@
 ## https://docs.digitalocean.com/reference/api/api-reference/#tag/Tags
 data "digitalocean_images" "latest" {
     for_each = {
-        for ind, cfg in local.cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
+        for alias, image in local.packer_images:
+        alias => image.name
     }
     filter {
         key    = "name"
-        values = [ local.image_name[each.value.role] ]
+        values = [ each.value ]
         all = true
     }
     filter {
@@ -29,24 +29,23 @@ data "digitalocean_images" "latest" {
 module "packer" {
     source             = "../packer"
     for_each = {
-        for ind, cfg in local.cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
-        if length(data.digitalocean_images.latest[cfg.key].images) == 0
+        for alias, image in local.packer_images:
+        alias => { name = image.name, size = image.size }
+        if length(data.digitalocean_images.latest[alias].images) == 0
     }
-    packer_image_name = local.image_name[each.value.role]
+    type = each.key
+    packer_image_name = each.value.name
+    packer_image_size = each.value.size
 
     active_env_provider = var.config.active_env_provider
-    role = each.value.role
 
     aws_access_key = var.config.aws_access_key
     aws_secret_key = var.config.aws_secret_key
     aws_region = var.config.aws_region
     aws_key_name = var.config.aws_key_name
-    aws_instance_type = ""
 
     do_token = var.config.do_token
     digitalocean_region = var.config.do_region
-    digitalocean_image_size = local.image_size[each.value.role]
 
     packer_config = var.config.packer_config
 }
@@ -54,13 +53,13 @@ module "packer" {
 data "digitalocean_images" "new" {
     depends_on = [ module.packer ]
     for_each = {
-        for ind, cfg in local.cfg_servers:
-        cfg.key => { id = module.packer[cfg.key], role = cfg.role }
-        if lookup(module.packer, cfg.key, "") != ""
+        for alias, image in local.packer_images:
+        alias => image.name
+        if lookup(module.packer, alias, null) != null
     }
     filter {
         key    = "name"
-        values = [ local.image_name[each.value.role] ]
+        values = [ each.value ]
         all = true
     }
     filter {
@@ -95,8 +94,8 @@ resource "digitalocean_droplet" "main" {
     name     = "${var.config.server_name_prefix}-${var.config.region}-${each.value.role}-${substr(uuid(), 0, 4)}"
     #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
     image = (each.value.cfg.server.image != "" ? each.value.cfg.server.image
-        : (length(data.digitalocean_images.latest[each.key].images) > 0
-            ? data.digitalocean_images.latest[each.key].images[0].id : data.digitalocean_images.new[each.key].images[0].id)
+        : (length(data.digitalocean_images.latest[each.value.cfg.image_alias].images) > 0
+            ? data.digitalocean_images.latest[each.value.cfg.image_alias].images[0].id : data.digitalocean_images.new[each.value.cfg.image_alias].images[0].id)
     )
 
     region   = var.config.region

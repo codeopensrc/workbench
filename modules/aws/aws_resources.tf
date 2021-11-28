@@ -1,58 +1,135 @@
-##NOTE: image_size is packer ami size, not instance size
-### Some sizes for reference
-#t3a.large  = 2vcpu 8gbMem
-#t3a.medium = 2vcpu 4gbMem
-#t3a.small  = 2vcpu 2gbMem
-#t3a.micro  = 2vcpu 1gbMem 
-#t3a.nano   = 2vcpu .5gbMem 
 
-module "admin" {
-    source = "./instances"
-    ##TODO: Limit to 1 atm
+data "aws_ami_ids" "latest" {
     for_each = {
-        for ind, cfg in local.admin_cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind }
+        for alias, image in local.packer_images:
+        alias => image.name
     }
-    servers = each.value.cfg.server
-
-    config = var.config
-    image_size = "t3a.medium"
-    vpc = local.vpc
+    owners = ["self"]
+    filter {
+        name = "name"
+        values = [ each.value ]
+    }
+    filter {
+        name   = "tag:aws_key_name"
+        values = [ var.config.aws_key_name ]
+    }
 }
-module "lead" {
-    source = "./instances"
-    for_each = {
-        for ind, cfg in local.lead_cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind }
-    }
-    servers = each.value.cfg.server
 
-    config = var.config
-    image_size = "t3a.micro"
-    vpc = local.vpc
+module "packer" {
+    source             = "../packer"
+    for_each = {
+        for alias, image in local.packer_images:
+        alias => { name = image.name, size = image.size }
+        if length(data.aws_ami_ids.latest[alias].ids) == 0
+    }
+    type = each.key
+    packer_image_name = each.value.name
+    packer_image_size = each.value.size
+
+    active_env_provider = var.config.active_env_provider
+
+    aws_access_key = var.config.aws_access_key
+    aws_secret_key = var.config.aws_secret_key
+    aws_region = var.config.aws_region
+    aws_key_name = var.config.aws_key_name
+
+    do_token = var.config.do_token
+    digitalocean_region = var.config.do_region
+
+    packer_config = var.config.packer_config
 }
-module "db" {
-    source = "./instances"
-    ##TODO: Limit to 1 atm
-    for_each = {
-        for ind, cfg in local.db_cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind }
-    }
-    servers = each.value.cfg.server
 
-    config = var.config
-    image_size = "t3a.micro"
-    vpc = local.vpc
+data "aws_ami" "new" {
+    depends_on = [ module.packer ]
+    most_recent = true
+    for_each = {
+        for alias, image in local.packer_images:
+        alias => image.name
+        if lookup(module.packer, alias, null) != null
+    }
+
+    owners = ["self"]
+
+    filter {
+        name = "name"
+        values = [ each.value ]
+    }
+    filter {
+        name   = "tag:aws_key_name"
+        values = [ var.config.aws_key_name ]
+    }
 }
-module "build" {
-    source = "./instances"
-    for_each = {
-        for ind, cfg in local.build_cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind }
-    }
-    servers = each.value.cfg.server
 
-    config = var.config
-    image_size = "t3a.micro"
-    vpc = local.vpc
+resource "time_static" "creation_time" {
+    for_each = {
+        for ind, cfg in local.cfg_servers:
+        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
+    }
+}
+
+resource "aws_instance" "main" {
+    for_each = {
+        for ind, cfg in local.cfg_servers:
+        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
+    }
+
+    key_name = var.config.aws_key_name
+    #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
+    ami = (each.value.cfg.server.image != "" ? each.value.cfg.server.image
+        : (length(data.aws_ami_ids.latest[each.value.cfg.image_alias].ids) > 0
+            ? data.aws_ami_ids.latest[each.value.cfg.image_alias].ids[0] : data.aws_ami.new[each.value.cfg.image_alias].id)
+    )
+
+    instance_type = each.value.cfg.server.size["aws"]
+
+    tags = {
+        Name = "${var.config.server_name_prefix}-${var.config.region}-${each.value.role}-${substr(uuid(), 0, 4)}",
+        Domain = each.value.role == "admin" ? "gitlab-${replace(var.config.root_domain_name, ".", "-")}" : ""
+        Roles = join(",", each.value.cfg.server.roles)
+    }
+    lifecycle {
+        ignore_changes= [ tags ]
+    }
+
+    root_block_device {
+        volume_size = each.value.cfg.server.aws_volume_size
+    }
+
+    subnet_id              = aws_subnet.public_subnet.id
+
+    vpc_security_group_ids = compact([
+        aws_security_group.default_ports.id,
+        aws_security_group.ext_remote.id,
+
+        contains(each.value.cfg.server.roles, "admin") ? aws_security_group.admin_ports.id : "",
+        contains(each.value.cfg.server.roles, "lead") ? aws_security_group.app_ports.id : "",
+
+        contains(each.value.cfg.server.roles, "db") ? aws_security_group.db_ports.id : "",
+        contains(each.value.cfg.server.roles, "db") ? aws_security_group.ext_db.id : "",
+    ])
+
+    provisioner "remote-exec" {
+        inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
+        connection {
+            host     = self.public_ip
+            type     = "ssh"
+            user     = "ubuntu"
+            private_key = file(var.config.local_ssh_key_file)
+        }
+    }
+
+    ## TODO: Confirm this works for aws .tags.Roles correctly
+    provisioner "local-exec" {
+        when = destroy
+        command = <<-EOF
+            ssh-keygen -R ${self.public_ip};
+
+            if [ "${terraform.workspace}" != "default" ]; then
+                ${self.tags.Domain != "" ? "ssh-keygen -R \"${replace(regex("gitlab-[a-z]+-[a-z]+", self.tags.Domain), "-", ".")}\"" : ""}
+                echo "Not default"
+            fi
+            exit 0;
+        EOF
+        on_failure = continue
+    }
 }
