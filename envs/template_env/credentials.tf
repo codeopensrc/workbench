@@ -116,38 +116,31 @@ locals {
 #    }
 #}
 
-locals {
-    backend_config = local.local_data_state
-    ##! If using s3 backend for terraform state, use remote_data_state for backend_config
-    #backend_config = local.remote_data_state
-
-    local_data_state = {
-        backend = "local"
-        workspace = "default"
-        outputname = "hosts"  ## Output name in main.tf that outputs module.cloud.ansible_hosts output
-        config = {
-            path = "./terraform.tfstate"
-        }
-    }
-    remote_data_state = {
-        backend = "s3"
-        workspace = terraform.workspace
-        outputname = "hosts"
-        config = {
-            key    = "terra_state/template_env"     ## Should match backend s3 key
-            workspace_key_prefix = "terra_state"    ## Should match backend s3 workspace_key_prefix
-            bucket = local.data_state_bucket[local.active_s3_provider]
-            region = local.data_state_bucketregion[local.active_s3_provider]
-            access_key = local.data_state_s3_access_key[local.active_s3_provider]
-            secret_key = local.data_state_s3_secret_key[local.active_s3_provider]
-
-            ###! Uncomment below to enable backend using digital ocean Spaces
-            #endpoint = local.data_state_remote_endpoint[local.active_s3_provider]
-            #skip_credentials_validation = true
-            #skip_metadata_api_check = true
-        }
-    }
+##! NOTE: If using local file for terraform state
+d]ata "terraform_remote_state" "cloud" {
+    backend = "local"
+    workspace = "default"
+    config = { path = "./terraform.tfstate" }
 }
+
+##! NOTE: If using s3 backend for terraform state
+#data "terraform_remote_state" "cloud" {
+#    backend = "s3"
+#    workspace = terraform.workspace
+#    config = {
+#        key    = "terra_state/template_env"     ## Should match backend s3 key
+#        workspace_key_prefix = "terra_state"    ## Should match backend s3 workspace_key_prefix
+#        bucket = local.data_state_bucket[local.active_s3_provider]
+#        region = local.data_state_bucketregion[local.active_s3_provider]
+#        access_key = local.data_state_s3_access_key[local.active_s3_provider]
+#        secret_key = local.data_state_s3_secret_key[local.active_s3_provider]
+#
+#        ###! Uncomment below to enable backend using digital ocean Spaces
+#        #endpoint = local.data_state_remote_endpoint[local.active_s3_provider]
+#        #skip_credentials_validation = true
+#        #skip_metadata_api_check = true
+#    }
+#}
 
 locals {
     data_state_s3_access_key = {

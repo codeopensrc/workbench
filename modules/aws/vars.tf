@@ -32,12 +32,6 @@ locals {
     ])
 }
 
-data "terraform_remote_state" "cloud" {
-    backend = var.config.remote_state.backend
-    config = var.config.remote_state.config
-    workspace = var.config.remote_state.workspace
-}
-
 ## sorted machines by creation time then size
 locals {
     has_admin = contains(flatten(local.cfg_servers[*].roles), "admin")
@@ -111,10 +105,9 @@ locals {
     ## We dont want dns pointing to servers set for decommissioning, (ones to destroy wont be in sorted_hosts)
     ##   so point to the current sorted_hosts
 
-    remote_state_hosts = data.terraform_remote_state.cloud.outputs[var.config.remote_state.outputname]
-    num_remote_hosts = length(flatten(values(local.remote_state_hosts)))
+    num_remote_hosts = length(flatten(values(var.config.remote_state_hosts)))
     dnshosts = (local.num_remote_hosts > 0 && length(flatten(values(local.sorted_hosts))) > local.num_remote_hosts
-        ? local.remote_state_hosts : local.sorted_hosts)
+        ? var.config.remote_state_hosts : local.sorted_hosts)
 
     # Check for main role first, if no main role, check if role attached to another host
     # Any use cases beyond what all this dns logic is doing, get static load balancer IP(s) and point to those

@@ -607,7 +607,8 @@ locals {
         aws_secret_key = var.aws_secret_key
         aws_region = var.aws_region
 
-        remote_state = local.backend_config
+        remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
+            ? data.terraform_remote_state.cloud.outputs.hosts : {})
     }
 }
 
