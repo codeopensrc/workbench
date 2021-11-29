@@ -410,7 +410,7 @@ module "kubernetes" {
     import_gitlab = var.import_gitlab
     vpc_private_iface = local.vpc_private_iface
 
-    kubernetes_version = var.kubernetes_version
+    kubernetes_version = var.kubernetes_version == "" ? "latest" : local.gitlab_kube_version
     container_orchestrators = var.container_orchestrators
 }
 
@@ -517,6 +517,18 @@ locals {
     ansible_hosts = module.cloud.ansible_hosts
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
     runners_per_machine = local.lead_servers + local.build_servers == 1 ? 4 : local.num_runners_per_machine
+
+    ##TODO: Major-minor regex for unlisted versions - ex 14.4.2, 14.4.3 matching 1.20 and 14.5.0 matching 1.21
+    ## Currently, if say (14.4.2 = 1.20) and (14.5.0 = 1.21), 14.4.3 is incorrectly matching 1.21 (last)
+    gitlab_kube_matrix = {
+        "14.4.2-ce.0" = "1.20.11-00"
+    }
+    num_gitlab_kube_versions = length(values(local.gitlab_kube_matrix))
+    last_gitlab_kube_version = values(local.gitlab_kube_matrix)[local.num_gitlab_kube_versions - 1]
+    gitlab_kube_version = (var.kubernetes_version == "gitlab"
+        ? (lookup(local.gitlab_kube_matrix, var.packer_config.gitlab_version, null) != null
+            ? local.gitlab_kube_matrix[var.packer_config.gitlab_version] : local.last_gitlab_kube_version)
+        : var.kubernetes_version)
 
     server_count = sum(tolist([ for SERVER in var.servers: SERVER.count ]))
     admin_servers = sum(concat([0], tolist([

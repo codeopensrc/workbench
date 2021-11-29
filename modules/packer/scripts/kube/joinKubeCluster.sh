@@ -27,7 +27,11 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
     sudo apt-get update;
     ## dpkg can stay briefly locked after update..
     sleep 20;
-    sudo apt-get install -y kubelet=${VERSION} kubeadm=${VERSION} kubectl=${VERSION}
+    if [[ ${VERSION} = "latest" ]]; then
+        sudo apt-get install -y kubelet kubeadm kubectl
+    else
+        sudo apt-get install -y kubelet=${VERSION} kubeadm=${VERSION} kubectl=${VERSION}
+    fi
     # apt list -a kubeadm | head -5
 
     # Im assuming this prevents it from upgrading

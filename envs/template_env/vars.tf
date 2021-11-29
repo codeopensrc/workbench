@@ -21,13 +21,15 @@ variable "gitlab_backups_enabled" { default = false }  #auto false if not "defau
 variable "install_unity3d" { default = false }
 
 ## NOTE: Kubernetes admin requires 2 cores and 2 GB of ram
-variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] }## kubernetes and/or docker_swarm
+variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] } ##! kubernetes and/or docker_swarm
 
 ########## SOFTWARE VERSIONS ##########
 #######################################
-## Provisioned after launch
-##NOTE: Latest kubernetes: 1.22.3-00
-variable "kubernetes_version" { default = "1.20.11-00" }## Gitlab 14.3.0 supports kubernetes 1.20.11-00
+
+##! NOTE: Software provisioned after launch
+##! kubernetes_version options (if installing): Valid version, recent version gitlab supports, or latest
+##!   ex "1.22.3-00" | "gitlab" | "" (empty/latest uses latest)
+variable "kubernetes_version" { default = "gitlab" }
 variable "nodeexporter_version" { default = "1.2.2" }
 variable "promtail_version" { default = "2.4.1" }
 variable "consulexporter_version" { default = "0.7.1" }
@@ -36,7 +38,8 @@ variable "postgres_version" { default = "9.5" } ## Not fully implemented - consu
 variable "mongo_version" { default = "4.4.6" } ## Not fully implemented - consulchecks atm
 variable "redis_version" { default = "5.0.9" } ## Not fully implemented - consulchecks atm
 
-## Baked into image
+
+##! NOTE: Software baked into image
 variable "packer_config" {
     default = {
         gitlab_version = "14.4.2-ce.0"

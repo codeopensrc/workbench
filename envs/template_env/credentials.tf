@@ -117,7 +117,7 @@ locals {
 #}
 
 ##! NOTE: If using local file for terraform state
-d]ata "terraform_remote_state" "cloud" {
+data "terraform_remote_state" "cloud" {
     backend = "local"
     workspace = "default"
     config = { path = "./terraform.tfstate" }
