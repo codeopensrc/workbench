@@ -42,7 +42,7 @@
       rescue:
         - name: create cluster serviceaccounts
           command: bash $HOME/code/scripts/kube/createClusterAccounts.sh -v {{ runner_img_version }} -d {{ root_domain_name }} \
-            -a {{ private_ip }} {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u
+            -a {{ private_ip }} -l {{ root_domain_name }} {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u
       when: admin_servers | int > 0
 
     - name: add cluster to gitlab

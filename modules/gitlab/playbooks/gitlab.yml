@@ -1,0 +1,38 @@
+---
+- name: RM OLD MACHINE RUNNERS
+  hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), []) }}"
+  remote_user: root
+  gather_facts: false
+  vars:
+    root_domain_name: "{{ root_domain_name }}"
+    import_gitlab: "{{ import_gitlab }}"
+  tasks:
+    - name: rm old machine runners
+      block:
+        - name: check if runners removed
+          command: consul kv get gitlab/runners_removed
+          changed_when: false
+      rescue:
+        - name: rm runners
+          shell: |
+            FILENAME=RUNNERS_ids.txt
+            LOCAL_FILE="$HOME/code/backups/$FILENAME"
+
+            ## Gen tmp TOKEN to query api
+            TERRA_UUID=$(uuidgen)
+            sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!";
+
+            ## Download list of runners tagged with our domain
+            curl -H "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.{{ root_domain_name }}/api/v4/runners/all?tag_list={{ root_domain_name }}" | jq ".[].id" > $LOCAL_FILE
+
+            ## Iterate over runners in $LOCAL_FILE and deregister
+            while read RUNNER_ID; do
+                echo $RUNNER_ID;
+                curl -X DELETE -H "PRIVATE-TOKEN: $TERRA_UUID" "https://gitlab.{{ root_domain_name }}/api/v4/runners/$RUNNER_ID"
+            done <$LOCAL_FILE
+
+            ## Revoke token
+            sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
+            rm $LOCAL_FILE
+            consul kv put gitlab/runners_removed true
+      when: import_gitlab | bool == true

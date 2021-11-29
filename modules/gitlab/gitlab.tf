@@ -371,6 +371,24 @@ resource "null_resource" "gitlab_plugins" {
     }
 }
 
+## On import, rm all imported runners with tags matching: root_domain_name
+## This should suffice until we can successfully fully migrate gitlab without downtime
+resource "null_resource" "rm_imported_runners" {
+    count = var.admin_servers
+    depends_on = [
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab,
+        null_resource.gitlab_plugins,
+    ]
+    provisioner "local-exec" {
+        command = <<-EOF
+            ansible-playbook ${path.module}/playbooks/gitlab.yml -i ${var.ansible_hostfile} --extra-vars \
+                'root_domain_name="${var.root_domain_name}"
+                import_gitlab=${var.import_gitlab}'
+        EOF
+    }
+}
+
 # NOTE: Used to re-authenticate mattermost with gitlab
 resource "null_resource" "reauthorize_mattermost" {
     count = 0

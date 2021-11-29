@@ -118,23 +118,27 @@
     runners_per_machine: "{{ runners_per_machine }}"
     root_domain_name: "{{ root_domain_name }}"
   tasks:
+    # https://gitlab.com/gitlab-org/gitlab-runner/issues/1316
+    - name: delete old runners
+      command: gitlab-runner verify --delete
+
     - name: register shell runners
       shell: |
         MACHINE_NAME={{ machine_name }}
         RUNNER_NAME=$(echo $MACHINE_NAME | grep -o "[a-z]*-[a-zA-Z0-9]*$");
         FULL_NAME="${RUNNER_NAME}_shell_{{ item }}";
         FOUND_NAME=$(sudo gitlab-runner -log-format json list 2>&1 >/dev/null | grep "$FULL_NAME" | jq -r ".msg");
-        TAG="";
+        TAG={{ root_domain_name }};
         ACCESS_LEVEL="not_protected";
         RUN_UNTAGGED="true";
         LOCKED="false";
 
         if [ {{ item }} = 1 ]; then
             case "$MACHINE_NAME" in
-                *build*) TAG=unity ;;
-                *admin*) TAG=prod ;;
-                *lead*) TAG=prod ;;
-                *) TAG="" ;;
+                *build*) TAG=${TAG},unity ;;
+                *admin*) TAG=${TAG},prod ;;
+                *lead*) TAG=${TAG},prod ;;
+                *) TAG=${TAG} ;;
             esac
         fi
         if [ "$TAG" = "prod" ]; then
@@ -156,10 +160,6 @@
         fi
       loop: "{{ range(1, runners_per_machine|int + 1) | list }}"
       when: runner_token != ""
-
-    # https://gitlab.com/gitlab-org/gitlab-runner/issues/1316
-    - name: delete old runners
-      command: gitlab-runner verify --delete
 
     #Scale down runners based on num of runners and active names/ip addresses
     #Deregisters excess runners per machine
