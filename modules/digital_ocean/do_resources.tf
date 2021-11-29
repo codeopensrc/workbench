@@ -99,7 +99,7 @@ resource "digitalocean_droplet" "main" {
     )
 
     region   = var.config.region
-    size     = each.value.cfg.server.size["digital_ocean"]
+    size     = each.value.cfg.server.size
     ssh_keys = [var.config.do_ssh_fingerprint]
     tags = compact(flatten([
         each.value.role == "admin" ? "gitlab-${replace(var.config.root_domain_name, ".", "-")}" : "",

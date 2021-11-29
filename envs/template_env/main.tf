@@ -530,21 +530,21 @@ locals {
             ? local.gitlab_kube_matrix[var.packer_config.gitlab_version] : local.last_gitlab_kube_version)
         : var.kubernetes_version)
 
-    server_count = sum(tolist([ for SERVER in var.servers: SERVER.count ]))
+    server_count = sum(tolist([ for SERVER in local.workspace_servers: SERVER.count ]))
     admin_servers = sum(concat([0], tolist([
-        for SERVER in var.servers: SERVER.count
+        for SERVER in local.workspace_servers: SERVER.count
         if contains(SERVER.roles, "admin")
     ])))
     lead_servers = sum(concat([0], tolist([
-        for SERVER in var.servers: SERVER.count
+        for SERVER in local.workspace_servers: SERVER.count
         if contains(SERVER.roles, "lead")
     ])))
     db_servers = sum(concat([0], tolist([
-        for SERVER in var.servers: SERVER.count
+        for SERVER in local.workspace_servers: SERVER.count
         if contains(SERVER.roles, "db")
     ])))
     build_servers = sum(concat([0], tolist([
-        for SERVER in var.servers: SERVER.count
+        for SERVER in local.workspace_servers: SERVER.count
         if contains(SERVER.roles, "build")
     ])))
 
@@ -583,7 +583,7 @@ locals {
     ##! local.config is a wrapper to pass into module.cloud in vars.tf
     config = {
         ## Machine/Misc
-        servers = var.servers
+        servers = local.workspace_servers
         region = local.region
         server_name_prefix = local.server_name_prefix
         active_env_provider = var.active_env_provider

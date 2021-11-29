@@ -20,7 +20,7 @@ locals {
                 server = SERVER
                 role = SERVER.roles[0]
                 roles = SERVER.roles
-                size_priority = local.size_priority[SERVER.size["digital_ocean"]]
+                size_priority = local.size_priority[SERVER.size]
                 image_alias = local.image_alias[SERVER.roles[0]]
             }
         ]

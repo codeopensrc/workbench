@@ -59,18 +59,6 @@ variable "packer_config" {
 ########## CLOUD MACHINES ##########
 ####################################
 
-# TODO: Azure and Google Cloud providers
-# Options will be digital_ocean, aws, azure, google_cloud etc.
-###! Current options: "digital_ocean" or "aws"
-variable "active_env_provider" { default = "digital_ocean" }
-module "cloud" {
-    source             = "../../modules/digital_ocean"  ###! Uncomment for digital ocean
-    #source             = "../../modules/aws"          ###! Uncomment for aws
-
-    config = local.config
-}
-locals { active_s3_provider = var.active_env_provider }
-
 ###! TODO: Use to lower dns TTL to 60 seconds and perform all backups initially
 ###! Anything that is done pre-system/machine migration should be done in a
 ###!  run once (backups) or toggleable (dns TTL) fashion with this setting
@@ -106,59 +94,50 @@ locals { active_s3_provider = var.active_env_provider }
 ## Terraform and ansible should handle the graceful replacement of that node after `terraform apply`
 ##   (Would need at least 2 of that type of fleet to do so gracefully)
 ## Should work as easily/seemlessly as docker and kubernetes replacing containers/pods
-variable "servers" {
+
+# TODO: Azure and Google Cloud providers
+# Options will be digital_ocean, aws, azure, google_cloud etc.
+###! Current options: "digital_ocean" or "aws"
+variable "active_env_provider" { default = "digital_ocean" }
+module "cloud" {
+    source             = "../../modules/digital_ocean"  ###! Uncomment for digital ocean
+    #source             = "../../modules/aws"          ###! Uncomment for aws
+
+    config = local.config
+}
+
+locals {
+    active_s3_provider = var.active_env_provider
+    sizes = {
+        "aws" = ["t3a.micro", "t3a.small", "t3a.small", "t3a.medium", "t3a.large"]
+        "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"]
+    }
     ### NOTE: Do not add or remove roles from instances after they are launched
     ### Fleets differ by either roles, size, or to use a specific image
     ### When intending to replace machines instead of scaling up/down
     ###  - Add a fleet, `terraform apply`, remove the old fleet, `terraform apply`
     ###  - Supports replacing 'lead' and 'build' type fleets
-    default = [
-        {
-            "count" = 1
-            "image" = ""
-            "roles" = ["admin", "lead", "db"]
-            #"roles" = ["admin"]
-            "size" = {
-                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][3]
-                "digital_ocean" = ["s-2vcpu-4gb", "s-4vcpu-8gb"][1]
-            }
-            "aws_volume_size" = 60
-            "fleet" = "aurora"
-        },
-        {
-            "count" = 0
-            "image" = ""
-            "roles" = ["lead"]
-            "size" = {
-                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-                "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-            }
-            "aws_volume_size" = 40
-            "fleet" = "lucy"
-        },
-        {
-            "count" = 0
-            "image" = ""
-            "roles" = ["db"]
-            "size" = {
-                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-                "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-            }
-            "aws_volume_size" = 40
-            "fleet" = "daisy"
-        },
-        {
-            "count" = 0
-            "image" = ""
-            "roles" = ["build"]
-            "size" = {
-                "aws" = ["t3a.micro", "t3a.small", "t3a.medium", "t3a.large"][1]
-                "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"][0]
-            }
-            "aws_volume_size" = 40
-            "fleet" = "beth"
-        },
-    ]
+    workspace_servers = lookup(local.servers, terraform.workspace)
+    servers = {
+        "default" = [
+            {
+                "count" = 1, "fleet" = "aurora", "roles" = ["admin", "lead", "db"], 
+                "image" = "", "aws_volume_size" = 60, "size" = local.sizes[var.active_env_provider][4], 
+            },
+            {
+                "count" = 0, "fleet" = "lucy", "roles" = ["lead"],
+                "image" = "", "aws_volume_size" = 60, "size" = local.sizes[var.active_env_provider][0], 
+            },
+            {
+                "count" = 0, "fleet" = "daisy", "roles" = ["db"], 
+                "image" = "", "aws_volume_size" = 60,"size" = local.sizes[var.active_env_provider][0], 
+            },
+            {
+                "count" = 0, "fleet" = "beth", "roles" = ["build"],
+                "image" = "", "aws_volume_size" = 60, "size" = local.sizes[var.active_env_provider][0], 
+            },
+        ]
+    }
 }
 
 ############ DNS ############
@@ -177,7 +156,6 @@ variable "admin_arecord_aliases" {
         "registry",
         "chat",
     ]
-        #"btcpay"
 }
 
 variable "db_arecord_aliases" {

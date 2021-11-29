@@ -80,7 +80,7 @@ resource "aws_instance" "main" {
             ? data.aws_ami_ids.latest[each.value.cfg.image_alias].ids[0] : data.aws_ami.new[each.value.cfg.image_alias].id)
     )
 
-    instance_type = each.value.cfg.server.size["aws"]
+    instance_type = each.value.cfg.server.size
 
     tags = {
         Name = "${var.config.server_name_prefix}-${var.config.region}-${each.value.role}-${substr(uuid(), 0, 4)}",

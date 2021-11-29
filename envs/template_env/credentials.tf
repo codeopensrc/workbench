@@ -116,31 +116,29 @@ locals {
 #    }
 #}
 
-##! NOTE: If using local file for terraform state
 data "terraform_remote_state" "cloud" {
+    ##! NOTE: If using local file for terraform state
     backend = "local"
     workspace = "default"
     config = { path = "./terraform.tfstate" }
-}
 
-##! NOTE: If using s3 backend for terraform state
-#data "terraform_remote_state" "cloud" {
-#    backend = "s3"
-#    workspace = terraform.workspace
-#    config = {
-#        key    = "terra_state/template_env"     ## Should match backend s3 key
-#        workspace_key_prefix = "terra_state"    ## Should match backend s3 workspace_key_prefix
-#        bucket = local.data_state_bucket[local.active_s3_provider]
-#        region = local.data_state_bucketregion[local.active_s3_provider]
-#        access_key = local.data_state_s3_access_key[local.active_s3_provider]
-#        secret_key = local.data_state_s3_secret_key[local.active_s3_provider]
-#
-#        ###! Uncomment below to enable backend using digital ocean Spaces
-#        #endpoint = local.data_state_remote_endpoint[local.active_s3_provider]
-#        #skip_credentials_validation = true
-#        #skip_metadata_api_check = true
-#    }
-#}
+    ##! NOTE: If using s3 backend for terraform state
+    #backend = "s3"
+    #workspace = terraform.workspace
+    #config = {
+    #    key    = "terra_state/template_env"     ## Should match backend s3 key
+    #    workspace_key_prefix = "terra_state"    ## Should match backend s3 workspace_key_prefix
+    #    bucket = local.data_state_bucket[local.active_s3_provider]
+    #    region = local.data_state_bucketregion[local.active_s3_provider]
+    #    access_key = local.data_state_s3_access_key[local.active_s3_provider]
+    #    secret_key = local.data_state_s3_secret_key[local.active_s3_provider]
+
+    #    ###! Uncomment below to enable backend using digital ocean Spaces
+    #    #endpoint = local.data_state_remote_endpoint[local.active_s3_provider]
+    #    #skip_credentials_validation = true
+    #    #skip_metadata_api_check = true
+    #}
+}
 
 locals {
     data_state_s3_access_key = {
@@ -161,7 +159,7 @@ locals {
         "digital_ocean" = "us-east-2"
     }
     data_state_remote_endpoint = {
-        #"aws" = ""  ## s3 backend endpoint for aws shouldnt be needed
+        "aws" = ""  ## s3 backend endpoint for aws shouldnt be needed
         "digital_ocean" = "https://${var.do_region}.digitaloceanspaces.com"
     }
 }
