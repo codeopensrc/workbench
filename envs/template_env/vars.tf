@@ -117,8 +117,8 @@ locals {
     ### When intending to replace machines instead of scaling up/down
     ###  - Add a fleet, `terraform apply`, remove the old fleet, `terraform apply`
     ###  - Supports replacing 'lead' and 'build' type fleets
-    workspace_servers = lookup(local.servers, terraform.workspace)
-    servers = {
+    servers = lookup(local.workspace_servers, terraform.workspace)
+    workspace_servers = {
         "default" = [
             {
                 "count" = 1, "fleet" = "aurora", "roles" = ["admin", "lead", "db"], 
@@ -203,13 +203,4 @@ variable "additional_domains" {
         #    #"www" = "CNAME"
         #}
     }
-}
-
-variable "misc_repos" {
-    type = map(object({ pull=string, stable_version=string, use_stable=string,
-        repo_url=string, repo_name=string, docker_registry_image=string,
-        docker_service_name=string, consul_service_name=string, folder_location=string,
-        logs_prefix=string, email_image=string
-    }))
-    default = {}
 }

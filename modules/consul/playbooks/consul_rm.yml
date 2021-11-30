@@ -40,6 +40,6 @@
       with_items: "{{ nodes_to_remove }}"
 
     - name: force-leave nodes
-      shell: "consul force-leave -prune {{ item }}"
+      shell: "consul force-leave -prune {{ item }} || echo "
       with_items: "{{ nodes_to_remove }}"
       when: nodes_to_remove | length > 0

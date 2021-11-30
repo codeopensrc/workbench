@@ -57,43 +57,33 @@ if [[ $RESET = "true" ]]; then
     echo "Review script for attempting to reset";
     exit
 
-
+    ############################################################
     ######## For removing a worker from the cluster ########
+    ############################################################
 
-    #### TODO: Get all nodes and loop
     #### On controlplane
-    # kubectl drain <node name> --delete-emptydir-data --force --ignore-daemonsets
+    #kubectl drain <node name> --delete-emptydir-data --force --ignore-daemonsets
 
-    #### On worker 
-    # kubeadm reset
-        #### Instructions on worker after reset
-        ####  "The reset process does not clean CNI configuration. To do so, you must remove /etc/cni/net.d"
-        # rm -rf /etc/cni/net.d
-        ####  "The reset process does not clean your kubeconfig files and you must remove them manually."
-        ####  "Please, check the contents of the $HOME/.kube/config file"
-        # rm $HOME/.kube/config
-
-
-    #### Assuming controlplane
-    # iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+    #### Run on worker only if keeping worker around/reprovisioning it to re-join
+    #### On worker
+    #kubeadm reset
+    #rm -rf /etc/cni/net.d
+    #rm $HOME/.kube/config  or  rm -rf $HOME/.kube   to nuke it
+    #iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
 
     #### Control plane
-    # kubectl delete node <node name>
+    #kubectl delete node <node name>
 
     ############################################################
-    ###### For reseting the cluster after removing workers ########
+    ###### For resetting the cluster to clean slate after removing workers ########
+    ############################################################
 
-    # kubeadm reset
-        #### Instructions on worker after reset
-        ####  "The reset process does not clean CNI configuration. To do so, you must remove /etc/cni/net.d"
-        # rm -rf /etc/cni/net.d
-        ####  "The reset process does not clean your kubeconfig files and you must remove them manually."
-        ####  "Please, check the contents of the $HOME/.kube/config file"
-        # rm $HOME/.kube/config
+    #### On main/controlplane
+    #kubeadm reset
+    #rm -rf /etc/cni/net.d
+    #rm $HOME/.kube/config  or  rm -rf $HOME/.kube   to nuke it
+    #iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
 
-    # iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
-
-    #########################################################
 fi
 ######################################################
 
@@ -133,12 +123,12 @@ kubeadm config images pull
 
 
 mkdir -p $HOME/.kube
+rm $HOME/.kube/joininfo.txt
 
 ## Init cluster
 API_VPC_IP=$(grep "vpc.my_private_ip" /etc/hosts | cut -d " " -f1)
 echo "KUBELET_EXTRA_ARGS=\"--node-ip=$API_VPC_IP\"" > /etc/default/kubelet
-kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$API_VPC_IP | grep -A 1 "kubeadm join" | tee $HOME/.kube/joininfo.txt
-## TODO: Format join command to be easily read in from file as a command
+kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$API_VPC_IP --control-plane-endpoint="kube-cluster-endpoint:6443" | grep -A 1 "^kubeadm join" | tee $HOME/.kube/joininfo.txt
 
 
 ### On control-plane copy config file to local dir so we can run commands

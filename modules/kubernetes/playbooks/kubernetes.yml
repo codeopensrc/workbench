@@ -1,7 +1,7 @@
 ## NOTE: Ansible has a clustering module for kubernetes we can get to later
 # https://docs.ansible.com/ansible/2.9/modules/list_of_clustering_modules.html
 ---
-- name: Handle Kubernetes admin
+- name: HANDLE KUBERNETES ADMIN
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
   vars:
@@ -25,14 +25,19 @@
       rescue:
         - name: start cluster
           command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }}
-          
-    - name: init nginxKubeProxy
-      command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
 
+    - name: get certificate-key
+      register: certificate_key
+      shell: 'kubeadm init phase upload-certs --upload-certs | awk "/^[[:alnum:]]{10,}/"'
+      when: server_count | int > 1
+          
     - name: untaint node if solo
       shell: "kubectl taint nodes --all node-role.kubernetes.io/master- || echo"
       changed_when: false
       when: server_count | int == 1
+
+    - name: init nginxKubeProxy
+      command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
 
     - name: cluster serviceaccounts
       block:
@@ -56,10 +61,35 @@
       when: admin_servers | int > 0
 
 
+- name: HANDLE KUBERNETES CONTROL-PLANE
+  ### Get lead hosts that do NOT match kubernetes admin
+  ### (lead) NOT IN (admin+lead | first)
+  hosts: "{{ (groups.lead) | difference( ((groups.admin + groups.lead) | first) ) }}"
+  remote_user: root
+  gather_facts: no
+  vars:
+    kubernetes_version: "{{ kubernetes_version }}"
+    cluster_admin_hostname: "{{ (groups.admin + groups.lead) | first }}"
+    certificate_key: "{{ hostvars[cluster_admin_hostname]['certificate_key'].stdout }}"
+  tasks:
+    - name: join cluster as control_plan
+      block:
+        - name: check cluster joined
+          command: kubectl get nodes
+          changed_when: false
+      rescue:
+        - name: join cluster
+          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -k {{ certificate_key }}"
+
+    - name: untaint secondary control plane
+      shell: "kubectl taint nodes {{ machine_name }} node-role.kubernetes.io/master- || echo"
+      changed_when: false
+
+
 - name: Handle Kubernetes worker
-  ### Get all hosts that do NOT match kubernetes admin
-  ### (lead+db+build) NOT IN (admin+lead | first)
-  hosts: "{{ (groups.lead + groups.db + groups.build) | difference( ((groups.admin + groups.lead) | first) ) }}"
+  ### Get all hosts that do NOT match kubernetes admin/control-plane
+  ### (db+build) NOT IN (admin+lead)
+  hosts: "{{ (groups.db + groups.build) | difference(groups.admin + groups.lead) }}"
   remote_user: root
   gather_facts: no
   vars:
@@ -75,7 +105,7 @@
           shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }}"
 
 
-- name: Reboot gitlab environments
+- name: REBOOT GITLAB ENVIRONMENTS
   hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), [] ) }}"
   remote_user: root
   vars:

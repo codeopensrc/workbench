@@ -25,7 +25,7 @@
       when: nodes_to_remove | length > 0
 
     - name: demote node
-      shell: "docker node demote {{ item }} && sleep 15"
+      shell: "docker node demote {{ item }} || echo"
       with_items: "{{ nodes_to_remove }}"
       when: nodes_to_remove | length > 0
 

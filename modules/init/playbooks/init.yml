@@ -53,6 +53,8 @@
     region: "{{ region }}"
     hostname: "{{ hostname }}"
     root_domain_name: "{{ root_domain_name }}"
+    cluster_admin_hostname: "{{ (groups.admin + groups.lead) | first }}"
+    control_plane_endpoint: "{{ hostvars[cluster_admin_hostname].private_ip }}"
   tasks:
     - name: change hostname
       command: sudo hostnamectl set-hostname {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}
@@ -74,3 +76,9 @@
         path: /etc/hosts
         regexp: '^{{ private_ip }} vpc.my_private_ip'
         line: '{{ private_ip }} vpc.my_private_ip'
+
+    - name: add kube controlplane endpoint alias
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^{{ control_plane_endpoint }} kube-cluster-endpoint'
+        line: '{{ control_plane_endpoint }} kube-cluster-endpoint'

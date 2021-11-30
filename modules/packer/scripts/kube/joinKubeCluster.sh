@@ -5,11 +5,12 @@ PATH=$PATH:/usr/bin
 ### Until its integrated and stable in our images, install/detect here
 VERSION="1.22.1-00"
 
-while getopts "i:t:h:j:v:" flag; do
+while getopts "i:t:h:j:k:v:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         i) API_VPC_IP=$OPTARG;;
         j) JOIN_COMMAND=$OPTARG;;
+        k) CERTIFICATE_KEY=$OPTARG;;
         t) TOKEN=$OPTARG;;
         h) HASH=$OPTARG;;
         v) VERSION=$OPTARG;;
@@ -86,11 +87,24 @@ echo "KUBELET_EXTRA_ARGS=\"--node-ip=$WORKER_VPC_IP\"" > /etc/default/kubelet
 ## Replace  {API_VPC_IP}   {TOKEN}   and   {HASH}
 if [[ -n $JOIN_COMMAND ]]; then
     echo "Trying joincmd: $JOIN_COMMAND"
-    $JOIN_COMMAND
+    if [[ -n $CERTIFICATE_KEY ]]; then
+        $JOIN_COMMAND --control-plane --apiserver-advertise-address $WORKER_VPC_IP --certificate-key $CERTIFICATE_KEY
+    else
+        $JOIN_COMMAND
+    fi
 else
-    kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH}
+    if [[ -n $CERTIFICATE_KEY ]]; then
+        kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH}
+    else
+        kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH} --control-plane \
+            --apiserver-advertise-address $WORKER_VPC_IP --certificate-key $CERTIFICATE_KEY
+    fi
 fi
 
 mkdir -p $HOME/.kube
-sudo cp /etc/kubernetes/kubelet.conf $HOME/.kube/config
+if [[ -n $CERTIFICATE_KEY ]]; then
+    sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+else
+    sudo cp /etc/kubernetes/kubelet.conf $HOME/.kube/config
+fi
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
