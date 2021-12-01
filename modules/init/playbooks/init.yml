@@ -62,7 +62,7 @@
     - name: add hostname
       lineinfile:
         path: /etc/hosts
-        regexp: '.*{{ server_name_prefix }}-{{ region }}.*'
+        regexp: '^127.0.1.1'
         line: '127.0.1.1 {{ ("admin" in machine_name) | ternary(hostname, root_domain_name) }} {{ machine_name }}'
 
     - name: add public_ip alias
@@ -80,5 +80,5 @@
     - name: add kube controlplane endpoint alias
       lineinfile:
         path: /etc/hosts
-        regexp: '^{{ control_plane_endpoint }} kube-cluster-endpoint'
+        regexp: 'kube-cluster-endpoint'
         line: '{{ control_plane_endpoint }} kube-cluster-endpoint'

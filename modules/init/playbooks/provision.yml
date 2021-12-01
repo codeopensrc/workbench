@@ -77,6 +77,8 @@
         dest: /etc/consul.d/conf.d/dns.json
         mode: '0755'
 
+    - name: downland and install etcdutl
+      command: bash /root/code/scripts/install/install_etcdutl.sh
 
 
 - name: PROVISION EXPORTERS

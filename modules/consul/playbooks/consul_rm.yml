@@ -20,7 +20,8 @@
 
 
 - name: REMOVE CONSUL NODES
-  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  ## Run on first and last so we can ensure force-leave can remove first/last
+  hosts: "{{ ((groups.admin + groups.lead) | first) + ((groups.admin + groups.lead) | last) }}"
   remote_user: root
   vars:
     current_names: "{{ all_names | from_json  }}"
@@ -40,6 +41,6 @@
       with_items: "{{ nodes_to_remove }}"
 
     - name: force-leave nodes
-      shell: "consul force-leave -prune {{ item }} || echo "
+      shell: "consul force-leave -prune {{ item }} || echo"
       with_items: "{{ nodes_to_remove }}"
-      when: nodes_to_remove | length > 0
+      when: nodes_to_remove | length > 0 and machine_name not in nodes_to_remove

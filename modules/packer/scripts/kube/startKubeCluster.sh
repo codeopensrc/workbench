@@ -68,7 +68,7 @@ if [[ $RESET = "true" ]]; then
     #### On worker
     #kubeadm reset
     #rm -rf /etc/cni/net.d
-    #rm $HOME/.kube/config  or  rm -rf $HOME/.kube   to nuke it
+    #rm -rf $HOME/.kube
     #iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
 
     #### Control plane
