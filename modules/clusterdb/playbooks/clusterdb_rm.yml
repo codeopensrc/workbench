@@ -1,0 +1,69 @@
+# TODO: Setup ALL dbs (not just mongo) to bind to private net/vpc instead of relying on security group/firewall
+---
+- name: SHUTDOWN MONGO
+  hosts: db
+  remote_user: root
+  vars:
+    current_ips: "{{ db_public_ips | from_json  }}"
+    old_ansible_ips: []
+    nodeips_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_ips: "{{ old_ansible_ips + [item] }}"
+      with_items: "{{ groups.db }}"
+    - set_fact:
+        nodeips_to_remove: "{{ nodeips_to_remove + [item] }}"
+      with_items: "{{ old_ansible_ips | difference(current_ips) }}"
+
+    ##TODO: Havent checked if this errors if run on non-primary
+    - name: stepdown if primary
+      command: mongo --eval "rs.stepDown()"
+      when: ansible_default_ipv4.address in nodeips_to_remove
+
+    - name: wait for election
+      command: sleep 10
+
+    ##TODO: Do we need echo or ignore_errors
+    - name: remove replicas
+      shell: |
+        SERVER=$(grep "{{ hostvars[item].private_ip }} mongo" /etc/hosts | cut -d " " -f2)
+        mongo --eval "rs.remove('$SERVER:27017')" || echo
+      loop: "{{ nodeips_to_remove }}"
+      when: nodeips_to_remove | length > 0
+
+    - name: wait for propagation
+      command: sleep 10
+
+    ## Mongo says to do this before remove, but after works for us
+    - name: remove self from replicaset
+      command: mongo --eval "db.shutdownServer()"
+      when: ansible_default_ipv4.address in nodeips_to_remove
+
+    - name: stop mongo
+      command: systemctl stop mongod
+      when: ansible_default_ipv4.address in nodeips_to_remove
+
+
+
+- name: REMOVE REPLICA ALIAS
+  hosts: all
+  remote_user: root
+  vars:
+    current_ips: "{{ db_public_ips | from_json  }}"
+    old_ansible_ips: []
+    nodeips_to_remove: []
+  tasks:
+    - set_fact:
+        old_ansible_ips: "{{ old_ansible_ips + [item] }}"
+      with_items: "{{ groups.db }}"
+    - set_fact:
+        nodeips_to_remove: "{{ nodeips_to_remove + [item] }}"
+      with_items: "{{ old_ansible_ips | difference(current_ips) }}"
+
+    - name: remove alias
+      lineinfile:
+        path: /etc/hosts
+        state: absent
+        regexp: '{{ hostvars[item].private_ip }} mongo'
+      loop: "{{ nodeips_to_remove }}"
+      when: (nodeips_to_remove | length > 0) and (ansible_default_ipv4.address not in nodeips_to_remove)

@@ -151,3 +151,10 @@
 
 
     CURRENT_NUM_RUNNERS="{%raw%}${#RUNNERS_ON_MACHINE[@]}{%endraw%}"
+
+
+  #vars:
+  #  group_ind: "{{ (lookup('ansible.utils.index_of', groups.db, 'eq', item) | int) + 1 }}"
+  #
+  #
+  #meta: end_host

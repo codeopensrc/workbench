@@ -1,14 +1,13 @@
 # TODO: Setup ALL dbs (not just mongo) to bind to private net/vpc instead of relying on security group/firewall
 ---
-- name: Install dbs
+- name: INSTALL DBS
   hosts: db
   remote_user: root
   vars:
     redis: "{{ redis_dbs | from_json }}"
     mongo: "{{ mongo_dbs | from_json }}"
     pg: "{{ pg_dbs | from_json }}"
-    vpc_private_iface : "{{ vpc_private_iface }}"
-    private_ip: "{{ hostvars[inventory_hostname]['ansible_'+vpc_private_iface].ipv4.address }}"
+    replica_set_name: "rs0"
   tasks:
     - name: chmod install files
       command: "{{ item }}"
@@ -28,7 +27,7 @@
     - name: install mongo
       command: "{{ item }}"
       with_items:
-        - bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i {{ private_ip }}
+        - bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i {{ private_ip }} -r {{ replica_set_name }}
         - cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
       when: mongo
 
@@ -42,18 +41,177 @@
     - name: reload consul
       command: consul reload
 
-- name: Import dbs
+
+##TODO: Maybe split into mongo/redis/postgres playbooks
+- name: INIT DB REPLICAS
+  hosts: db[0]
+  remote_user: root
+  vars:
+    start_replica_set: "{{ groups.db | length >= 3 }}"
+    replica_set_name: "rs0"
+    mongo: "{{ mongo_dbs | from_json }}"
+    root_domain_name: "{{ root_domain_name }}"
+  tasks:
+    ## Only mongo support atm
+    - name: end_play if requirements not met
+      meta: end_play
+      when: ((mongo | list) | length == 0) or (start_replica_set | bool == false)
+
+    - name: check mongo hostnames
+      block:
+        - name: get mongo hostnames
+          shell: 'grep "mongo" /etc/hosts'
+      rescue:
+        - name: supply default hostnames
+          lineinfile:
+            path: /etc/hosts
+            regexp: 'mongo{{ item }}.{{ root_domain_name }}'
+            line: '{{ hostvars[groups.db[item]].private_ip }} mongo{{ item }}.{{ root_domain_name }}'
+          loop: "{{ range(groups.db|length) | list }}"
+
+    - name: check mongo replicaset initiated
+      block:
+        - name: check replica conf
+          command: mongo --eval "rs.conf()"
+          changed_when: false
+      rescue:
+        ##TODO: Better method to add correct name/number of hostnames on init maybe
+        - name: start mongo replica set
+          shell: |
+            MONGO_CMD='rs.initiate( { _id : "rs0", members: [
+                  { _id: 0, host: "mongo0.{{ root_domain_name }}:27017" },
+                  { _id: 1, host: "mongo1.{{ root_domain_name }}:27017" },
+                  { _id: 2, host: "mongo2.{{ root_domain_name }}:27017" }
+            ]})'
+            mongo --eval "$MONGO_CMD"
+          when: (start_replica_set | bool == true) and (groups.db | length >= 3)
+
+    - name: wait for election
+      command: sleep 15
+
+
+
+- name: ADD DB REPLICAS
   hosts: db
+  remote_user: root
+  vars:
+    start_replica_set: "{{ groups.db | length >= 3 }}"
+    replica_set_name: "rs0"
+    mongo: "{{ mongo_dbs | from_json }}"
+    root_domain_name: "{{ root_domain_name }}"
+    members_to_add: []
+    members_should_have: []
+    current_members: []
+  tasks:
+    ## Only mongo support atm
+    - name: end_play if requirements not met
+      meta: end_play
+      when: ((mongo | list) | length == 0) or (start_replica_set | bool == false)
+
+    ## How to get primary
+    #mongo --quiet --eval "JSON.stringify(rs.hello())" | jq ".primary"
+    - name: get replica members
+      register: current_members
+      shell: |
+        mongo --quiet --eval "JSON.stringify(rs.hello())" | jq -r ".hosts[]"
+      ignore_errors: true
+
+    - name: set current_members
+      set_fact:
+        current_members: "{{ current_members.stdout_lines | list }}"
+
+    - name: set members_should_have
+      set_fact:
+        members_should_have: "{{ members_should_have + ['mongo'+(item|string)+'.'+root_domain_name+':27017'] }}"
+      loop: "{{ range(groups.db|length) | list }}"
+
+    - name: set members_to_add
+      set_fact:
+        members_to_add: "{{ members_to_add + [item] }}"
+      with_items: "{{ members_should_have | difference(current_members) }}"
+      when: current_members | length > 0
+
+    - name: add replica members
+      shell: |
+        mongo --quiet --eval "rs.add( { host{%raw%}:{%endraw%} '{{ item }}' } )" || echo
+      loop: "{{ members_to_add }}"
+      when: (start_replica_set | bool == true) and (groups.db | length >= 3) and (members_to_add | length > 0)
+      ignore_errors: true
+
+
+
+- name: GET EXISTING HOSTS
+  hosts: db[0]
+  remote_user: root
+  vars:
+    mongo_dns: []
+  tasks:
+    - name: get mongoips
+      register: mongo_ips
+      shell: 'grep "mongo" /etc/hosts'
+      ignore_errors: true
+
+    - name: set mongodns
+      set_fact:
+        mongo_dns: "{{ mongo_ips.stdout_lines | list }}"
+      ignore_errors: true
+
+
+
+- name: ADD DB CLUSTER ALIASES
+  hosts: all
+  remote_user: root
+  vars:
+    start_index: "{{ hostvars[groups.db[0]]['current_members'] | length }}"
+    aliases_to_add: "{{ hostvars[groups.db[0]]['members_to_add'] | default([]) }}"
+    mongo_aliases: "{{ hostvars[groups.db[0]]['mongo_dns'] | default([]) }}"
+  tasks:
+    ## Add members_to_add hostnames, aliasing to ips from groups.db, starting at index that is length of current members
+    - name: add new aliases
+      lineinfile:
+        path: /etc/hosts
+        regexp: '{{ item | regex_replace(":27017", "") }}'
+        line: '{{ hostvars[groups.db[((start_index|int) + my_idx)]].private_ip }} {{ item | regex_replace(":27017", "") }}'
+      loop: "{{ aliases_to_add }}"
+      loop_control:
+        index_var: my_idx
+      when: aliases_to_add | length > 0
+
+    - name: add old aliases to new hosts
+      lineinfile:
+        path: /etc/hosts
+        regexp: '{{ item }}'
+        line: '{{ item }}'
+      loop: "{{ mongo_aliases }}"
+
+
+
+- name: UPDATE CONSUL ADDRESSES
+  hosts: db
+  remote_user: root
+  tasks:
+    - name: update consul
+      shell: |
+        cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
+        MONGO_ADDRESS=$(grep "{{ private_ip }} mongo" /etc/hosts | cut -d " " -f2)
+        sed -i "s|address\": \".*\"|address\": \"$MONGO_ADDRESS\"|" /etc/consul.d/conf.d/mongo.json
+        consul reload
+
+
+
+- name: IMPORT DBS
+  hosts: db[0]
   remote_user: root
   vars:
     import_dbs_list: "{{ dbs_to_import | from_json }}"
     should_import_dbs: "{{ import_dbs }}"
-    vpc_private_iface : "{{ vpc_private_iface }}"
-    private_ip: "{{ hostvars[inventory_hostname]['ansible_'+vpc_private_iface].ipv4.address }}"
     use_gpg: "{{ use_gpg }}"
     bot_gpg_name: "{{ bot_gpg_name }}"
     passphrase_file: "\"-p $HOME/{{ bot_gpg_name }}\""
   tasks:
+    ## TODO: Check if we're previously imported?
+    ## We should only need to import once, but we run this playbook when adding/removing members (mongo)
+    ## Might need to do consul kv db_type/db_name/imported = true
     - name: import dbs
       shell: |
         IMPORT={{ item["import"] }}

@@ -1,6 +1,7 @@
 variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 variable "predestroy_hostfile" {}
+variable "remote_state_hosts" {}
 
 variable "region" {}
 variable "server_count" {}
@@ -15,6 +16,7 @@ variable "dev_pg_password" { default = "" }
 locals {
     all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
     all_public_ips = flatten([for role, hosts in var.ansible_hosts: hosts[*].ip])
+    old_all_public_ips = flatten([for role, hosts in var.remote_state_hosts: hosts[*].ip])
 }
 
 resource "null_resource" "start" {
@@ -32,10 +34,12 @@ resource "null_resource" "start" {
     }
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/consul.yml -i ${var.ansible_hostfile} \
-                --extra-vars \
-               'force_rebootstrap=${var.force_consul_rebootstrap}
-               region=${var.region}'
+            if [ ${length(local.all_public_ips)} -ge ${length(local.old_all_public_ips)} ]; then
+                ansible-playbook ${path.module}/playbooks/consul.yml -i ${var.ansible_hostfile} \
+                    --extra-vars \
+                   'force_rebootstrap=${var.force_consul_rebootstrap}
+                   region=${var.region}'
+            fi
         EOF
     }
 }

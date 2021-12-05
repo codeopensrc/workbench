@@ -1,7 +1,7 @@
 output "instances" {
     value = {
-        for h in digitalocean_droplet.main:
-        (h.name) => "ssh root@${h.ipv4_address}"
+        for k, h in digitalocean_droplet.main:
+        (h.name) => "${k} - ssh root@${h.ipv4_address}"
     }
 }
 

@@ -1,4 +1,7 @@
+variable "ansible_hosts" {}
+variable "remote_state_hosts" {}
 variable "ansible_hostfile" {}
+
 variable "server_count" {}
 
 variable "region" { default = "" }
@@ -29,6 +32,10 @@ variable "mongo_port" { default = "" }
 variable "redis_version" { default = "" }
 variable "redis_port" { default = "" }
 
+locals {
+    all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
+    old_all_names = flatten([for role, hosts in var.remote_state_hosts: hosts[*].name])
+}
 
 resource "null_resource" "playbook" {
     triggers = {
@@ -36,17 +43,19 @@ resource "null_resource" "playbook" {
     }
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/init.yml -i ${var.ansible_hostfile} \
-                --extra-vars \
-                'aws_bot_access_key=${var.aws_bot_access_key}
-                aws_bot_secret_key=${var.aws_bot_secret_key}
-                do_spaces_region=${var.do_spaces_region}
-                do_spaces_access_key=${var.do_spaces_access_key}
-                do_spaces_secret_key=${var.do_spaces_secret_key}
-                server_name_prefix=${var.server_name_prefix}
-                region=${var.region}
-                hostname=${var.hostname}
-                root_domain_name=${var.root_domain_name}'
+            if [ ${length(local.all_names)} -ge ${length(local.old_all_names)} ]; then
+                ansible-playbook ${path.module}/playbooks/init.yml -i ${var.ansible_hostfile} \
+                    --extra-vars \
+                    'aws_bot_access_key=${var.aws_bot_access_key}
+                    aws_bot_secret_key=${var.aws_bot_secret_key}
+                    do_spaces_region=${var.do_spaces_region}
+                    do_spaces_access_key=${var.do_spaces_access_key}
+                    do_spaces_secret_key=${var.do_spaces_secret_key}
+                    server_name_prefix=${var.server_name_prefix}
+                    region=${var.region}
+                    hostname=${var.hostname}
+                    root_domain_name=${var.root_domain_name}'
+            fi
         EOF
     }
 
@@ -57,28 +66,29 @@ resource "null_resource" "playbook" {
     ## TODO: Determine best way to use identity files and remote repo locations
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/provision.yml -i ${var.ansible_hostfile} \
-                --extra-vars \
-                'nodeexporter_version=${var.nodeexporter_version}
-                promtail_version=${var.promtail_version}
-                loki_version=${var.loki_version}
-                consulexporter_version=${var.consulexporter_version}
-
-                pg_read_only_pw=${var.pg_read_only_pw}
-                postgres_version=${var.postgres_version}
-                postgres_port=${var.postgres_port}
-                mongo_version=${var.mongo_version}
-                mongo_port=${var.mongo_port}
-                redis_version=${var.redis_version}
-                redis_port=${var.redis_port}
-                deploy_key_location=${var.deploy_key_location}
-                known_hosts_json=${jsonencode(var.known_hosts)}
-                fqdn=${var.root_domain_name}
-                sshconfig_hosts_json=${jsonencode([
-                    for HOST in var.known_hosts:
-                    HOST.site
-                    if HOST.site != "gitlab.${var.root_domain_name}"
-                ])}'
+            if [ ${length(local.all_names)} -ge ${length(local.old_all_names)} ]; then
+                ansible-playbook ${path.module}/playbooks/provision.yml -i ${var.ansible_hostfile} \
+                    --extra-vars \
+                    'nodeexporter_version=${var.nodeexporter_version}
+                    promtail_version=${var.promtail_version}
+                    loki_version=${var.loki_version}
+                    consulexporter_version=${var.consulexporter_version}
+                    pg_read_only_pw=${var.pg_read_only_pw}
+                    postgres_version=${var.postgres_version}
+                    postgres_port=${var.postgres_port}
+                    mongo_version=${var.mongo_version}
+                    mongo_port=${var.mongo_port}
+                    redis_version=${var.redis_version}
+                    redis_port=${var.redis_port}
+                    deploy_key_location=${var.deploy_key_location}
+                    known_hosts_json=${jsonencode(var.known_hosts)}
+                    fqdn=${var.root_domain_name}
+                    sshconfig_hosts_json=${jsonencode([
+                        for HOST in var.known_hosts:
+                        HOST.site
+                        if HOST.site != "gitlab.${var.root_domain_name}"
+                    ])}'
+            fi
         EOF
     }
 

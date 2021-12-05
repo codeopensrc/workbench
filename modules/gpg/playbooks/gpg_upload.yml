@@ -1,6 +1,6 @@
 ---
-- name: Upload gpg
-  hosts: "{{ (groups['admin'] | default([]) + groups['db']) }}"
+- name: UPLOAD GPG
+  hosts: "{{ groups.admin + groups.db }}"
   remote_user: root
   gather_facts: no
   vars:

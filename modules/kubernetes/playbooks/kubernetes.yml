@@ -1,6 +1,22 @@
 ## NOTE: Ansible has a clustering module for kubernetes we can get to later
 # https://docs.ansible.com/ansible/2.9/modules/list_of_clustering_modules.html
 ---
+- name: ADD KUBE CLUSTER ENDPOINT
+  hosts: all
+  remote_user: root
+  gather_facts: no
+  vars:
+    cluster_admin_hostname: "{{ (groups.admin + groups.lead) | first }}"
+    control_plane_endpoint: "{{ hostvars[cluster_admin_hostname].private_ip }}"
+  tasks:
+    - name: add kube controlplane endpoint alias
+      lineinfile:
+        path: /etc/hosts
+        regexp: 'kube-cluster-endpoint'
+        line: '{{ control_plane_endpoint }} kube-cluster-endpoint'
+
+
+
 - name: HANDLE KUBERNETES ADMIN
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
@@ -13,7 +29,6 @@
     admin_servers: "{{ admin_servers }}"
     server_count: "{{ server_count }}"
 
-    private_ip: "{{ hostvars[inventory_hostname]['ansible_'+vpc_private_iface].ipv4.address }}"
     nginx_args: "{{ (admin_servers | int == 0) | ternary('-p default', '') }}"
     runner_img_version: "{{ kubernetes_version | regex_replace('-00') }}"
   tasks:
@@ -25,6 +40,11 @@
       rescue:
         - name: start cluster
           command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }}
+
+    ## Token can expire, update join command.
+    #https://stackoverflow.com/questions/61352209/kubernetes-unable-to-join-a-remote-master-node
+    - name: create join command
+      shell: "kubeadm token create --print-join-command | tee $HOME/.kube/joininfo.txt | consul kv put kube/joincmd -"
 
     - name: get certificate-key
       register: certificate_key

@@ -34,7 +34,10 @@ module "init" {
         module.cloud,
         module.ansible,
     ]
+    ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
+    remote_state_hosts = local.remote_state_hosts
+
     server_count = local.server_count
 
     region = local.region
@@ -78,6 +81,7 @@ module "consul" {
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
     predestroy_hostfile = local.predestroy_hostfile
+    remote_state_hosts = local.remote_state_hosts
 
     region = local.region
     server_count = local.server_count
@@ -103,7 +107,9 @@ module "cron" {
         module.init,
         module.consul,
     ]
+    ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
+    remote_state_hosts = local.remote_state_hosts
 
     admin_servers = local.admin_servers
     lead_servers = local.lead_servers
@@ -222,7 +228,12 @@ module "clusterdb" {
         module.nginx,
     ]
 
+    ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
+    predestroy_hostfile = local.predestroy_hostfile
+    remote_state_hosts = local.remote_state_hosts
+
+    db_servers = local.db_servers
 
     redis_dbs = local.redis_dbs
     mongo_dbs = local.mongo_dbs
@@ -234,7 +245,7 @@ module "clusterdb" {
     use_gpg = var.use_gpg
     bot_gpg_name = var.bot_gpg_name
 
-    vpc_private_iface = local.vpc_private_iface
+    root_domain_name = local.root_domain_name
 }
 
 ##NOTE: Uses ansible
@@ -535,6 +546,9 @@ locals {
                 ? reverse(local.kube_versions_found)[0]
                 : local.last_gitlab_kube_version) )
         : var.kubernetes_version)
+
+    remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
+        ? data.terraform_remote_state.cloud.outputs.hosts : {})
 
     server_count = sum(tolist([ for SERVER in local.servers: SERVER.count ]))
     admin_servers = sum(concat([0], tolist([

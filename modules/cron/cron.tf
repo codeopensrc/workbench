@@ -1,4 +1,6 @@
+variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
+variable "remote_state_hosts" {}
 # All
 variable "lead_servers" {}
 variable "admin_servers" {}
@@ -27,9 +29,12 @@ variable "app_definitions" {
 locals {
     allow_cron_backups = terraform.workspace == "default"
     mongo_host = var.mongo_host == "" ? "vpc.my_private_ip" : var.mongo_host
+    all_public_ips = flatten([for role, hosts in var.ansible_hosts: hosts[*].ip])
+    old_all_public_ips = flatten([for role, hosts in var.remote_state_hosts: hosts[*].ip])
 }
 
-
+## TODO: Where should we run cron backups for replicated DBs
+## Need to make sure we only do one
 resource "null_resource" "cronjobs" {
     triggers = {
         num_apps = length(keys(var.app_definitions))
@@ -41,21 +46,22 @@ resource "null_resource" "cronjobs" {
 
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/cron.yml -i ${var.ansible_hostfile} --extra-vars \
-                'gitlab_backups_enabled=${var.gitlab_backups_enabled && local.allow_cron_backups}
-                mongo_host=${local.mongo_host}
-                redis_dbs_json=${jsonencode(length(var.redis_dbs) > 0 ? var.redis_dbs : [])}
-                mongo_dbs_json=${jsonencode(length(var.mongo_dbs) > 0 ? var.mongo_dbs : [])}
-                pg_dbs_json=${jsonencode(length(var.pg_dbs) > 0 ? var.pg_dbs : [])}
-                s3alias=${var.s3alias}
-                s3bucket=${var.s3bucket}
-                use_gpg=${var.use_gpg}
-                allow_cron_backups=${local.allow_cron_backups}
-                app_definitions_json=${jsonencode([
-                    for APP in var.app_definitions: APP  
-                    if APP.custom_backup_file != ""
-                ])}'
-
+            if [ ${length(local.all_public_ips)} -ge ${length(local.old_all_public_ips)} ]; then
+                ansible-playbook ${path.module}/playbooks/cron.yml -i ${var.ansible_hostfile} --extra-vars \
+                    'gitlab_backups_enabled=${var.gitlab_backups_enabled && local.allow_cron_backups}
+                    mongo_host=${local.mongo_host}
+                    redis_dbs_json=${jsonencode(length(var.redis_dbs) > 0 ? var.redis_dbs : [])}
+                    mongo_dbs_json=${jsonencode(length(var.mongo_dbs) > 0 ? var.mongo_dbs : [])}
+                    pg_dbs_json=${jsonencode(length(var.pg_dbs) > 0 ? var.pg_dbs : [])}
+                    s3alias=${var.s3alias}
+                    s3bucket=${var.s3bucket}
+                    use_gpg=${var.use_gpg}
+                    allow_cron_backups=${local.allow_cron_backups}
+                    app_definitions_json=${jsonencode([
+                        for APP in var.app_definitions: APP  
+                        if APP.custom_backup_file != ""
+                    ])}'
+            fi
         EOF
     }
 }

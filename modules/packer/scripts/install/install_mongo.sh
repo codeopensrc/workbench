@@ -1,13 +1,14 @@
 #!/bin/bash
 
 MONGO_VERSION="4.4.6"
-BIND_IP="0.0.0.0"
+BIND_IPS="0.0.0.0"
 
-while getopts "v:i:b" flag; do
+while getopts "v:i:r:b" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         b) BACKUP=true;;
-        i) BIND_IP=$OPTARG;;
+        i) BIND_IPS=$OPTARG;;
+        r) REPLICA_SET_NAME=$OPTARG;;
         v) MONGO_VERSION=$OPTARG;;
     esac
 done
@@ -39,8 +40,14 @@ sudo apt-get update
 
 sudo apt-get install -y mongodb-org=$MONGO_VERSION mongodb-org-server=$MONGO_VERSION mongodb-org-shell=$MONGO_VERSION mongodb-org-mongos=$MONGO_VERSION mongodb-org-tools=$MONGO_VERSION
 
-sed -i "s|bindIp: 0.0.0.0|bindIp: $BIND_IP|" /etc/mongod.conf;
-sed -i "s|bindIp: 127.0.0.1|bindIp: $BIND_IP|" /etc/mongod.conf;
+## BIND_IPS can be a single address or comma deliminated set of ip/dns names
+
+sed -i "s|bindIp: 0.0.0.0|bindIp: $BIND_IPS|" /etc/mongod.conf;
+sed -i "s|bindIp: 127.0.0.1.*|bindIp: 127.0.0.1,$BIND_IPS|" /etc/mongod.conf;
+
+if [[ -n $REPLICA_SET_NAME ]]; then
+    sed -i "s|#replication:|replication:\n  replSetName: \"$REPLICA_SET_NAME\"|" /etc/mongod.conf;
+fi
 
 
 sudo systemctl daemon-reload;
