@@ -1,5 +1,30 @@
+## TODO: Work to elimiate as many/as much time from sleep as possible
+## Changes to where `delete node` done and using `kubeadm reset` may have been enough
 ---
-- name: Remove nodes
+- name: UPDATE KUBE CLUSTER ENDPOINT
+  hosts: all
+  remote_user: root
+  gather_facts: no
+  vars:
+    admin_ips: "{{ admin_private_ips | from_json  }}"
+    lead_ips: "{{ lead_private_ips | from_json  }}"
+    control_plane_endpoint: ""
+  tasks:
+    - set_fact:
+        control_plane_endpoint: "{{ (admin_ips + lead_ips) | first }}"
+
+    - name: update kube controlplane endpoint alias
+      lineinfile:
+        path: /etc/hosts
+        regexp: 'kube-cluster-endpoint'
+        line: '{{ control_plane_endpoint }} kube-cluster-endpoint'
+
+    - name: sleep 90
+      command: sleep 90
+
+
+
+- name: DRAIN NODES
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
   vars:
@@ -30,16 +55,72 @@
       command: sleep 20
       when: current_names | length == 1
 
+    - name: get patchfiles
+      register: patchfiles
+      find:
+        paths: /root/.kube
+        patterns: "*-cm-patch.yml"
+
+    - name: apply reconfigured coredns configmap patches
+      shell: 'kubectl patch cm -n kube-system coredns --type merge --patch "$(cat {{ item.path }})"'
+      loop: "{{ patchfiles.files }}"
+      when: patchfiles.matched > 0
+
+    - name: sleep 60
+      command: sleep 60
+      when: nodes_to_remove | length > 0
+
     - name: drain nodes
-      shell: "kubectl drain {{ item }} --ignore-daemonsets --force --delete-emptydir-data --grace-period=300 && sleep 10"
+      shell: "kubectl drain {{ item }} --ignore-daemonsets --force --delete-emptydir-data --grace-period=300 || echo"
       with_items: "{{ nodes_to_remove }}"
       when: nodes_to_remove | length > 0
 
-    - name: sleep2
-      command: sleep 10
+    - name: sleep 20
+      command: sleep 20
       when: nodes_to_remove | length > 0
 
+
+- name: REMOVE NODES
+  hosts: "{{ (groups.admin + groups.lead) }}"
+  remote_user: root
+  vars:
+    primary_host: "{{ (groups.admin + groups.lead) | first }}"
+    nodes_to_remove: "{{ hostvars[primary_host].nodes_to_remove }}"
+  tasks:
+    - name: kubeadm reset
+      shell: 'echo y | kubeadm reset'
+      when: nodes_to_remove | length > 0 and machine_name in nodes_to_remove
+
+    - name: iptables reset
+      shell: 'iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X'
+      when: nodes_to_remove | length > 0 and machine_name in nodes_to_remove
+
+    - name: sleep 15
+      command: sleep 15
+      when: nodes_to_remove | length > 0
+
+    ##TODO: Confirm deleting self caused sub-second request issues or dns
     - name: delete nodes
-      shell: "kubectl delete node {{ item }} && sleep 10"
+      shell: "kubectl delete node {{ item }} || echo"
       with_items: "{{ nodes_to_remove }}"
-      when: nodes_to_remove | length > 0
+      when: nodes_to_remove | length > 0 and machine_name not in nodes_to_remove
+
+    ## https://github.com/kubernetes/kubernetes/issues/81071
+    ### In case address/port is different - etcdctl --endpoints 127.0.0.1:2379
+    - name: get etcd id
+      register: etcd_id
+      shell: |
+          etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt \
+            --cert /etc/kubernetes/pki/etcd/server.crt \
+            --key /etc/kubernetes/pki/etcd/server.key member list \
+            | grep "{{ item }}" | sed -rn "s/(^[[:alnum:]]{6,}).*/\1/1p"
+      with_items: "{{ nodes_to_remove }}"
+      when: nodes_to_remove | length > 0 and machine_name not in nodes_to_remove
+
+    - name: remove from etcd member
+      shell: |
+          etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt \
+            --cert /etc/kubernetes/pki/etcd/server.crt \
+            --key /etc/kubernetes/pki/etcd/server.key member remove {{ item.stdout }} || echo
+      with_items: "{{ etcd_id.results }}"
+      when: nodes_to_remove | length > 0 and machine_name not in nodes_to_remove

@@ -60,9 +60,18 @@
         nodeips_to_remove: "{{ nodeips_to_remove + [item] }}"
       with_items: "{{ old_ansible_ips | difference(current_ips) }}"
 
-    - name: remove alias
+    - name: remove alias from /etc/hosts
       lineinfile:
         path: /etc/hosts
+        state: absent
+        regexp: '{{ hostvars[item].private_ip }} mongo'
+      loop: "{{ nodeips_to_remove }}"
+      when: (nodeips_to_remove | length > 0) and (ansible_default_ipv4.address not in nodeips_to_remove)
+
+    ## Does it error if the file doesnt exist?
+    - name: remove alias from cm patch
+      lineinfile:
+        path: /root/.kube/mongohosts-cm-patch.yml
         state: absent
         regexp: '{{ hostvars[item].private_ip }} mongo'
       loop: "{{ nodeips_to_remove }}"

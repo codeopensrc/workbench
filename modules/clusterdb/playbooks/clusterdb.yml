@@ -165,17 +165,24 @@
     start_index: "{{ hostvars[groups.db[0]]['current_members'] | length }}"
     aliases_to_add: "{{ hostvars[groups.db[0]]['members_to_add'] | default([]) }}"
     mongo_aliases: "{{ hostvars[groups.db[0]]['mongo_dns'] | default([]) }}"
+    new_aliases: []
   tasks:
     ## Add members_to_add hostnames, aliasing to ips from groups.db, starting at index that is length of current members
-    - name: add new aliases
-      lineinfile:
-        path: /etc/hosts
-        regexp: '{{ item | regex_replace(":27017", "") }}'
-        line: '{{ hostvars[groups.db[((start_index|int) + my_idx)]].private_ip }} {{ item | regex_replace(":27017", "") }}'
+    - name: 
+      set_fact:
+        new_aliases: '{{ new_aliases + [hostvars[groups.db[((start_index|int) + my_idx)]].private_ip+" "+(item | regex_replace(":27017", ""))] }}'
       loop: "{{ aliases_to_add }}"
       loop_control:
         index_var: my_idx
       when: aliases_to_add | length > 0
+    
+    - name: add new aliases
+      lineinfile:
+        path: /etc/hosts
+        regexp: '{{ item }}'
+        line: '{{ item }}'
+      loop: "{{ new_aliases }}"
+      when: new_aliases | length > 0
 
     - name: add old aliases to new hosts
       lineinfile:
@@ -183,6 +190,21 @@
         regexp: '{{ item }}'
         line: '{{ item }}'
       loop: "{{ mongo_aliases }}"
+
+    - name: combine aliases
+      set_fact:
+        combined_aliases:  "{{ new_aliases + mongo_aliases }}"
+
+    ##TODO: Temp until we find a good spot to place patches maybe
+    - name: ensure .kube dir
+      file:
+        path: /root/.kube
+        state: directory
+
+    - name: update coredns configmap file
+      template:
+        src: ansiblefiles/mongohosts-cm-patch.yml
+        dest: /root/.kube/mongohosts-cm-patch.yml
 
 
 

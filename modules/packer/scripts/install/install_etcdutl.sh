@@ -17,3 +17,4 @@ rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
 /tmp/etcd-download-test/etcdutl version
 
 cp /tmp/etcd-download-test/etcdutl /usr/local/bin
+cp /tmp/etcd-download-test/etcdctl /usr/local/bin

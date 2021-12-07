@@ -1,6 +1,7 @@
 variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 variable "predestroy_hostfile" {}
+variable "remote_state_hosts" {}
 
 variable "admin_servers" {}
 variable "server_count" {}
@@ -15,6 +16,19 @@ variable "container_orchestrators" {}
 
 locals {
     all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
+    old_all_names = flatten([for role, hosts in var.remote_state_hosts: hosts[*].name])
+    admin_private_ips = flatten([
+        for role, hosts in var.ansible_hosts: [
+            for HOST in hosts: HOST.private_ip
+            if contains(HOST.roles, "admin")
+        ]
+    ])
+    lead_private_ips = flatten([
+        for role, hosts in var.ansible_hosts: [
+            for HOST in hosts: HOST.private_ip
+            if contains(HOST.roles, "lead")
+        ]
+    ])
 }
 
 resource "null_resource" "kubernetes" {
@@ -26,9 +40,13 @@ resource "null_resource" "kubernetes" {
     ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them
     provisioner "local-exec" {
         command = <<-EOF
-            if [ -f "${var.predestroy_hostfile}" ]; then
-                ansible-playbook ${path.module}/playbooks/kubernetes_rm.yml -i ${var.predestroy_hostfile} \
-                    --extra-vars 'all_names=${jsonencode(local.all_names)}';
+            if [ ${length(local.all_names)} -lt ${length(local.old_all_names)} ]; then
+                if [ -f "${var.predestroy_hostfile}" ]; then
+                    ansible-playbook ${path.module}/playbooks/kubernetes_rm.yml -i ${var.predestroy_hostfile} --extra-vars \
+                        'all_names=${jsonencode(local.all_names)}
+                        admin_private_ips=${jsonencode(local.admin_private_ips)}
+                        lead_private_ips=${jsonencode(local.lead_private_ips)}';
+                fi
             fi
         EOF
     }

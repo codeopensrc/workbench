@@ -267,6 +267,7 @@ module "docker" {
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
     predestroy_hostfile = local.predestroy_hostfile
+    remote_state_hosts = local.remote_state_hosts
 
     lead_servers = local.lead_servers
 
@@ -412,6 +413,7 @@ module "kubernetes" {
     ansible_hosts = local.ansible_hosts
     ansible_hostfile = local.ansible_hostfile
     predestroy_hostfile = local.predestroy_hostfile
+    remote_state_hosts = local.remote_state_hosts
 
     admin_servers = local.admin_servers
     server_count = local.server_count

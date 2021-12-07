@@ -1,0 +1,5 @@
+data:
+  mongohosts: |
+{% for alias in combined_aliases %}
+    {{ alias }}
+{% endfor %}

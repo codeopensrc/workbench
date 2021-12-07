@@ -39,22 +39,32 @@
           changed_when: false
       rescue:
         - name: start cluster
+          register: initcert
           command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }}
+
+    - name: delete old cert certificate-key
+      shell: 'kubectl delete secret -n kube-system kubeadm-certs || echo'
+      when: (server_count | int > 1) and (initcert is not defined)
+
+    - name: wait
+      command: sleep 10
+
+    - name: get certificate-key
+      register: certificate_key
+      shell: 'kubeadm init phase upload-certs --upload-certs | awk "/^[[:alnum:]]{10,}/"'
+      when: server_count | int > 1
 
     ## Token can expire, update join command.
     #https://stackoverflow.com/questions/61352209/kubernetes-unable-to-join-a-remote-master-node
     - name: create join command
       shell: "kubeadm token create --print-join-command | tee $HOME/.kube/joininfo.txt | consul kv put kube/joincmd -"
 
-    - name: get certificate-key
-      register: certificate_key
-      shell: 'kubeadm init phase upload-certs --upload-certs | awk "/^[[:alnum:]]{10,}/"'
-      when: server_count | int > 1
-          
+    ## Due to various configs/rotations, just untainting the master from get-go
+    ##  no mater server count for the time being
     - name: untaint node if solo
       shell: "kubectl taint nodes --all node-role.kubernetes.io/master- || echo"
       changed_when: false
-      when: server_count | int == 1
+      #when: server_count | int == 1
 
     - name: init nginxKubeProxy
       command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
@@ -188,3 +198,54 @@
             sudo gitlab-rails runner "PersonalAccessToken.find_by_token('$TERRA_UUID').revoke!";
             consul kv put kube/envs_rebooted true
       when: import_gitlab | bool == true
+
+
+
+- name: UPDATE COREDNS
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  vars:
+    configmap_keys: []
+  tasks:
+    - name: get patchfiles
+      register: patchfiles
+      find:
+        paths: /root/.kube
+        patterns: "*-cm-patch.yml"
+
+    - name: add hosts to coredns configmap
+      shell: 'kubectl patch cm -n kube-system coredns --type merge --patch "$(cat {{ item.path }})"'
+      loop: "{{ patchfiles.files }}"
+      when: patchfiles.matched > 0
+
+    - name: get configmap keys from file
+      register: configmap_patch_keys
+      command: 'sed -n -r "s/ +([[:alnum:]]+): \|/\1/p" {{ item.path }}'
+      loop: "{{ patchfiles.files }}"
+      when: patchfiles.matched > 0
+
+    - name: make configmap_keys
+      set_fact:
+        configmap_keys: "{{ configmap_keys + item.stdout_lines }}"
+      loop: '{{ configmap_patch_keys.results | list }}'
+
+      ### Might have to do hosts HOSTNAME { _hosts_ fallthrough } in cm's
+      ###  if we have multiple hosts directives for the same host
+    - name: add hosts directive to coredns configmap
+      register: update
+      shell: |
+        kubectl get cm -n kube-system coredns -o yaml | sed "/hosts \/etc\/coredns\/{{ item }}/d" \
+            | sed -r "s|( +)loadbalance|\1loadbalance\n\1hosts /etc/coredns/{{ item }} {{ root_domain_name }}|" \
+            | kubectl replace -f -
+        sleep 1
+      loop: "{{ configmap_keys }}"
+
+    - name: update coredns deployment volume file
+      template:
+        src: ansiblefiles/coredns-vol-patch.yml
+        dest: /root/.kube/coredns-vol-patch.yml
+
+    ## Only redeploys the deployment on volume change
+    ## CoreDNS reads its Corefile in its configmap periodically, updating any changes gracefully
+    - name: patch coredns deployment
+      shell: 'kubectl patch deployment -n kube-system coredns --type merge --patch "$(cat /root/.kube/coredns-vol-patch.yml)"'

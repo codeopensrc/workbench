@@ -128,7 +128,7 @@ rm $HOME/.kube/joininfo.txt
 ## Init cluster
 API_VPC_IP=$(grep "vpc.my_private_ip" /etc/hosts | cut -d " " -f1)
 echo "KUBELET_EXTRA_ARGS=\"--node-ip=$API_VPC_IP\"" > /etc/default/kubelet
-kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$API_VPC_IP --control-plane-endpoint="kube-cluster-endpoint:6443" | grep -A 1 "^kubeadm join" | tee $HOME/.kube/joininfo.txt
+kubeadm init --upload-certs --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$API_VPC_IP --control-plane-endpoint="kube-cluster-endpoint:6443" | grep -A 1 "^kubeadm join" | tee $HOME/.kube/joininfo.txt
 
 
 ### On control-plane copy config file to local dir so we can run commands

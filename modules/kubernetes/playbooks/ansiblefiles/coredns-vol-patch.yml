@@ -1,0 +1,14 @@
+spec:
+  template:
+    spec:
+      volumes:
+      - name: config-volume
+        configMap:
+          name: coredns
+          items:
+          - key: Corefile
+            path: Corefile
+{% for cm_key in configmap_keys %}
+          - key: {{ cm_key }}
+            path: {{ cm_key }}
+{% endfor %}

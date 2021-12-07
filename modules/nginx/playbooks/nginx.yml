@@ -32,11 +32,13 @@
       template:
         src: ansiblefiles/mainproxy.tmpl
         dest: /etc/nginx/conf.d/proxy.conf
+      when: (subdomains | list) | length > 0
 
     - name: kube_services template
       template:
         src: ansiblefiles/kube_services.tmpl
         dest: /etc/nginx/conf.d/kube_services.conf
+      when: (kube_subdomains | list) | length > 0
 
 
 - name: Nginx additional

@@ -1,6 +1,7 @@
 variable "ansible_hosts" {}
 variable "ansible_hostfile" {}
 variable "predestroy_hostfile" {}
+variable "remote_state_hosts" {}
 
 variable "lead_servers" {}
 variable "region" { default = "" }
@@ -17,6 +18,12 @@ variable "app_definitions" {
 }
 
 locals {
+    old_lead_public_ips = flatten([
+        for role, hosts in var.remote_state_hosts: [
+            for HOST in hosts: HOST.ip
+            if contains(HOST.roles, "lead")
+        ]
+    ])
     lead_public_ips = flatten([
         for role, hosts in var.ansible_hosts: [
             for HOST in hosts: HOST.ip
@@ -39,14 +46,20 @@ resource "null_resource" "swarm" {
     ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them
     provisioner "local-exec" {
         command = <<-EOF
-            if [ -f "${var.predestroy_hostfile}" ]; then
-                ansible-playbook ${path.module}/playbooks/swarm_rm.yml -i ${var.predestroy_hostfile} \
-                    --extra-vars 'lead_names=${jsonencode(local.lead_names)} lead_public_ips=${jsonencode(local.lead_public_ips)}';
+            if [ ${length(local.lead_public_ips)} -lt ${length(local.old_lead_public_ips)} ]; then
+                if [ -f "${var.predestroy_hostfile}" ]; then
+                    ansible-playbook ${path.module}/playbooks/swarm_rm.yml -i ${var.predestroy_hostfile} \
+                        --extra-vars 'lead_names=${jsonencode(local.lead_names)} lead_public_ips=${jsonencode(local.lead_public_ips)}';
+                fi
             fi
         EOF
     }
     provisioner "local-exec" {
-        command = "ansible-playbook ${path.module}/playbooks/swarm.yml -i ${var.ansible_hostfile} --extra-vars \"region=${var.region}\""
+        command = <<-EOF
+            if [ ${length(local.lead_public_ips)} -ge ${length(local.old_lead_public_ips)} ]; then
+                ansible-playbook ${path.module}/playbooks/swarm.yml -i ${var.ansible_hostfile} --extra-vars "region=${var.region}"
+            fi
+        EOF
     }
 }
 
@@ -61,8 +74,10 @@ resource "null_resource" "services" {
     }
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/services.yml -i ${var.ansible_hostfile} --extra-vars \
-                'aws_ecr_region=${var.aws_ecr_region} app_definitions=${jsonencode(var.app_definitions)}'
+            if [ ${length(local.lead_public_ips)} -ge ${length(local.old_lead_public_ips)} ]; then
+                ansible-playbook ${path.module}/playbooks/services.yml -i ${var.ansible_hostfile} --extra-vars \
+                    'aws_ecr_region=${var.aws_ecr_region} app_definitions=${jsonencode(var.app_definitions)}'
+            fi
         EOF
     }
 }

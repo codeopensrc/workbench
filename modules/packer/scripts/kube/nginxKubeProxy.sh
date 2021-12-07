@@ -159,6 +159,16 @@ server {
 #    matchLabels:
 #      app: $APPNAME
 
+#lifecycle:
+#  preStop:
+#    exec:
+#      command: [
+#        "sh", "-c",
+#        # Introduce a delay to the shutdown sequence to wait for the
+#        # pod eviction event to propagate. Then, gracefully shutdown
+#        # nginx.
+#        "sleep 5 && /usr/sbin/nginx -s quit",
+#      ]
 ## Create a kubernetes service
 ## Create a kubernetes deployment
 kubectl apply -f - <<EOF

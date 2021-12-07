@@ -1,7 +1,7 @@
 {
     "bootstrap": {{ (bootstrap | bool == true) | ternary('true', 'false') }},
     "ui_config": {
-        "enabled": {{ (cluster_leader_hostname == inventory_hostname) | ternary('true', 'false') }}
+        "enabled": true
     },
     "retry_join_wan": [ "{{ consul_wan_leader_ip }}" ],
     "datacenter": "{{ region }}",
