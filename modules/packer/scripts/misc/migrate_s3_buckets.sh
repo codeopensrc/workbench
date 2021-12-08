@@ -1,5 +1,7 @@
 #!/bin/bash
 
+## NOTE:: Hasnt been used/updated in a while but I feel like it can be used if needed after a review
+
 #### NOTE: This migrates one s3 bucket at a time to stay fairly configurable
 #### TODO: Write to allow cli inputs to run this script in a resource
 

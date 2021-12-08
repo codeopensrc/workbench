@@ -1,5 +1,7 @@
 #!/bin/bash
 
+## NOTE: Hasnt been used/updated in a while but I feel like it can be used if needed after a review
+
 # This pertains to creating a registry on AWS's ECR.
 # Todo item would be creating the registry anywhere
 
