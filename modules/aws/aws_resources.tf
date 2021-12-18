@@ -117,8 +117,9 @@ resource "aws_instance" "main" {
             private_key = file(var.config.local_ssh_key_file)
         }
     }
-
-    ## TODO: Confirm this works for aws .tags.Roles correctly
+    provisioner "local-exec" {
+        command = "ssh-keyscan -H ${self.public_ip} >> ~/.ssh/known_hosts"
+    }
     provisioner "local-exec" {
         when = destroy
         command = <<-EOF

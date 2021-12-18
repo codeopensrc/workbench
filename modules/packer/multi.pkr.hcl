@@ -58,6 +58,10 @@ variable "redis_version" {
   type    = string
   default = ""
 }
+variable "kubernetes_version" {
+  type    = string
+  default = ""
+}
 variable "packer_dir" {
   type    = string
   default = ""
@@ -81,6 +85,7 @@ source "amazon-ebs" "main" {
         docker_version         = "${var.docker_version}"
         gitlab_version         = "${var.gitlab_version}"
         redis_version          = "${var.redis_version}"
+        kubernetes_version     = "${var.kubernetes_version}"
     }
 }
 
@@ -132,10 +137,12 @@ build {
             "chmod +x /tmp/scripts/init.sh",
             "chmod +x /tmp/scripts/install/install_docker.sh",
             "chmod +x /tmp/scripts/install/install_redis.sh",
+            "chmod +x /tmp/scripts/install/install_kubernetes.sh",
             "chmod +x /tmp/scripts/move.sh",
             "sudo bash /tmp/scripts/init.sh -c ${var.consul_version} -d ${var.docker_compose_version} ${var.gitlab_version != "" ? "-g ${var.gitlab_version} -a" : ""}",
             "sudo bash /tmp/scripts/install/install_docker.sh -v ${var.docker_version}",
             "sudo bash /tmp/scripts/install/install_redis.sh -v ${var.redis_version}",
+            "sudo bash /tmp/scripts/install/install_kubernetes.sh -v ${var.kubernetes_version}",
             "sudo bash /tmp/scripts/move.sh"
         ]
     }

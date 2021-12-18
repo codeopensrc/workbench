@@ -25,6 +25,9 @@ function getclusterjoin() {
 
 if [[ -n $GET_JOIN ]]; then getclusterjoin; exit; fi
 
+
+## TODO: Detect currently installed kubectl and install/upgrade if our provided version different
+
 if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [[ ! -f /usr/bin/kubectl ]]; then
     # Install kubeadm, kubelet, kubeadm
     # Download gpg
@@ -47,7 +50,8 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
     sudo apt-mark hold kubelet kubeadm kubectl
 fi
 
-
+## Moving to installation and stopping kubelet in packer, so ensure its enabled here
+systemctl start kubelet
 
 ### Reset cluster
 ### ATM these are instuctions and not runnable via arg

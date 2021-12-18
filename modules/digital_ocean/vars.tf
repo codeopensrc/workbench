@@ -168,21 +168,32 @@ locals {
     dockerc = "DKC-${var.config.packer_config.docker_compose_version}"
     gitlab = "GL-${var.config.packer_config.gitlab_version}"
     redis = "R-${var.config.packer_config.redis_version}"
-    large_image_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.gitlab}_${local.redis}")
-    small_image_name = uuidv5("dns", "${local.consul}_${local.docker}_${local.dockerc}_${local.redis}")
+    kubernetes = "K-${var.config.packer_config.kubernetes_version}"
+    image_str = join("_", [
+        local.consul,
+        local.docker,
+        local.dockerc,
+        local.gitlab,
+        local.redis,
+        local.kubernetes
+    ])
+    small_image_name = uuidv5("dns", replace(local.image_str, "${local.gitlab}_", ""))
+    large_image_name = uuidv5("dns", local.image_str)
 
     do_tags = [
         "${replace(local.consul, ".", "-")}",
         "${replace(local.docker, ".", "-")}",
         "${replace(local.dockerc, ".", "-")}",
         "${replace(local.gitlab, ".", "-")}",
-        "${replace(local.redis, ".", "-")}"
+        "${replace(local.redis, ".", "-")}",
+        "${replace(local.kubernetes, ".", "-")}"
     ]
     do_small_tags = [
         "${replace(local.consul, ".", "-")}",
         "${replace(local.docker, ".", "-")}",
         "${replace(local.dockerc, ".", "-")}",
-        "${replace(local.redis, ".", "-")}"
+        "${replace(local.redis, ".", "-")}",
+        "${replace(local.kubernetes, ".", "-")}"
     ]
 
     tags = {

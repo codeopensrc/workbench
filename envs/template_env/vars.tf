@@ -27,32 +27,44 @@ variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] } 
 #######################################
 
 ##! NOTE: Software provisioned after launch
-##! kubernetes_version options (if installing): Valid version, recent version gitlab supports, or latest
-##!   ex "1.22.3-00" | "gitlab" | "" (empty/latest uses latest)
-variable "kubernetes_version" { default = "gitlab" }
 variable "nodeexporter_version" { default = "1.2.2" }
 variable "promtail_version" { default = "2.4.1" }
 variable "consulexporter_version" { default = "0.7.1" }
 variable "loki_version" { default = "2.4.1" }
 variable "postgres_version" { default = "9.5" } ## Not fully implemented - consulchecks atm
 variable "mongo_version" { default = "4.4.6" } ## Not fully implemented - consulchecks atm
-variable "redis_version" { default = "5.0.9" } ## Not fully implemented - consulchecks atm
 
 
-##! NOTE: Software baked into image
-variable "packer_config" {
+##! NOTE: Packer config variables - Software baked into image
+##! kubernetes_version options: Valid version, recent version gitlab supports, or latest
+##!   ex "1.22.3-00" | "gitlab" | "" (empty/latest uses latest)
+variable "kubernetes_version" { default = "gitlab" }
+variable "gitlab_version" { default = "14.4.2-ce.0" }
+variable "docker_version" { default = "20.10.10" }
+variable "docker_compose_version" { default = "1.29.2" }
+variable "consul_version" { default = "1.10.3" }
+variable "redis_version" { default = "5.0.9" }
+variable "base_amis" {
     default = {
-        gitlab_version = "14.4.2-ce.0"
-        docker_version = "20.10.10"
-        docker_compose_version = "1.29.2"
-        consul_version = "1.10.3"
-        redis_version = "5.0.9"
-        base_amis = {
-            "us-east-2" = "ami-030bd1caa8425dfe8" #20.04
-        }
-        digitalocean_image_os = {
-            "main" = "ubuntu-20-04-x64"
-        }
+        "us-east-2" = "ami-030bd1caa8425dfe8" #20.04
+    }
+}
+variable "digitalocean_image_os" {
+    default = {
+        "main" = "ubuntu-20-04-x64"
+    }
+}
+
+locals {
+    packer_config = {
+        gitlab_version = var.gitlab_version
+        docker_version = var.docker_version
+        docker_compose_version = var.docker_compose_version
+        consul_version = var.consul_version
+        redis_version = var.redis_version
+        kubernetes_version = local.kubernetes_version
+        base_amis = var.base_amis
+        digitalocean_image_os = var.digitalocean_image_os
     }
 }
 
@@ -64,31 +76,20 @@ variable "packer_config" {
 ###!  run once (backups) or toggleable (dns TTL) fashion with this setting
 #variable "migration_prep" { default = false } ## Not in use atm
 
-## Known role support matrix for 1-3 nodes
-## All matrices support adding multiple 1gb+ build nodes
-## None of the matrices support more than 1 db role in a cluster
-## None of the matrices support more than 1 admin role in a cluster
+# Any combination of admin+lead+db+build on/across nodes works
+# Only restriction for the moment is 1 admin role in a cluster (tied to gitlab)
+#  Also its 1 OR 3+ db (2 is not HA)
+# Cpu and memory issues should be taken into consideration
+# DB and Build are kubernetes worker nodes, but so far 1gb *works*
+# Lead are control-planes and work with 2gb nodes
+# Admin currently installs gitlab and requires 8gb
 
-# 1 node  - (admin + lead + db)  -- Confirmed
-# 1 node  - (lead + db)          -- Confirmed
-
-# 2 nodes - (lead), (db)                 -- Confirmed
-# 2 nodes - (lead + db), (lead)          -- Confirmed
-# 2 nodes - (admin), (lead + db)         -- Confirmed
-# 2 nodes - (admin + db), (lead)         -- Confirmed
-# 2 nodes - (admin + lead), (db)         -- Confirmed
-# 2 nodes - (admin + lead + db), (lead)  -- Confirmed
-
-# 3 nodes - (lead), (lead), (db)                -- Confirmed
-# 3 nodes - (lead + db), (lead), (lead)         -- Confirmed
-# 3 nodes - (admin), (lead), (db)               -- Confirmed
-# 3 nodes - (admin), (lead + db), (lead)        -- Confirmed
-# 3 nodes - (admin + db), (lead), (lead)        -- Confirmed
-# 3 nodes - (admin + lead), (lead), (db)        -- Confirmed
-# 3 nodes - (admin + lead), (lead + db), (lead) -- Confirmed
-# 3 nodes - (admin + lead + db), (lead), (lead) -- Confirmed
+# Migration/scaling of lead and db become HA at 3 nodes, with a 1 node malfunction toleration
+# No extra configuration besides maybe redeployment of applications if deployed @ 2 nodes
+# Admin/gitlab requires extra consideration in regards to migration and is not scalable atm
 
 
+#####! For now replacing fleets instead of `terraform taint` works - See note @ `local.workspace_servers` below
 ## New long term goal - taint based replacement of nodes
 ## Number is how many machines you want. When you want to replace a node, you `terraform taint` it
 ## Terraform and ansible should handle the graceful replacement of that node after `terraform apply`

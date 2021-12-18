@@ -34,6 +34,7 @@ resource "null_resource" "build" {
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
+                --var 'kubernetes_version=${var.packer_config.kubernetes_version}' \
                 --var 'aws_key_name=${var.aws_key_name}' \
                 --var 'aws_region=${var.aws_region}' \
                 --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \
@@ -54,6 +55,7 @@ resource "null_resource" "build" {
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
+                --var 'kubernetes_version=${var.packer_config.kubernetes_version}' \
                 --var 'aws_key_name=${var.aws_key_name}' \
                 --var 'aws_region=${var.aws_region}' \
                 --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \

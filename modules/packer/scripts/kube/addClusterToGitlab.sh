@@ -48,8 +48,7 @@ fi
 
 ## NOTE: Make sure this IP is allowed to make local requests (we handle it by default now)
 ## Admin > AppSettings > Network > Outbound requests
-#### NOTE: url produced from below command contains color output characters that we remove
-CLUSTER_API_ADDR=$(kubectl cluster-info | grep -E 'Kubernetes master|Kubernetes control plane' | sed -r "s|.*(http[s:/.[:alnum:]]*).*|\1|")
+CLUSTER_API_ADDR=$(kubectl get --raw /api | jq -r ".serverAddressByClientCIDRs[].serverAddress")
 
 SECRET=$(kubectl get secrets | grep default-token | cut -d " " -f1)
 CERT=$(kubectl get secret ${SECRET} -o jsonpath="{['data']['ca\.crt']}" | base64 --decode)

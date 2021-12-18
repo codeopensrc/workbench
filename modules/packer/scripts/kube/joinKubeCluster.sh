@@ -17,6 +17,7 @@ while getopts "i:t:h:j:k:v:" flag; do
     esac
 done
 
+## TODO: Detect currently installed kubectl and install/upgrade if our provided version different
 
 if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [[ ! -f /usr/bin/kubectl ]]; then
     # Install kubeadm, kubelet, kubeadm
@@ -38,6 +39,9 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
     # Im assuming this prevents it from upgrading
     sudo apt-mark hold kubelet kubeadm kubectl
 fi
+
+## Moving to installation and stopping kubelet in packer, so ensure its enabled here
+systemctl start kubelet
 
 
 if [[ -z $JOIN_COMMAND ]]; then

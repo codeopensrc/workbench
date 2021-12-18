@@ -7,7 +7,9 @@
     redis: "{{ redis_dbs | from_json }}"
     mongo: "{{ mongo_dbs | from_json }}"
     pg: "{{ pg_dbs | from_json }}"
+    start_replica_set: "{{ groups.db | length >= 3 }}"
     replica_set_name: "rs0"
+    replica_set_arg: '{{ (start_replica_set | bool) | ternary("-r "+replica_set_name, "") }}'
   tasks:
     - name: chmod install files
       command: "{{ item }}"
@@ -27,7 +29,7 @@
     - name: install mongo
       command: "{{ item }}"
       with_items:
-        - bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i {{ private_ip }} -r {{ replica_set_name }}
+        - bash /root/code/scripts/install/install_mongo.sh -v 4.4.6 -i {{ private_ip }} {{ replica_set_arg }}
         - cp /etc/consul.d/templates/mongo.json /etc/consul.d/conf.d/mongo.json
       when: mongo
 
@@ -190,6 +192,7 @@
         regexp: '{{ item }}'
         line: '{{ item }}'
       loop: "{{ mongo_aliases }}"
+      when: mongo_aliases | length > 0
 
     - name: combine aliases
       set_fact:
@@ -205,6 +208,7 @@
       template:
         src: ansiblefiles/mongohosts-cm-patch.yml
         dest: /root/.kube/mongohosts-cm-patch.yml
+      when: combined_aliases | length > 0
 
 
 

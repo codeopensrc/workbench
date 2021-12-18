@@ -423,7 +423,7 @@ module "kubernetes" {
     import_gitlab = var.import_gitlab
     vpc_private_iface = local.vpc_private_iface
 
-    kubernetes_version = var.kubernetes_version == "" ? "latest" : local.gitlab_kube_version
+    kubernetes_version = local.kubernetes_version
     container_orchestrators = var.container_orchestrators
 }
 
@@ -536,18 +536,19 @@ locals {
     }
     ## values() order output is based on SORTED gitlab_versions, then reversed
     last_gitlab_kube_version = reverse(values(local.gitlab_kube_matrix))[0]
-    gitlab_major_minor = regex("^[0-9]+.[0-9]+", var.packer_config.gitlab_version)
+    gitlab_major_minor = regex("^[0-9]+.[0-9]+", var.gitlab_version)
     kube_versions_found = [
         for GITLAB_V, KUBE_V in local.gitlab_kube_matrix: KUBE_V
         if length(regexall("^${local.gitlab_major_minor}", GITLAB_V)) > 0
     ]
     gitlab_kube_version = (var.kubernetes_version == "gitlab"
-        ? ( lookup(local.gitlab_kube_matrix, var.packer_config.gitlab_version, null) != null
-            ? local.gitlab_kube_matrix[var.packer_config.gitlab_version]
+        ? ( lookup(local.gitlab_kube_matrix, var.gitlab_version, null) != null
+            ? local.gitlab_kube_matrix[var.gitlab_version]
             : (length(local.kube_versions_found) > 0
                 ? reverse(local.kube_versions_found)[0]
                 : local.last_gitlab_kube_version) )
         : var.kubernetes_version)
+    kubernetes_version = var.kubernetes_version == "" ? "latest" : local.gitlab_kube_version
 
     remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
         ? data.terraform_remote_state.cloud.outputs.hosts : {})
@@ -611,7 +612,7 @@ locals {
         active_env_provider = var.active_env_provider
         local_ssh_key_file = var.local_ssh_key_file
         app_definitions = var.app_definitions
-        packer_config = var.packer_config
+        packer_config = local.packer_config
 
         ## DNS
         root_domain_name = local.root_domain_name
