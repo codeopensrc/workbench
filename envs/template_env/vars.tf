@@ -7,6 +7,10 @@ variable "aws_region" { default = "us-east-2" }
 variable "aws_ecr_region" { default = "us-east-2" }
 variable "placeholder_reusable_delegationset_id" { default = "" }
 
+########## Azure ##########
+variable "az_region" { default = "eastus" }
+variable "az_resource_group" { default = "rg" }
+
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
 variable "stun_port" { default = "" }
@@ -51,7 +55,18 @@ variable "base_amis" {
 }
 variable "digitalocean_image_os" {
     default = {
-        "main" = "ubuntu-20-04-x64"
+        "nyc3" = "ubuntu-20-04-x64"
+    }
+}
+
+variable "azure_image_os" {
+    default = {
+        "eastus" = {
+            publisher = "Canonical"
+            offer     = "UbuntuServer"
+            sku       = "18.04-LTS"
+            version   = "latest"
+        }
     }
 }
 
@@ -65,6 +80,7 @@ locals {
         kubernetes_version = local.kubernetes_version
         base_amis = var.base_amis
         digitalocean_image_os = var.digitalocean_image_os
+        azure_image_os = var.azure_image_os
     }
 }
 
@@ -103,6 +119,7 @@ variable "active_env_provider" { default = "digital_ocean" }
 module "cloud" {
     source             = "../../modules/digital_ocean"  ###! Uncomment for digital ocean
     #source             = "../../modules/aws"          ###! Uncomment for aws
+    #source             = "../../modules/azure"          ###! Uncomment for azure
 
     config = local.config
 }
@@ -112,6 +129,7 @@ locals {
     sizes = {
         "aws" = ["t3a.micro", "t3a.small", "t3a.small", "t3a.medium", "t3a.large"]
         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"]
+        "azure" = ["Standard_F2", "Standard_F2", "Standard_F2", "Standard_F2"/*2vcpu-4gb*/, "Standard_F2"]# "Standard_DS1_v2"
     }
     ### NOTE: Do not add or remove roles from instances after they are launched
     ### Fleets differ by either roles, size, or to use a specific image

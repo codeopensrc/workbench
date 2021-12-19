@@ -21,6 +21,15 @@ variable "aws_bot_access_key" { default = "" }
 variable "aws_bot_secret_key" { default = "" }
 #####
 
+##### Microsoft Azure only
+variable "az_admin_username" { default = ""} ## `ssh-keygen -l -f var.local_ssh_key_file` for name
+variable "az_subscriptionId" { default = ""}
+variable "az_tenant" { default = ""}
+variable "az_appId" { default = "" }
+variable "az_password" { default = ""}
+#####
+
+
 variable "pg_password" { default = "" }
 variable "pg_read_only_pw" { default = "" }
 variable "dev_pg_password" { default = "" }
@@ -144,22 +153,27 @@ locals {
     data_state_s3_access_key = {
         "aws" = var.aws_bot_access_key
         "digital_ocean" = var.do_spaces_access_key
+        "azure" = var.do_spaces_access_key ## TODO
     }
     data_state_s3_secret_key = {
         "aws" = var.aws_bot_secret_key
         "digital_ocean" = var.do_spaces_secret_key
+        "azure" = var.do_spaces_secret_key ## TODO
     }
     data_state_bucket = {
         "aws" = var.aws_bucket_name
         "digital_ocean" = var.do_spaces_name
+        "azure" = var.do_spaces_name ## TODO
     }
     ##! Must be valid aws region name even if digital ocean backend - so we use us-east-2 placeholder
     data_state_bucketregion = {
         "aws" = var.aws_region
         "digital_ocean" = "us-east-2"
+        "azure" = "us-east-2" ## TODO
     }
     data_state_remote_endpoint = {
         "aws" = ""  ## s3 backend endpoint for aws shouldnt be needed
         "digital_ocean" = "https://${var.do_region}.digitaloceanspaces.com"
+        "azure" = "https://${var.do_region}.digitaloceanspaces.com" ## TODO
     }
 }

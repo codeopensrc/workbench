@@ -1,4 +1,3 @@
-
 locals {
     vpc_name = "${var.config.server_name_prefix}_vpc"
 }
@@ -13,7 +12,22 @@ resource "aws_vpc" "terraform_vpc" {
     }
 }
 
-# ^
+# query/create igw
+resource "aws_internet_gateway" "igw" {
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name          = "IG_${local.vpc_name}"
+    }
+}
+
+# query/create rtb
+resource "aws_route_table" "rtb" {
+    vpc_id = aws_vpc.terraform_vpc.id
+    tags = {
+        Name          = "RTB_${local.vpc_name}"
+    }
+}
+
 # query/create subnets
 resource "aws_subnet" "public_subnet" {
     vpc_id     = aws_vpc.terraform_vpc.id
@@ -24,23 +38,6 @@ resource "aws_subnet" "public_subnet" {
     }
 }
 
-# ^
-# route table association
-resource "aws_route_table_association" "public_subnet_assoc" {
-    subnet_id      = aws_subnet.public_subnet.id
-    route_table_id = aws_route_table.rtb.id
-}
-
-# ^
-# query/create rtb
-resource "aws_route_table" "rtb" {
-    vpc_id = aws_vpc.terraform_vpc.id
-    tags = {
-        Name          = "RTB_${local.vpc_name}"
-    }
-}
-
-# ^
 # route
 resource "aws_route" "internet_access" {
     route_table_id         = aws_route_table.rtb.id
@@ -48,13 +45,10 @@ resource "aws_route" "internet_access" {
     destination_cidr_block = "0.0.0.0/0"
 }
 
-# ^
-# query/create igw
-resource "aws_internet_gateway" "igw" {
-    vpc_id = aws_vpc.terraform_vpc.id
-    tags = {
-        Name          = "IG_${local.vpc_name}"
-    }
+# route table association
+resource "aws_route_table_association" "public_subnet_assoc" {
+    subnet_id      = aws_subnet.public_subnet.id
+    route_table_id = aws_route_table.rtb.id
 }
 
 

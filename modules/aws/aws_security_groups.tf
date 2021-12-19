@@ -8,6 +8,7 @@
 # As long as the groups are added at creation you can have 6+ but cannot ADD a 6th after instance created
 # Long term goal I guess is no more than 5 groups available
 
+## TODO: Mix network acls in with security groups to limit sgs
 resource "aws_security_group" "db_ports" {
     name = "${local.vpc_name}_db_sg"
     vpc_id = aws_vpc.terraform_vpc.id
@@ -116,23 +117,38 @@ resource "aws_security_group" "app_ports" {
         cidr_blocks = ["172.16.0.0/12"]
         protocol    = "tcp"
     }
-    # We allow all ports by default for user, but this will ensure we can at least
-    #  make a docker-machine connection even if that rule is deleted
-    ingress {
-        description = "Docker Machine (user)"
-        from_port   = 2376
-        to_port     = 2376
-        cidr_blocks = ["${var.config.docker_machine_ip}/32"]
-        protocol    = "tcp"
-    }
 
     ingress {
-        description = "Kubernetes"
+        description = "Kubernetes nodeport services"
         from_port   = 30000                   ## *Purpose* NodePort Services†
         to_port     = 32767
         cidr_blocks = [var.config.cidr_block] ## Probably this setting once we setup dns/ingress
         #cidr_blocks = ["0.0.0.0/0"]           ## Debugging
         protocol    = "tcp"                   ## *Used By*  All
+    }
+    ingress {
+        description = "Kubernetes api"          ## *Purpose* Kubernetes API server
+        from_port   = 6443
+        to_port     = 6443
+        cidr_blocks = [var.config.cidr_block]   ## Only vpc (most secure, but need individual ip access for kubectl)
+        #cidr_blocks = ["0.0.0.0/0"]             ## Allow outside private vpc (best in team/group setting or have bastion host)
+        protocol    = "tcp"                     ## *Used By* All
+    }
+    ingress {
+        description = "Kubernetes etcd"        ## *Purpose* etcd server client API
+        from_port   = 2379
+        to_port     = 2380
+        cidr_blocks = [var.config.cidr_block]  ## Might be only needed between control nodes
+        #cidr_blocks = ["0.0.0.0/0"]            ## Debugging
+        protocol    = "tcp"                    ## *Used By* kube-apiserver, etcd
+    }
+    ingress {
+        description = "Kubernetes controller"  ## *Purpose* kubelet API,kube-scheduler,kube-controller-manager
+        from_port   = 10250
+        to_port     = 10252
+        cidr_blocks = [var.config.cidr_block]  ## Might be only needed between control nodes
+        #cidr_blocks = ["0.0.0.0/0"]            ## Debugging
+        protocol    = "tcp"                    ## *Used By* Self/Control Plane
     }
 
     #ingress {

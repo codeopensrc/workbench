@@ -39,7 +39,7 @@ resource "null_resource" "build" {
                 --var 'aws_region=${var.aws_region}' \
                 --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \
                 --var 'do_token=${var.do_token}' \
-                --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os["main"]}' \
+                --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os[var.digitalocean_region]}' \
                 --var 'digitalocean_region=${var.digitalocean_region}' \
                 --var packer_dir=$CUR_DIR \
                 $CUR_DIR/multi.pkr.hcl
@@ -60,7 +60,7 @@ resource "null_resource" "build" {
                 --var 'aws_region=${var.aws_region}' \
                 --var 'ami_source=${var.packer_config.base_amis[var.aws_region]}' \
                 --var 'do_token=${var.do_token}' \
-                --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os["main"]}' \
+                --var 'digitalocean_image_os=${var.packer_config.digitalocean_image_os[var.digitalocean_region]}' \
                 --var 'digitalocean_region=${var.digitalocean_region}' \
                 --var packer_dir=$CUR_DIR \
                 $CUR_DIR/multi.pkr.hcl

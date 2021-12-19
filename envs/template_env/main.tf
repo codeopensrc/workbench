@@ -516,11 +516,30 @@ resource "null_resource" "enable_autoupgrade" {
 
 locals {
     ###! provider based
-    ## TODO: Map
-    vpc_private_iface = var.active_env_provider == "digital_ocean" ? "eth1" : "ens5"
-    s3alias = local.active_s3_provider == "digital_ocean" ? "spaces" : "s3"
-    s3bucket = local.active_s3_provider == "digital_ocean" ? var.do_spaces_name : var.aws_bucket_name
-    region = var.active_env_provider == "digital_ocean" ? var.do_region : var.aws_region_alias
+    vpc_private_iface = local.vpc_private_ifaces[var.active_env_provider]
+    s3alias = local.s3aliases[local.active_s3_provider]
+    s3bucket = local.s3buckets[local.active_s3_provider]
+    region = local.regions[var.active_env_provider]
+    vpc_private_ifaces = {
+        "digital_ocean" = "eth1"
+        "aws" = "ens5"
+        "azure" = "eth1" ### TODO
+    }
+    s3aliases = {
+        "digital_ocean" = "spaces"
+        "aws" = "s3"
+        "azure" = "spaces" ### TODO
+    }
+    s3buckets = {
+        "digital_ocean" = var.do_spaces_name
+        "aws" = var.aws_bucket_name
+        "azure" = var.do_spaces_name ### TODO
+    }
+    regions = {
+        "digital_ocean" = var.do_region
+        "aws" = var.aws_region_alias
+        "azure" = var.az_region
+    }
 
     ###! workspace based
     ansible_hostfile = "./${terraform.workspace}_ansible_hosts"
@@ -641,6 +660,14 @@ locals {
         aws_access_key = var.aws_access_key
         aws_secret_key = var.aws_secret_key
         aws_region = var.aws_region
+
+        az_admin_username = var.az_admin_username
+        az_subscriptionId = var.az_subscriptionId
+        az_tenant = var.az_tenant
+        az_appId = var.az_appId
+        az_password = var.az_password
+        az_region = var.az_region
+        az_resource_group = var.az_resource_group
 
         remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
             ? data.terraform_remote_state.cloud.outputs.hosts : {})
