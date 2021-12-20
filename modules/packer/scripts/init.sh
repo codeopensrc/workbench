@@ -71,7 +71,7 @@ sleep 30;
 sudo apt-get install \
     build-essential apt-utils openjdk-8-jdk \
     unzip apt-transport-https ca-certificates curl \
-    vim git jq \
+    vim git jq python3-distutils python3 \
     awscli silversearcher-ag -y
 
 sudo apt-mark unhold openssh-server

@@ -41,6 +41,50 @@ resource "azurerm_network_security_group" "db_ports" {
         destination_address_prefix = "*"
     }
 
+    ## Custom apps in
+    security_rule {
+        name                       = "postgresql"
+        priority                   = 1004
+        direction                  = "Inbound"
+        access                     = "Allow"
+        protocol                   = "Tcp"
+        source_port_range          = "*"
+        destination_port_range     = "5432"
+        source_address_prefixes    = [
+            for OBJ in var.config.app_ips:
+            "${OBJ.ip}/32"
+        ]
+        destination_address_prefix = "*"
+    }
+    security_rule {
+        name                       = "redis"
+        priority                   = 1005
+        direction                  = "Inbound"
+        access                     = "Allow"
+        protocol                   = "Tcp"
+        source_port_range          = "*"
+        destination_port_range     = "6379"
+        source_address_prefixes    = [
+            for OBJ in var.config.app_ips:
+            "${OBJ.ip}/32"
+        ]
+        destination_address_prefix = "*"
+    }
+    security_rule {
+        name                       = "mongo"
+        priority                   = 1006
+        direction                  = "Inbound"
+        access                     = "Allow"
+        protocol                   = "Tcp"
+        source_port_range          = "*"
+        destination_port_range     = "27017"
+        source_address_prefixes    = [
+            for OBJ in var.config.app_ips:
+            "${OBJ.ip}/32"
+        ]
+        destination_address_prefix = "*"
+    }
+
     lifecycle {
         create_before_destroy = true
     }
@@ -123,23 +167,27 @@ resource "azurerm_network_security_group" "app_ports" {
     }
 
     # STUN
-    dynamic "security_rule" {
-        for_each = {
-            for key, value in var.stun_protos:
-            key => value
-            if var.config.stun_port != ""
-        }
-        content {
-            name                       = "Stun: ${security_rule.value}"
-            priority                   = 1007
-            direction                  = "Inbound"
-            access                     = "Allow"
-            protocol                   = security_rule.value
-            source_port_range          = "*"
-            destination_port_range     = var.config.stun_port
-            source_address_prefix      = "*"
-            destination_address_prefix = "*"
-        }
+    security_rule {
+        name                       = "Stun tcp"
+        priority                   = 1007
+        direction                  = "Inbound"
+        access                     = "Allow"
+        protocol                   = "Tcp"
+        source_port_range          = "*"
+        destination_port_range     = var.config.stun_port
+        source_address_prefix      = "*"
+        destination_address_prefix = "*"
+    }
+    security_rule {
+        name                       = "Stun udp"
+        priority                   = 1008
+        direction                  = "Inbound"
+        access                     = "Allow"
+        protocol                   = "Udp"
+        source_port_range          = "*"
+        destination_port_range     = var.config.stun_port
+        source_address_prefix      = "*"
+        destination_address_prefix = "*"
     }
 
     lifecycle {
@@ -334,72 +382,10 @@ resource "azurerm_network_security_group" "default_ports" {
         destination_address_prefix = "*"
     }
 
-    lifecycle {
-        create_before_destroy = true
-    }
-}
-
-resource "azurerm_network_security_group" "ext_db" {
-    name                = "${local.vpc_name}_ext-db-sg"
-    location            = azurerm_resource_group.main.location
-    resource_group_name = azurerm_resource_group.main.name
-
-    security_rule {
-        name                       = "postgresql"
-        priority                   = 1001
-        direction                  = "Inbound"
-        access                     = "Allow"
-        protocol                   = "Tcp"
-        source_port_range          = "*"
-        destination_port_range     = "5432"
-        source_address_prefixes    = [
-            for OBJ in var.config.app_ips:
-            "${OBJ.ip}/32"
-        ]
-        destination_address_prefix = "*"
-    }
-    security_rule {
-        name                       = "redis"
-        priority                   = 1002
-        direction                  = "Inbound"
-        access                     = "Allow"
-        protocol                   = "Tcp"
-        source_port_range          = "*"
-        destination_port_range     = "6379"
-        source_address_prefixes    = [
-            for OBJ in var.config.app_ips:
-            "${OBJ.ip}/32"
-        ]
-        destination_address_prefix = "*"
-    }
-    security_rule {
-        name                       = "mongo"
-        priority                   = 1003
-        direction                  = "Inbound"
-        access                     = "Allow"
-        protocol                   = "Tcp"
-        source_port_range          = "*"
-        destination_port_range     = "27017"
-        source_address_prefixes    = [
-            for OBJ in var.config.app_ips:
-            "${OBJ.ip}/32"
-        ]
-        destination_address_prefix = "*"
-    }
-
-    lifecycle {
-        create_before_destroy = true
-    }
-}
-
-resource "azurerm_network_security_group" "ext_remote" {
-    name                = "${local.vpc_name}_ext-remote-sg"
-    location            = azurerm_resource_group.main.location
-    resource_group_name = azurerm_resource_group.main.name
-
+    ## Custom station in
     security_rule {
         name                       = "All"
-        priority                   = 1001
+        priority                   = 1012
         direction                  = "Inbound"
         access                     = "Allow"
         protocol                   = "Tcp"
@@ -450,30 +436,9 @@ resource "azurerm_network_interface_security_group_association" "admin_ports" {
     network_interface_id      = azurerm_network_interface.main[each.key].id
     network_security_group_id = azurerm_network_security_group.admin_ports.id
 }
-resource "azurerm_network_interface_security_group_association" "default_ports" {
-    for_each = {
-        for ind, cfg in local.cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
-    }
-    network_interface_id      = azurerm_network_interface.main[each.key].id
+resource "azurerm_subnet_network_security_group_association" "default_ports" {
+    subnet_id                 = azurerm_subnet.public_subnet.id
     network_security_group_id = azurerm_network_security_group.default_ports.id
-}
-resource "azurerm_network_interface_security_group_association" "ext_db" {
-    for_each = {
-        for ind, cfg in local.cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
-        if contains(cfg.roles, "db")
-    }
-    network_interface_id      = azurerm_network_interface.main[each.key].id
-    network_security_group_id = azurerm_network_security_group.ext_db.id
-}
-resource "azurerm_network_interface_security_group_association" "ext_remote" {
-    for_each = {
-        for ind, cfg in local.cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
-    }
-    network_interface_id      = azurerm_network_interface.main[each.key].id
-    network_security_group_id = azurerm_network_security_group.ext_remote.id
 }
 
 

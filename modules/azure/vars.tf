@@ -3,13 +3,20 @@ variable "config" {}
 
 variable "stun_protos" { default = ["tcp", "udp"] }
 
-
 ## input/config
 locals {
     ##TODO: Dynamic or list all sizes
+    ### Some sizes for reference
+    #Standard_B2ms = 2vcpu 8gbMem  16gbtmp $72.416/month 
+    #Standard_B2s  = 2vcpu 4gbMem  8gbtmp  $36.208/month 
+    #Standard_B1ms = 1vcpu 2gbMem  4gbtmp  $18.104/month
+    #Standard_B1s  = 1vcpu 1gbMem  4gbtmp  $9.052/month 
+    #Standard_B1ls = 1vcpu .5gbMem 4gbtmp  $4.526/month 
     size_priority = {
-        #"s-1vcpu-1gb" = "1",
-        "Standard_F2" = "1"
+        "Standard_B1s" = "1"
+        "Standard_B1ms" = "2"
+        "Standard_B2s" = "3"
+        "Standard_B2ms" = "4"
     }
     cfg_servers = flatten([
         for ind, SERVER in var.config.servers: [
@@ -178,28 +185,6 @@ locals {
     small_image_name = uuidv5("dns", replace(local.image_str, "${local.gitlab}_", ""))
     large_image_name = uuidv5("dns", local.image_str)
 
-    #do_tags = [
-    #    "${replace(local.consul, ".", "-")}",
-    #    "${replace(local.docker, ".", "-")}",
-    #    "${replace(local.dockerc, ".", "-")}",
-    #    "${replace(local.gitlab, ".", "-")}",
-    #    "${replace(local.redis, ".", "-")}",
-    #    "${replace(local.kubernetes, ".", "-")}"
-    #]
-    #do_small_tags = [
-    #    "${replace(local.consul, ".", "-")}",
-    #    "${replace(local.docker, ".", "-")}",
-    #    "${replace(local.dockerc, ".", "-")}",
-    #    "${replace(local.redis, ".", "-")}",
-    #    "${replace(local.kubernetes, ".", "-")}"
-    #]
-
-    #tags = {
-    #    "admin" = local.do_tags
-    #    "lead" = local.do_small_tags
-    #    "db" = local.do_small_tags
-    #    "build" = local.do_small_tags
-    #}
     image_alias = {
         "admin" = "large"
         "lead" = "small"
@@ -210,13 +195,11 @@ locals {
     packer_images = {
         "large" = {
             "name" = local.large_image_name,
-            "size" = "Standard_F2"
-            #"size" = "s-2vcpu-4gb"
+            "size" = "Standard_B2s"
         }
         "small" = {
             "name" = local.small_image_name,
-            "size" = "Standard_F2"
-            #"size" = "s-1vcpu-1gb"
+            "size" = "Standard_B1s"
         }
     }
 }

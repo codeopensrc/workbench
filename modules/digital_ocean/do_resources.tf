@@ -47,6 +47,13 @@ module "packer" {
     do_token = var.config.do_token
     digitalocean_region = var.config.do_region
 
+    az_subscriptionId = var.config.az_subscriptionId
+    az_tenant = var.config.az_tenant
+    az_appId = var.config.az_appId
+    az_password = var.config.az_password
+    az_region = var.config.az_region
+    az_resource_group = var.config.az_resource_group
+
     packer_config = var.config.packer_config
 }
 

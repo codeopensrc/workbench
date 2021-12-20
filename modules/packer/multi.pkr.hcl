@@ -42,6 +42,46 @@ variable "do_token" {
   type    = string
   default = ""
 }
+variable "az_subscriptionId" {
+  type    = string
+  default = ""
+}
+variable "az_tenant" {
+  type    = string
+  default = ""
+}
+variable "az_appId" {
+  type    = string
+  default = ""
+}
+variable "az_password" {
+  type    = string
+  default = ""
+}
+variable "az_region" {
+  type    = string
+  default = ""
+}
+variable "az_resource_group" {
+  type    = string
+  default = ""
+}
+variable "az_image_publisher" {
+  type    = string
+  default = ""
+}
+variable "az_image_offer" {
+  type    = string
+  default = ""
+}
+variable "az_image_sku" {
+  type    = string
+  default = ""
+}
+variable "az_image_version" {
+  type    = string
+  default = ""
+}
 variable "docker_compose_version" {
   type    = string
   default = ""
@@ -98,12 +138,45 @@ source "digitalocean" "main" {
     ssh_username  = "root"
 }
 
+source "azure-arm" "main" {
+    os_type            = "Linux"
+    subscription_id    = var.az_subscriptionId
+    tenant_id          = var.az_tenant
+    client_id          = var.az_appId
+    client_secret      = var.az_password
+    location           = var.az_region
+    managed_image_name = var.packer_image_name
+    vm_size            = var.packer_image_size
+    azure_tags = {
+        image_name             = var.packer_image_name
+        os_version             = var.az_image_sku
+        consul_version         = var.consul_version
+        docker_compose_version = var.docker_compose_version
+        docker_version         = var.docker_version
+        gitlab_version         = var.gitlab_version
+        redis_version          = var.redis_version
+        kubernetes_version     = var.kubernetes_version
+    }
+    #
+    image_publisher = var.az_image_publisher
+    image_offer= var.az_image_offer
+    image_sku = var.az_image_sku
+    image_version = var.az_image_version
+    managed_image_resource_group_name = "packer-${var.az_resource_group}"
+    #os_disk_size_gb = var.az_image_os.os_disk_size_gb
+    #capture_container_name = "images"
+    #capture_name_prefix = "packer"
+    #storage_account = "virtualmachines"
+    #resource_group_name = "packerdemo"
+}
+
 ## Docs for build block
 ## https://www.packer.io/docs/templates/hcl_templates/blocks/build/provisioner
 build {
     sources = [
         "source.digitalocean.main",
-        "source.amazon-ebs.main"
+        "source.amazon-ebs.main",
+        "source.azure-arm.main"
     ]
 
     provisioner "shell" {
@@ -121,6 +194,7 @@ build {
     }
 
     provisioner "file" {
+        except = ["azure-arm.main"]
         destination = "/home/ubuntu/.ssh/authorized_keys"
         source      = "${var.packer_dir}/ignore/authorized_keys"
     }
@@ -145,5 +219,14 @@ build {
             "sudo bash /tmp/scripts/install/install_kubernetes.sh -v ${var.kubernetes_version}",
             "sudo bash /tmp/scripts/move.sh"
         ]
+    }
+
+    ## https://www.packer.io/docs/builders/azure/arm#deprovision
+    provisioner "shell" {
+        #skip_clean = true ### https://www.packer.io/docs/builders/azure/arm#skip_clean
+        only = ["azure-arm.main"]
+        execute_command = "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'"
+        inline = [ "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync" ]
+        inline_shebang = "/bin/sh -x"
     }
 }

@@ -3,50 +3,63 @@ resource "azurerm_resource_group" "main" {
     location = var.config.az_region
 }
 
-data "azurerm_images" "latest" {
+data "azurerm_resources" "latest" {
     for_each = {
         for alias, image in local.packer_images:
-        alias => image.name
+        alias => { name = image.name, size = image.size }
     }
-    tags_filter = {
-        name = each.value
+    type = "Microsoft.Compute/images"
+    resource_group_name = "packer-${var.config.az_resource_group}"
+
+    required_tags = {
+        image_name = each.value.name
     }
-    resource_group_name = azurerm_resource_group.main.name
 }
 
-#module "packer" {
-#    source             = "../packer"
-#    for_each = {
-#        for alias, image in local.packer_images:
-#        alias => { name = image.name, size = image.size }
-#        if length(data.azurerm_images.latest[alias].ids) == 0
-#    }
-#    type = each.key
-#    packer_image_name = each.value.name
-#    packer_image_size = each.value.size
-#
-#    active_env_provider = var.config.active_env_provider
-#
-#    aws_access_key = var.config.aws_access_key
-#    aws_secret_key = var.config.aws_secret_key
-#    aws_region = var.config.aws_region
-#    aws_key_name = var.config.aws_key_name
-#
-#    do_token = var.config.do_token
-#    digitalocean_region = var.config.do_region
-#
-#    packer_config = var.config.packer_config
-#}
+module "packer" {
+    source             = "../packer"
+    for_each = {
+        for alias, image in local.packer_images:
+        alias => { name = image.name, size = image.size }
+        if length(data.azurerm_resources.latest[alias].resources) == 0
+    }
+    type = each.key
+    packer_image_name = each.value.name
+    packer_image_size = each.value.size
 
-data "azurerm_images" "new" {
+    active_env_provider = var.config.active_env_provider
+
+    aws_access_key = var.config.aws_access_key
+    aws_secret_key = var.config.aws_secret_key
+    aws_region = var.config.aws_region
+    aws_key_name = var.config.aws_key_name
+
+    do_token = var.config.do_token
+    digitalocean_region = var.config.do_region
+
+    az_subscriptionId = var.config.az_subscriptionId
+    az_tenant = var.config.az_tenant
+    az_appId = var.config.az_appId
+    az_password = var.config.az_password
+    az_region = var.config.az_region
+    az_resource_group = var.config.az_resource_group
+
+    packer_config = var.config.packer_config
+}
+
+data "azurerm_resources" "new" {
+    depends_on = [ module.packer ]
     for_each = {
         for alias, image in local.packer_images:
         alias => image.name
+        if lookup(module.packer, alias, null) != null
     }
-    tags_filter = {
-        name = each.value
+    type = "Microsoft.Compute/images"
+    resource_group_name = "packer-${var.config.az_resource_group}"
+
+    required_tags = {
+        image_name = each.value
     }
-    resource_group_name = azurerm_resource_group.main.name
 }
 
 resource "time_static" "creation_time" {
@@ -74,6 +87,7 @@ resource "azurerm_linux_virtual_machine" "main" {
 
     tags = {
         Domain = each.value.role == "admin" ? "gitlab-${replace(var.config.root_domain_name, ".", "-")}" : ""
+        Roles = join(",", each.value.cfg.server.roles)
     }
 
     lifecycle {
@@ -86,23 +100,23 @@ resource "azurerm_linux_virtual_machine" "main" {
     }
 
     os_disk {
+        disk_size_gb         = each.value.cfg.server.disk_size
         caching              = "ReadWrite"
         storage_account_type = "Standard_LRS"
     }
 
     #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
-    #source_image_id = (each.value.cfg.server.image != "" ? each.value.cfg.server.image
-    #    : (length(data.azurerm_images.latest[each.value.cfg.image_alias].images) > 0
-    #        ? data.azurerm_images.latest[each.value.cfg.image_alias].images[0].id : data.azurerm_images.new[each.value.cfg.image_alias].images[0].id)
-    #)
-
-    ## TODO: Temporary until packer
-    source_image_reference {
-        publisher = var.config.packer_config.azure_image_os[var.config.az_region].publisher
-        offer     = var.config.packer_config.azure_image_os[var.config.az_region].offer
-        sku       = var.config.packer_config.azure_image_os[var.config.az_region].sku
-        version   = var.config.packer_config.azure_image_os[var.config.az_region].version
-    }
+    source_image_id = (each.value.cfg.server.image != "" ? each.value.cfg.server.image
+        : (length(data.azurerm_resources.latest[each.value.cfg.image_alias].resources) > 0
+            ? data.azurerm_resources.latest[each.value.cfg.image_alias].resources[0].id : data.azurerm_resources.new[each.value.cfg.image_alias].resources[0].id)
+    )
+    ## Quick fallback over source_image_id
+    #source_image_reference {
+    #    publisher = var.config.packer_config.azure_image_os[var.config.az_region].publisher
+    #    offer     = var.config.packer_config.azure_image_os[var.config.az_region].offer
+    #    sku       = var.config.packer_config.azure_image_os[var.config.az_region].sku
+    #    version   = var.config.packer_config.azure_image_os[var.config.az_region].version
+    #}
 
     provisioner "remote-exec" {
         inline = [ "cat /home/${var.config.az_admin_username}/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]

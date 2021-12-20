@@ -10,9 +10,6 @@ output "ansible_hosts" {
 }
 
 ## TODO:
-### packer
-### tags
-### sizes
 ### storage/s3
 ### backend
 ### dns

@@ -129,7 +129,7 @@ locals {
     sizes = {
         "aws" = ["t3a.micro", "t3a.small", "t3a.small", "t3a.medium", "t3a.large"]
         "digital_ocean" = ["s-1vcpu-1gb", "s-1vcpu-2gb", "s-2vcpu-2gb", "s-2vcpu-4gb", "s-4vcpu-8gb"]
-        "azure" = ["Standard_F2", "Standard_F2", "Standard_F2", "Standard_F2"/*2vcpu-4gb*/, "Standard_F2"]# "Standard_DS1_v2"
+        "azure" = ["Standard_B1s", "Standard_B1ms", "Standard_B1ms", "Standard_B2s", "Standard_B2ms"]
     }
     ### NOTE: Do not add or remove roles from instances after they are launched
     ### Fleets differ by either roles, size, or to use a specific image
@@ -137,23 +137,24 @@ locals {
     ###  - Add a fleet, `terraform apply`, remove the old fleet, `terraform apply`
     ###  - Supports replacing 'lead' and 'build' type fleets
     servers = lookup(local.workspace_servers, terraform.workspace)
+    ## NOTE: 'disk_size' applies to aws & azure only
     workspace_servers = {
         "default" = [
             {
                 "count" = 1, "fleet" = "aurora", "roles" = ["admin", "lead", "db"], 
-                "image" = "", "aws_volume_size" = 60, "size" = local.sizes[var.active_env_provider][4], 
+                "image" = "", "disk_size" = 60, "size" = local.sizes[var.active_env_provider][4], 
             },
             {
                 "count" = 0, "fleet" = "lucy", "roles" = ["lead"],
-                "image" = "", "aws_volume_size" = 60, "size" = local.sizes[var.active_env_provider][0], 
+                "image" = "", "disk_size" = 60, "size" = local.sizes[var.active_env_provider][0], 
             },
             {
                 "count" = 0, "fleet" = "daisy", "roles" = ["db"], 
-                "image" = "", "aws_volume_size" = 60,"size" = local.sizes[var.active_env_provider][0], 
+                "image" = "", "disk_size" = 60,"size" = local.sizes[var.active_env_provider][0], 
             },
             {
                 "count" = 0, "fleet" = "beth", "roles" = ["build"],
-                "image" = "", "aws_volume_size" = 60, "size" = local.sizes[var.active_env_provider][0], 
+                "image" = "", "disk_size" = 60, "size" = local.sizes[var.active_env_provider][0], 
             },
         ]
     }
