@@ -9,34 +9,37 @@ resource "azurerm_virtual_network" "terraform_vpc" {
     address_space       = [ var.config.cidr_block ]
 }
 
-resource "azurerm_subnet" "public_subnet" {
-    name                 = "public-subnet_${local.vpc_name}"
+resource "azurerm_subnet" "pubsubnet" {
+    name                 = "${local.vpc_name}_pubsubnet"
     resource_group_name  = azurerm_resource_group.main.name
     virtual_network_name = azurerm_virtual_network.terraform_vpc.name
     address_prefixes       = [ cidrsubnet(var.config.cidr_block, 8, 2) ]
 }
 
 resource "azurerm_public_ip" "main" {
-    name                = "pub-ip_${local.vpc_name}"
+    for_each = {
+        for ind, cfg in local.cfg_servers: cfg.key => cfg.key
+    }
+    name                = "${local.vpc_name}_${each.key}_pubip"
     resource_group_name = azurerm_resource_group.main.name
     location            = azurerm_resource_group.main.location
     allocation_method   = "Dynamic"
 }
 
+
 resource "azurerm_network_interface" "main" {
     for_each = {
-        for ind, cfg in local.cfg_servers:
-        cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
+        for ind, cfg in local.cfg_servers: cfg.key => cfg.key
     }
-    name                = "pub-NIC-${each.key}_${local.vpc_name}"
+    name                = "${local.vpc_name}_${each.key}"
     location            = azurerm_resource_group.main.location
     resource_group_name = azurerm_resource_group.main.name
 
     ip_configuration {
-        name                          = "pub-NIC-config1_${local.vpc_name}"
-        subnet_id                     = azurerm_subnet.public_subnet.id
+        name                          = "${local.vpc_name}_${each.key}_NIC"
+        subnet_id                     = azurerm_subnet.pubsubnet.id
         private_ip_address_allocation = "Dynamic"
-        public_ip_address_id          = azurerm_public_ip.main.id
+        public_ip_address_id          = azurerm_public_ip.main[each.key].id
     }
 }
 
