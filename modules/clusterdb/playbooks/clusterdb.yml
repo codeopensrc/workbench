@@ -80,6 +80,7 @@
         ##TODO: Better method to add correct name/number of hostnames on init maybe
         - name: start mongo replica set
           shell: |
+            systemctl restart mongod
             MONGO_CMD='rs.initiate( { _id : "rs0", members: [
                   { _id: 0, host: "mongo0.{{ root_domain_name }}:27017" },
                   { _id: 1, host: "mongo1.{{ root_domain_name }}:27017" },

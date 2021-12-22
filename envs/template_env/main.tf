@@ -523,7 +523,7 @@ locals {
     vpc_private_ifaces = {
         "digital_ocean" = "eth1"
         "aws" = "ens5"
-        "azure" = "eth0" ### TODO
+        "azure" = "eth0"
     }
     s3aliases = {
         "digital_ocean" = "spaces"

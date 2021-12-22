@@ -12,4 +12,3 @@ output "ansible_hosts" {
 ## TODO:
 ### storage/s3
 ### backend
-### dns

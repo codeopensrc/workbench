@@ -233,11 +233,10 @@ resource "azurerm_network_security_rule" "docker_bridge" {
 
 
 ####### ADMIN #######
-#### TODO: Better conditionals if we do not have admin - see other cloud security groups
 resource "azurerm_network_security_rule" "letsencrypt" {
     for_each = {
         for ind, cfg in local.cfg_servers: cfg.key => cfg.key
-        if contains(cfg.roles, "admin")
+        if contains(cfg.roles, (contains(flatten(local.cfg_servers[*].roles), "admin") ? "admin" : "lead"))
     }
     name                       = "letsencrypt"
     priority                   = 400
@@ -254,7 +253,7 @@ resource "azurerm_network_security_rule" "letsencrypt" {
 resource "azurerm_network_security_rule" "admin_internal" {
     for_each = {
         for ind, cfg in local.cfg_servers: cfg.key => cfg.key
-        if contains(cfg.roles, "admin")
+        if contains(cfg.roles, (contains(flatten(local.cfg_servers[*].roles), "admin") ? "admin" : "lead"))
     }
     name                       = "admin_internal"
     priority                   = 401
