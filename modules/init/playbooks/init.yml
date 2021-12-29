@@ -9,6 +9,10 @@
     do_spaces_region: "{{ do_spaces_region }}"
     do_spaces_access_key: "{{ do_spaces_access_key }}"
     do_spaces_secret_key: "{{ do_spaces_secret_key }}"
+    az_storageaccount: "{{ az_storageaccount }}"
+    az_storagekey: "{{ az_storagekey }}"
+    az_gateway: "{{ az_minio_gateway | default('localhost', true) }}"
+    az_gateway_port: "{{ az_minio_gateway_port | default('31900', true) }}"
   tasks:
     # Temporarily disable for initial install - can lock dkpg file if enabled
     - name: temp disable autoupgrade
@@ -33,6 +37,27 @@
     - name: add do mc alias
       command: mc alias set spaces https://{{ do_spaces_region }}.digitaloceanspaces.com {{ do_spaces_access_key }} {{ do_spaces_secret_key }}
       when: do_spaces_access_key != ""
+
+    ##TODO: Ultimately probably move to rclone over mc
+    ##NOTE: Kubernetes minio-s3-gateway service launched in later steps
+    - name: create tmp azure-s3 gateway
+      block:
+        - name: check alias added
+          command: mc alias list azure
+          changed_when: false
+      rescue:
+        - name: start gateway
+          shell: |
+            docker stop azure-s3
+            docker run -d --rm -p {{ az_gateway_port }}:9000 --name azure-s3 \
+              -e "MINIO_ROOT_USER={{ az_storageaccount }}" \
+              -e "MINIO_ROOT_PASSWORD={{ az_storagekey }}" \
+              minio/minio:RELEASE.2021-12-27T07-23-18Z gateway azure
+      when: az_storageaccount != ""
+
+    - name: add azure mc alias
+      command: mc alias set azure http://{{ az_gateway }}:{{ az_gateway_port}} {{ az_storageaccount }} {{ az_storagekey }}
+      when: az_storageaccount != ""
 
     - name: check cli tools
       stat:

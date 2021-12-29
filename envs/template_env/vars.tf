@@ -10,6 +10,8 @@ variable "placeholder_reusable_delegationset_id" { default = "" }
 ########## Azure ##########
 variable "az_region" { default = "eastus" }
 variable "az_resource_group" { default = "rg" }
+variable "az_minio_gateway" { default = "" } #Defaults: localhost
+variable "az_minio_gateway_port" { default = "" } #Defaults: 31900
 
 ########## MISC CONFIG/VARIABLES ##########
 ############################################

@@ -52,6 +52,11 @@ module "init" {
     aws_bot_access_key = var.aws_bot_access_key
     aws_bot_secret_key = var.aws_bot_secret_key
 
+    az_storageaccount = var.az_storageaccount
+    az_storagekey = var.az_storagekey
+    az_minio_gateway = var.az_minio_gateway
+    az_minio_gateway_port = var.az_minio_gateway_port
+
     known_hosts = var.known_hosts
     deploy_key_location = var.deploy_key_location
 
@@ -422,6 +427,7 @@ module "kubernetes" {
     root_domain_name = local.root_domain_name
     import_gitlab = var.import_gitlab
     vpc_private_iface = local.vpc_private_iface
+    active_env_provider = var.active_env_provider
 
     kubernetes_version = local.kubernetes_version
     container_orchestrators = var.container_orchestrators
@@ -528,12 +534,12 @@ locals {
     s3aliases = {
         "digital_ocean" = "spaces"
         "aws" = "s3"
-        "azure" = "spaces" ### TODO
+        "azure" = "azure"
     }
     s3buckets = {
         "digital_ocean" = var.do_spaces_name
         "aws" = var.aws_bucket_name
-        "azure" = var.do_spaces_name ### TODO
+        "azure" = var.az_bucket_name
     }
     regions = {
         "digital_ocean" = var.do_region

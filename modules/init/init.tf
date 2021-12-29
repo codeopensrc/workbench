@@ -16,6 +16,11 @@ variable "do_spaces_region" { default = "" }
 variable "do_spaces_access_key" { default = "" }
 variable "do_spaces_secret_key" { default = "" }
 
+variable "az_storageaccount" { default = "" }
+variable "az_storagekey" { default = "" }
+variable "az_minio_gateway" { default = "" }
+variable "az_minio_gateway_port" { default = "" }
+
 variable "known_hosts" { default = [] }
 variable "deploy_key_location" {}
 
@@ -51,6 +56,10 @@ resource "null_resource" "playbook" {
                     do_spaces_region=${var.do_spaces_region}
                     do_spaces_access_key=${var.do_spaces_access_key}
                     do_spaces_secret_key=${var.do_spaces_secret_key}
+                    az_storageaccount=${var.az_storageaccount}
+                    az_storagekey=${var.az_storagekey}
+                    az_minio_gateway=${var.az_minio_gateway}
+                    az_minio_gateway_port=${var.az_minio_gateway_port}
                     server_name_prefix=${var.server_name_prefix}
                     region=${var.region}
                     hostname=${var.hostname}

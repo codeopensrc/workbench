@@ -10,6 +10,7 @@ variable "gitlab_runner_tokens" {}
 variable "root_domain_name" {}
 variable "import_gitlab" {}
 variable "vpc_private_iface" {}
+variable "active_env_provider" {}
 
 variable "kubernetes_version" {}
 variable "container_orchestrators" {}
@@ -52,6 +53,7 @@ resource "null_resource" "kubernetes" {
     }
     ##  digitaloceans private iface = eth1
     ##  aws private iface = ens5
+    ##  azure private iface = eth0
     provisioner "local-exec" {
         command = <<-EOF
             ansible-playbook ${path.module}/playbooks/kubernetes.yml -i ${var.ansible_hostfile} --extra-vars \
@@ -61,6 +63,7 @@ resource "null_resource" "kubernetes" {
                 root_domain_name=${var.root_domain_name}
                 admin_servers=${var.admin_servers}
                 server_count=${var.server_count}
+                active_env_provider=${var.active_env_provider}
                 import_gitlab=${var.import_gitlab}'
         EOF
     }

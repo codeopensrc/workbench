@@ -8,7 +8,3 @@ output "instances" {
 output "ansible_hosts" {
     value = local.sorted_hosts
 }
-
-## TODO:
-### storage/s3
-### backend

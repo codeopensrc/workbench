@@ -28,6 +28,7 @@
     root_domain_name: "{{ root_domain_name }}"
     admin_servers: "{{ admin_servers }}"
     server_count: "{{ server_count }}"
+    active_env_provider: "{{ active_env_provider }}"
 
     nginx_args: "{{ (admin_servers | int == 0) | ternary('-p default', '') }}"
     runner_img_version: "{{ kubernetes_version | regex_replace('-00') }}"
@@ -69,6 +70,11 @@
     ##TODO: Check if exists before launching or pay attention to current scale
     - name: init nginxKubeProxy
       command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
+
+    ##TODO: Check if exists before launching or pay attention to current scale
+    - name: init minioKubeAzGateway
+      command: bash $HOME/code/scripts/kube/minioKubeAzGateway.sh
+      when: "'azure' in active_env_provider"
 
     - name: cluster serviceaccounts
       block:

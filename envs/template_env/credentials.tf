@@ -4,7 +4,7 @@ variable "local_ssh_key_file" { default = "~/.ssh/id_rsa" } #Local ssh key file 
 ##### Digital Ocean only
 variable "do_ssh_fingerprint" { default = "" }
 variable "do_token" { default = "" }
-## Spaces
+## Spaces (Blob storage)
 variable "do_spaces_name" { default = "" }
 variable "do_spaces_region" { default = "" }
 variable "do_spaces_access_key" { default = "" }
@@ -15,7 +15,7 @@ variable "do_spaces_secret_key" { default = "" }
 variable "aws_key_name" { default = "id_rsa" }
 variable "aws_access_key" { default = ""}
 variable "aws_secret_key" { default = ""}
-## S3
+## AWS S3  (Blob storage)
 variable "aws_bucket_name" { default = ""}
 variable "aws_bot_access_key" { default = "" }
 variable "aws_bot_secret_key" { default = "" }
@@ -27,6 +27,10 @@ variable "az_subscriptionId" { default = ""}
 variable "az_tenant" { default = ""}
 variable "az_appId" { default = "" }
 variable "az_password" { default = ""}
+### Azure Blob Storage
+variable "az_storageaccount" { default = ""} ## storage_account name
+variable "az_storagekey" { default = ""}     ## access_key for az_storageaccount
+variable "az_bucket_name" { default = "bucket"}
 #####
 
 
@@ -110,6 +114,7 @@ locals {
 ###! https://www.terraform.io/docs/backends/config.html#first-time-configuration
 
 #terraform {
+#    ###! Use AWS S3/Digital Ocean Spaces for remote backend
 #    backend "s3" {
 #        bucket = "bucket_name"
 #        key    = "terra_state/template_env"
@@ -123,6 +128,13 @@ locals {
 #        # skip_credentials_validation = true
 #        # skip_metadata_api_check = true
 #    }
+#    ###! Use Azure Blob Storage for remote backend instead of s3
+#    #backend "azurerm" {
+#    #    storage_account_name = ""  ##! az_storageaccount
+#    #    access_key = ""            ##! az_storagekey
+#    #    container_name       = "bucket" ##! az_bucket_name
+#    #    key                  = "terra_state/terraform.tfstate"
+#    #}
 #}
 
 data "terraform_remote_state" "cloud" {
@@ -147,33 +159,43 @@ data "terraform_remote_state" "cloud" {
     #    #skip_credentials_validation = true
     #    #skip_metadata_api_check = true
     #}
+
+    ##! NOTE: If using azure backend for terraform state
+    #backend = "azurerm"
+    #workspace = terraform.workspace
+    #config = {
+    #    storage_account_name = local.data_state_s3_access_key[local.active_s3_provider]
+    #    container_name       = local.data_state_bucket[local.active_s3_provider]
+    #    key                  = "terra_state/terraform.tfstate"
+    #    access_key = local.data_state_s3_secret_key[local.active_s3_provider]
+    #}
 }
 
 locals {
     data_state_s3_access_key = {
         "aws" = var.aws_bot_access_key
         "digital_ocean" = var.do_spaces_access_key
-        "azure" = var.do_spaces_access_key ## TODO
+        "azure" = var.az_storageaccount
     }
     data_state_s3_secret_key = {
         "aws" = var.aws_bot_secret_key
         "digital_ocean" = var.do_spaces_secret_key
-        "azure" = var.do_spaces_secret_key ## TODO
+        "azure" = var.az_storagekey
     }
     data_state_bucket = {
         "aws" = var.aws_bucket_name
         "digital_ocean" = var.do_spaces_name
-        "azure" = var.do_spaces_name ## TODO
+        "azure" = var.az_bucket_name
     }
     ##! Must be valid aws region name even if digital ocean backend - so we use us-east-2 placeholder
     data_state_bucketregion = {
         "aws" = var.aws_region
         "digital_ocean" = "us-east-2"
-        "azure" = "us-east-2" ## TODO
+        "azure" = var.az_region
     }
     data_state_remote_endpoint = {
         "aws" = ""  ## s3 backend endpoint for aws shouldnt be needed
         "digital_ocean" = "https://${var.do_region}.digitaloceanspaces.com"
-        "azure" = "https://${var.do_region}.digitaloceanspaces.com" ## TODO
+        "azure" = "" ## azurerm endpoint shouldnt be needed "http://${var.az_storageaccount}.blob.core.windows.net"
     }
 }
