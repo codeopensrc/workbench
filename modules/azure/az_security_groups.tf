@@ -233,18 +233,21 @@ resource "azurerm_network_security_rule" "docker_bridge" {
 
 
 ####### ADMIN #######
-resource "azurerm_network_security_rule" "letsencrypt" {
+resource "azurerm_network_security_rule" "admin_tcp" {
     for_each = {
         for ind, cfg in local.cfg_servers: cfg.key => cfg.key
         if contains(cfg.roles, (contains(flatten(local.cfg_servers[*].roles), "admin") ? "admin" : "lead"))
     }
-    name                       = "letsencrypt"
+    name                       = "admin_tcp"
     priority                   = 400
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "7080"
+    destination_port_ranges    = [
+        "80", "443",           ## http
+        "7080",                ## letsencrypt
+    ]
     source_address_prefix      = "*"
     destination_address_prefix = "*"
     resource_group_name         = azurerm_resource_group.main.name

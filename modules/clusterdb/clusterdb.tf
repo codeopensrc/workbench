@@ -37,6 +37,7 @@ resource "null_resource" "configure_dbs" {
         install_mongo = length(var.mongo_dbs) > 0 ? true : false
         install_pg = length(var.pg_dbs) > 0 ? true : false
         num_db = var.db_servers
+        total_dbs = sum([length(var.pg_dbs), length(var.redis_dbs), length(var.mongo_dbs)])
     }
     ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them
     provisioner "local-exec" {
@@ -51,6 +52,7 @@ resource "null_resource" "configure_dbs" {
         EOF
     }
 
+    ##TODO: Split install vs import
     provisioner "local-exec" {
         command = <<-EOF
             if [ ${length(local.db_public_ips)} -ge ${length(local.old_db_public_ips)} ]; then

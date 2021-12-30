@@ -256,3 +256,4 @@
     ## CoreDNS reads its Corefile in its configmap periodically, updating any changes gracefully
     - name: patch coredns deployment
       shell: 'kubectl patch deployment -n kube-system coredns --type merge --patch "$(cat /root/.kube/coredns-vol-patch.yml)"'
+      ignore_errors: true

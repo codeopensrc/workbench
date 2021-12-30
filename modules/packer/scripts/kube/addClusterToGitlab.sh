@@ -48,7 +48,7 @@ fi
 
 ## NOTE: Make sure this IP is allowed to make local requests (we handle it by default now)
 ## Admin > AppSettings > Network > Outbound requests
-CLUSTER_API_ADDR=$(kubectl get --raw /api | jq -r ".serverAddressByClientCIDRs[].serverAddress")
+CLUSTER_API_ADDR="https://$(kubectl get --raw /api | jq -r '.serverAddressByClientCIDRs[].serverAddress')"
 
 SECRET=$(kubectl get secrets | grep default-token | cut -d " " -f1)
 CERT=$(kubectl get secret ${SECRET} -o jsonpath="{['data']['ca\.crt']}" | base64 --decode)
