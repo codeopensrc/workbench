@@ -149,7 +149,6 @@ resource "null_resource" "install_gitlab" {
 
 
                 sleep 5;
-                sudo gitlab-ctl reconfigure
 
                 sed -i "s|# mattermost_external_url 'https://[0-9a-zA-Z.-]*'|mattermost_external_url 'https://${var.mattermost_subdomain}.${var.root_domain_name}'|" /etc/gitlab/gitlab.rb;
                 echo "alias mattermost-cli=\"cd /opt/gitlab/embedded/service/mattermost && sudo /opt/gitlab/embedded/bin/chpst -e /opt/gitlab/etc/mattermost/env -P -U mattermost:mattermost -u mattermost:mattermost /opt/gitlab/embedded/bin/mattermost --config=/var/opt/gitlab/mattermost/config.json $1\"" >> ~/.bashrc
@@ -177,6 +176,11 @@ resource "null_resource" "install_gitlab" {
 }
 
 
+### TODO: Add Temp PAT token once and ensure removed at end of provisioning
+### Can be found by searching 'sudo gitlab-rails runner'
+### ATM actively used in 5 locations -
+###  module.gitlab - restore_gitlab, gitlab_plugins, rm_imported_runners
+###  module.kubernetes - addClusterToGitlab script, reboot_envs
 resource "null_resource" "restore_gitlab" {
     count = var.admin_servers
     depends_on = [
@@ -198,8 +202,8 @@ resource "null_resource" "restore_gitlab" {
 
                 if [ "$IMPORT_GITLAB" = "true" ]; then
                     bash /root/code/scripts/misc/importGitlab.sh -a ${var.s3alias} -b ${var.s3bucket} $PASSPHRASE_FILE $IMPORT_GITLAB_VERSION;
-                    echo "=== Wait 90s for restore ==="
-                    sleep 90
+                    echo "=== Wait 20s for restore ==="
+                    sleep 20
 
                     if [ "$TERRA_WORKSPACE" != "default" ]; then
                         echo "WORKSPACE: $TERRA_WORKSPACE, removing remote mirrors"
@@ -290,8 +294,8 @@ resource "null_resource" "gitlab_plugins" {
                 ## Modifying "grafana['admin_password'] = 'foobar'" will NOT work (multiple reconfigures have occured)
                 ## https://docs.gitlab.com/omnibus/settings/grafana.html#resetting-the-admin-password
 
-                echo "=== Wait 90s for gitlab api for oauth plugins ==="
-                sleep 90;
+                echo "=== Wait 20s for gitlab api for oauth plugins ==="
+                sleep 20;
 
                 sudo gitlab-rails runner "token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT'); token.set_token('$TERRA_UUID'); token.save!";
 

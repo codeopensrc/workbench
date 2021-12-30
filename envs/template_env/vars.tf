@@ -50,6 +50,7 @@ variable "docker_version" { default = "20.10.10" }
 variable "docker_compose_version" { default = "1.29.2" }
 variable "consul_version" { default = "1.10.3" }
 variable "redis_version" { default = "5.0.9" }
+
 variable "base_amis" {
     default = {
         "us-east-2" = "ami-030bd1caa8425dfe8" #20.04
@@ -60,7 +61,6 @@ variable "digitalocean_image_os" {
         "nyc3" = "ubuntu-20-04-x64"
     }
 }
-
 variable "azure_image_os" {
     default = {
         "eastus" = {
@@ -114,9 +114,9 @@ locals {
 ##   (Would need at least 2 of that type of fleet to do so gracefully)
 ## Should work as easily/seemlessly as docker and kubernetes replacing containers/pods
 
-# TODO: Azure and Google Cloud providers
+# TODO: Google Cloud
 # Options will be digital_ocean, aws, azure, google_cloud etc.
-###! Current options: "digital_ocean" or "aws"
+###! Current options: "digital_ocean", "aws", "azure"
 variable "active_env_provider" { default = "digital_ocean" }
 module "cloud" {
     source             = "../../modules/digital_ocean"  ###! Uncomment for digital ocean
@@ -137,7 +137,7 @@ locals {
     ### Fleets differ by either roles, size, or to use a specific image
     ### When intending to replace machines instead of scaling up/down
     ###  - Add a fleet, `terraform apply`, remove the old fleet, `terraform apply`
-    ###  - Supports replacing 'lead' and 'build' type fleets
+    ###  - Supports replacing 'lead', 'build', 'db' type fleets
     servers = lookup(local.workspace_servers, terraform.workspace)
     ## NOTE: 'disk_size' applies to aws & azure only
     workspace_servers = {

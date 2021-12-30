@@ -75,7 +75,13 @@
         SERVICE_NAME={{ apps[item].service_name }}
 
         if [ "$REPO_NAME" = "wekan" ]; then
+            ## TODO: ServiceAddress for dns name - but docker containers will not resolve the dns name at this time
+            ##  `docker-compose up` resolves dns but `docker stack deploy` does not
+            ##  `extra_hosts:` directive needed for `docker stack deploy`
+            ##   sample replicaset url - "mongodb://mongo0.host:27017,mongo1.host:27017,mongo2.host:27017/wekan?replicaSet=rs0"
             MONGO_IP=$(curl -sS "http://localhost:8500/v1/catalog/service/mongo" | jq -r ".[].Address")
+            ## TODO: Supporting solo address, not replicaset - will not work if address of replicaset
+            MONGO_IP=$(echo $MONGO_IP | cut -d " " -f1)
             if [ -n "$MONGO_IP" ]; then
                 sed -i "s|mongodb://mongo_url:27017|mongodb://$MONGO_IP:27017|" /root/repos/$REPO_NAME/docker-compose.yml;
             fi
