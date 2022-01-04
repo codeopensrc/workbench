@@ -1,0 +1,29 @@
+---
+- name: LAUNCH KUBERNETES APP INGRESS
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  vars:
+    root_domain_name: "{{ root_domain_name }}"
+    services: "{{ kube_services | from_json }}"
+    tls_secret_name: "app-tls"
+  tasks:
+    ### Adding the TLS secret this way requires a file for --key and --cert
+    - name: Add TLS secret
+      command: kubectl create secret tls {{ tls_secret_name }} --key /etc/letsencrypt/live/{{ root_domain_name }}/privkey.pem --cert /etc/letsencrypt/live/{{ root_domain_name }}/fullchain.pem
+
+      ## Some LBs may end up requiring patches
+      #- name: apply lb patches
+      #  command: 'kubectl patch service -n ingress-nginx ingress-nginx-controller --type merge --patch "$(cat /root/.kube/lb-svc-patch.yml)"'
+
+      ## Adds entry for each kube_service
+    - name: update service ingress routing file
+      template:
+        src: ansiblefiles/ingress-route.yml
+        dest: /root/.kube/ingress-route.yml
+      when: (services | list) | length > 0
+
+    - name: apply ingress routing
+      command: kubectl apply -f /root/.kube/ingress-route.yml
+      when: (services | list) | length > 0
+
+    ### TODO: Add a cronjob/script to update the secret when changing certs

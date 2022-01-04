@@ -1,17 +1,37 @@
 ########## Digital Ocean ##########
 variable "do_region" { default = "nyc3" }
+variable "digitalocean_image_os" {
+    default = {
+        "nyc3" = "ubuntu-20-04-x64"
+    }
+}
 
 ########## AWS ##########
 variable "aws_region_alias" { default = "awseast" }
 variable "aws_region" { default = "us-east-2" }
 variable "aws_ecr_region" { default = "us-east-2" }
 variable "placeholder_reusable_delegationset_id" { default = "" }
+variable "base_amis" {
+    default = {
+        "us-east-2" = "ami-030bd1caa8425dfe8" #20.04
+    }
+}
 
 ########## Azure ##########
 variable "az_region" { default = "eastus" }
 variable "az_resource_group" { default = "rg" }
 variable "az_minio_gateway" { default = "" } #Defaults: localhost
 variable "az_minio_gateway_port" { default = "" } #Defaults: 31900
+variable "azure_image_os" {
+    default = {
+        "eastus" = {
+            publisher = "Canonical"
+            offer     = "UbuntuServer"
+            sku       = "18.04-LTS"
+            version   = "latest"
+        }
+    }
+}
 
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
@@ -27,7 +47,13 @@ variable "gitlab_backups_enabled" { default = false }  #auto false if not "defau
 variable "install_unity3d" { default = false }
 
 ## NOTE: Kubernetes admin requires 2 cores and 2 GB of ram
-variable "container_orchestrators" { default = ["kubernetes", "docker_swarm"] } ##! kubernetes and/or docker_swarm
+variable "container_orchestrators" {
+    default = [
+        "kubernetes",
+        "docker_swarm",
+        #"managed_kubernetes",  ## in alpha
+    ]
+}
 
 ########## SOFTWARE VERSIONS ##########
 #######################################
@@ -51,26 +77,6 @@ variable "docker_compose_version" { default = "1.29.2" }
 variable "consul_version" { default = "1.10.3" }
 variable "redis_version" { default = "5.0.9" }
 
-variable "base_amis" {
-    default = {
-        "us-east-2" = "ami-030bd1caa8425dfe8" #20.04
-    }
-}
-variable "digitalocean_image_os" {
-    default = {
-        "nyc3" = "ubuntu-20-04-x64"
-    }
-}
-variable "azure_image_os" {
-    default = {
-        "eastus" = {
-            publisher = "Canonical"
-            offer     = "UbuntuServer"
-            sku       = "18.04-LTS"
-            version   = "latest"
-        }
-    }
-}
 
 locals {
     packer_config = {
@@ -159,6 +165,20 @@ locals {
                 "image" = "", "disk_size" = 60, "size" = local.sizes[var.active_env_provider][0], 
             },
         ]
+    }
+
+    ##! Used with `managed_kubernetes`
+    ##! Only for digital ocean during alpha
+    managed_kubernetes_conf = lookup(local.workspace_managed_kubernetes_conf, terraform.workspace)
+    workspace_managed_kubernetes_conf = {
+        "default" = [{
+            size       = "s-2vcpu-2gb"
+            count = 0
+            ##! (count) or (min_node + max_node + auto_scale)
+            #min_nodes  = 0
+            #max_nodes  = 0
+            #auto_scale = true
+        }]
     }
 }
 

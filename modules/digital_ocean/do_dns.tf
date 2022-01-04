@@ -106,7 +106,7 @@ resource "digitalocean_record" "default_a_leader" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.dns_lead
+    value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
@@ -115,7 +115,7 @@ resource "digitalocean_record" "default_a_leader_root" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.dns_lead
+    value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
 resource "digitalocean_record" "additional_ssl" {

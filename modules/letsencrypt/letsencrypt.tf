@@ -8,6 +8,7 @@ variable "lead_servers" {}
 
 variable "app_definitions" {}
 variable "additional_ssl" {}
+variable "cert_port" {}
 
 variable "root_domain_name" {}
 variable "contact_email" {}
@@ -24,7 +25,8 @@ resource "null_resource" "ssl" {
                 fqdn="${var.root_domain_name}"
                 email="${var.contact_email}"
                 dry_run=false
-                ssl=${jsonencode(var.additional_ssl)}'
+                ssl=${jsonencode(var.additional_ssl)}
+                cert_port=${var.cert_port}'
         EOF
     }
 }

@@ -220,7 +220,7 @@ resource "digitalocean_firewall" "admin" {
     # description = "LetsEncrypt"
     inbound_rule {
         protocol    = "tcp"
-        port_range   = 7080
+        port_range   = var.config.cert_port
         source_addresses = ["0.0.0.0/0"]
     }
 

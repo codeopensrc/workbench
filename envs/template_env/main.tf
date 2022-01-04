@@ -215,7 +215,7 @@ module "nginx" {
     additional_domains = local.additional_domains
     additional_ssl = var.additional_ssl
 
-    cert_port = "7080" ## Currently hardcoded in letsencrypt/letsencrypt.tmpl
+    cert_port = local.config.cert_port
 }
 
 ##NOTE: Uses ansible
@@ -332,6 +332,7 @@ module "letsencrypt" {
 
     app_definitions = var.app_definitions
     additional_ssl = var.additional_ssl
+    cert_port = local.config.cert_port
 
     root_domain_name = local.root_domain_name
     contact_email = var.contact_email
@@ -431,6 +432,8 @@ module "kubernetes" {
 
     kubernetes_version = local.kubernetes_version
     container_orchestrators = var.container_orchestrators
+
+    additional_ssl = var.additional_ssl
 }
 
 resource "null_resource" "configure_smtp" {
@@ -638,6 +641,8 @@ locals {
         local_ssh_key_file = var.local_ssh_key_file
         app_definitions = var.app_definitions
         packer_config = local.packer_config
+        container_orchestrators = var.container_orchestrators
+        managed_kubernetes_conf = contains(var.container_orchestrators, "managed_kubernetes") ? local.managed_kubernetes_conf : []
 
         ## DNS
         root_domain_name = local.root_domain_name
@@ -656,6 +661,7 @@ locals {
         cidr_block = local.cidr_block
         app_ips = var.app_ips
         station_ips = var.station_ips
+        cert_port = 7080
 
         ## Credentials/Cloud
         do_token = var.do_token

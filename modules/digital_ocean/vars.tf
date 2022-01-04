@@ -221,6 +221,14 @@ locals {
     }
 }
 
+## managed_kubernetes
+locals {
+    use_lb = contains(var.config.container_orchestrators, "managed_kubernetes")
+    lb_name = "${var.config.server_name_prefix}-${var.config.region}-lb"
+    lb_http_nodeport = 31000  ## Must be valid kubernetes nodeport: 30000-32767
+    lb_https_nodeport = 32000 ## Must be valid kubernetes nodeport: 30000-32767
+}
+
 terraform {
     required_providers {
         digitalocean = {

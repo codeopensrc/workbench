@@ -9,6 +9,7 @@
     dry_run: "{{ dry_run }}"
     app_definitions: "{{ apps | from_json }}"
     additional_ssl: "{{ ssl | from_json }}"
+    letsencrypt_port: "{{ cert_port | default(7080, true) }}"
   tasks:
     - name: letsencrypt_vars template
       template:
@@ -23,7 +24,7 @@
     - name: run script
       shell: |
         chmod +x /root/code/scripts/letsencrypt.sh
-        export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh
+        export RUN_FROM_CRON=true; bash /root/code/scripts/letsencrypt.sh -p {{ letsencrypt_port }}
         sed -i "s|#ssl_certificate|ssl_certificate|" /etc/nginx/conf.d/*.conf
         sed -i "s|#ssl_certificate_key|ssl_certificate_key|" /etc/nginx/conf.d/*.conf
         sed -i "s|#listen 443 ssl|listen 443 ssl|" /etc/nginx/conf.d/*.conf

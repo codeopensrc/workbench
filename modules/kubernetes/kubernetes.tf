@@ -15,6 +15,8 @@ variable "active_env_provider" {}
 variable "kubernetes_version" {}
 variable "container_orchestrators" {}
 
+variable "additional_ssl" {}
+
 locals {
     all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
     old_all_names = flatten([for role, hosts in var.remote_state_hosts: hosts[*].name])
@@ -30,6 +32,11 @@ locals {
             if contains(HOST.roles, "lead")
         ]
     ])
+    kube_services = [
+        for app in var.additional_ssl:
+        { subdomain = format("%s.%s", app.subdomain_name, var.root_domain_name), name = app.service_name }
+        if app.create_ssl_cert == true
+    ]
 }
 
 resource "null_resource" "kubernetes" {
@@ -69,3 +76,13 @@ resource "null_resource" "kubernetes" {
     }
 }
 
+resource "null_resource" "managed_kubernetes" {
+    count = contains(var.container_orchestrators, "managed_kubernetes") ? 1 : 0
+    provisioner "local-exec" {
+        command = <<-EOF
+            ansible-playbook ${path.module}/playbooks/managed_kubernetes.yml -i ${var.ansible_hostfile} --extra-vars \
+                'root_domain_name=${var.root_domain_name}
+                kube_services=${jsonencode(local.kube_services)}'
+        EOF
+    }
+}

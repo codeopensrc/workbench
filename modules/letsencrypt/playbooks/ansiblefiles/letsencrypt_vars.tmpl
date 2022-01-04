@@ -60,3 +60,11 @@ fi
 if [ "$DRY_RUN" = "true" ]; then
     RENEW+=(--dry-run)
 fi
+
+
+###! Seems adding extra domains with old certs missing from live/archive will cause new certs to appear under -0001 still
+###! Running and receiving a cert, adding a new domain, and immediately receiving a new cert works correctly
+###! Remove from live/ archive/ and renewal/ to reset back to pre -0001
+
+## Get hosts in ssl cert 
+##openssl x509 -in /etc/letsencrypt/live/{root_domain_name}/fullchain.pem -noout -text|grep -oP '(?<=DNS:|IP Address:)[^,]+'|sort -uV
