@@ -69,7 +69,7 @@ sudo apt-get upgrade -y;
 echo "Idk wait 30 seconds again for apt-get install to avoid lock"
 sleep 30;
 sudo apt-get install \
-    build-essential apt-utils openjdk-8-jdk \
+    build-essential apt-utils net-tools openjdk-8-jdk \
     unzip apt-transport-https ca-certificates curl \
     vim git jq python3-distutils python3 \
     awscli silversearcher-ag -y

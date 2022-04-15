@@ -224,6 +224,7 @@ resource "null_resource" "configure_ingress_controller" {
             "echo 'Wait 60 for Nginx ingress controller'",
             "sleep 60", ## ingress-letsencrypt.yml uses `ingressClassName: nginx` - controller needs to be up to accept ingress webhook validation
             "kubectl apply -f /root/.kube/ingress-letsencrypt.yml",
+            "kubectl delete pod -n ingress-nginx -l 'app.kubernetes.io/component=admission-webhook'"
         ]
     }
     connection {
