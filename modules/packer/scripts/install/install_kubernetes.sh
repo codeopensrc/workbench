@@ -1,11 +1,13 @@
 #!/bin/bash
 
 VERSION="1.22.1-00"
+HELM_VERSION="3.8.2-1"
 
-while getopts "v:" flag; do
+while getopts "v:h:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         v) VERSION=$OPTARG;;
+        h) HELM_VERSION=$OPTARG;;
     esac
 done
 
@@ -30,6 +32,16 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
 
     # Im assuming this prevents it from upgrading
     sudo apt-mark hold kubelet kubeadm kubectl
+fi
+
+##! Installs helm - deployment tool for kubernetes
+##! https://docs.helm.sh/docs/intro/install/
+if [[ ! -f $HOME/.local/bin/helm ]] && [[ ! -f /usr/local/bin/helm ]] && [[ ! -f /usr/bin/helm ]]; then
+    curl https://baltocdn.com/helm/signing.asc | sudo apt-key add -
+    sudo apt-get install apt-transport-https --yes
+    echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+    sudo apt-get update
+    sudo apt-get install -y helm=${HELM_VERSION}
 fi
 
 ## This is to be run during packer init so disable kubelet service

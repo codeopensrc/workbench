@@ -102,6 +102,10 @@ variable "kubernetes_version" {
   type    = string
   default = ""
 }
+variable "helm_version" {
+  type    = string
+  default = ""
+}
 variable "packer_dir" {
   type    = string
   default = ""
@@ -216,7 +220,7 @@ build {
             "sudo bash /tmp/scripts/init.sh -c ${var.consul_version} -d ${var.docker_compose_version} ${var.gitlab_version != "" ? "-g ${var.gitlab_version} -a" : ""}",
             "sudo bash /tmp/scripts/install/install_docker.sh -v ${var.docker_version}",
             "sudo bash /tmp/scripts/install/install_redis.sh -v ${var.redis_version}",
-            "sudo bash /tmp/scripts/install/install_kubernetes.sh -v ${var.kubernetes_version}",
+            "sudo bash /tmp/scripts/install/install_kubernetes.sh -v ${var.kubernetes_version} -h ${var.helm_version}",
             "sudo bash /tmp/scripts/move.sh"
         ]
     }

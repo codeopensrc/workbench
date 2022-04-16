@@ -43,6 +43,7 @@ resource "null_resource" "build" {
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'kubernetes_version=${var.packer_config.kubernetes_version}' \
+                --var 'helm_version=${var.packer_config.helm_version}' \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'aws_key_name=${var.aws_key_name}' \
@@ -74,6 +75,7 @@ resource "null_resource" "build" {
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'kubernetes_version=${var.packer_config.kubernetes_version}' \
+                --var 'helm_version=${var.packer_config.helm_version}' \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'aws_key_name=${var.aws_key_name}' \
