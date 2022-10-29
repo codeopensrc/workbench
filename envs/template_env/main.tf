@@ -245,7 +245,7 @@ module "clusterdb" {
     pg_dbs = local.pg_dbs
 
     import_dbs = var.import_dbs
-    dbs_to_import = var.dbs_to_import
+    dbs_to_import = local.dbs_to_import
 
     use_gpg = var.use_gpg
     bot_gpg_name = var.bot_gpg_name
@@ -599,18 +599,24 @@ locals {
         if contains(SERVER.roles, "build")
     ])))
 
+    dbs_to_import = [
+        for db in var.dbs_to_import: {
+            for k, v in db: 
+            k => (k == "s3alias" && v == "active_s3_provider" ? local.s3alias : v)
+        }
+    ]
     redis_dbs = [
-        for db in var.dbs_to_import:
+        for db in local.dbs_to_import:
         {name = db.dbname, backups_enabled = db.backups_enabled}
         if db.type == "redis" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
     pg_dbs = [
-        for db in var.dbs_to_import:
+        for db in local.dbs_to_import:
         {name = db.dbname, backups_enabled = db.backups_enabled}
         if db.type == "pg" && ( db.import == "true" || db.backups_enabled == "true" )
     ]
     mongo_dbs = [
-        for db in var.dbs_to_import:
+        for db in local.dbs_to_import:
         {name = db.dbname, backups_enabled = db.backups_enabled}
         if db.type == "mongo" && ( db.import == "true" || db.backups_enabled == "true" )
     ]

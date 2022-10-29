@@ -44,7 +44,7 @@ variable "dbs_to_import" {
         {
             "type" = "mongo"
             "s3bucket" = "S3_BUCKET_NAME"
-            "s3alias" = "" ##! s3 OR spaces
+            "s3alias" = "active_s3_provider" ##! s3 OR spaces OR azure OR active_s3_provider
             "dbname" = "wekan"
             "import" = "false"
             "backups_enabled" = "false"  ## auto false if not "default" workspace

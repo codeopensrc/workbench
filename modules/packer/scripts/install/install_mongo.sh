@@ -31,7 +31,7 @@ if [ "$BACKUP" = true ]; then
 fi
 
 
-sudo apt-get install gnupg;
+sudo apt-get install -y gnupg;
 wget -qO - https://www.mongodb.org/static/pgp/server-$MONGO_MAJOR_MINOR.asc | sudo apt-key add -
 
 echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/$MONGO_MAJOR_MINOR multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-$MONGO_MAJOR_MINOR.list
