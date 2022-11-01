@@ -1,0 +1,12 @@
+#https://github.com/digitalocean/csi-digitalocean
+#https://github.com/digitalocean/csi-digitalocean/blob/master/deploy/kubernetes/releases/csi-digitalocean-v3.0.0/snapshot-validation-webhook.yaml
+#https://github.com/kubernetes-csi/external-snapshotter/tree/master/deploy/kubernetes/webhook-example
+#
+### More concept reading
+#https://kubernetes-csi.github.io/docs/deploying.html
+#https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/
+#
+### Mount sharing
+#https://kubernetes.io/docs/concepts/storage/volumes/#configuration
+#https://kubernetes.io/docs/concepts/storage/volumes/#mount-propagation
+

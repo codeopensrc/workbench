@@ -143,6 +143,7 @@
 
 
 # TODO: Implement csi config for aws then azure
+# TODO: Automated cleanup of volumes in intelligent way
 - name: START KUBERNETES CLOUD CSI
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
