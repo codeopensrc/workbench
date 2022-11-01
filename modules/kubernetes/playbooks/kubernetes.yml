@@ -142,6 +142,98 @@
           shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }}"
 
 
+# TODO: Implement csi config for aws then azure
+- name: START KUBERNETES CLOUD CSI
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  gather_facts: no
+  vars:
+    cloud_provider: "{{ cloud_provider }}"
+    cloud_provider_token: "{{ cloud_provider_token }}"
+    csi_namespace: "{{ csi_namespace }}"
+    csi_version: "{{ csi_version }}"
+    snapshot_secret_name: "snapshot-validation-secret"
+    ca_bundle: ""
+  tasks:
+    - name: ensure digitalocean csi secret present
+      block:
+        - name: check digitalocean csi secret
+          command: 'kubectl get secret -n {{ csi_namespace }} {{ cloud_provider }}'
+          changed_when: false
+      rescue:
+        - name: add digitalocean csi secret file
+          template:
+            src: ansiblefiles/csi-secret.yaml
+            dest: /root/.kube/csi-secret.yaml
+
+        - name: apply digitalocean csi secret
+          shell: 'kubectl apply -f /root/.kube/csi-secret.yaml'
+
+        - name: rm digitalocean csi secret file
+          file: 
+            path: /root/.kube/csi-secret.yaml
+            state: absent
+      when: cloud_provider == "digitalocean" and cloud_provider_token != ""
+
+    # TODO: Do this using cert-manager
+    - name: ensure snapshot validation secret present
+      block:
+        - name: check snapshot validation secret
+          command: 'kubectl get secret -n {{ csi_namespace }} {{ snapshot_secret_name }}'
+          changed_when: false
+      rescue:
+        - name: add digitalocean create-cert script
+          template:
+            src: ansiblefiles/create-cert.sh
+            dest: /tmp/create-cert.sh
+
+        - name: chmod cert script
+          command: "chmod +x /tmp/create-cert.sh"
+
+        - name: create key/cert and populate secret
+          shell: '/tmp/create-cert.sh --service snapshot-validation-service --secret {{ snapshot_secret_name }} --namespace {{ csi_namespace }}'
+      when: cloud_provider == "digitalocean" and cloud_provider_token != ""
+
+    - name: ensure snapshot validation deployed
+      block:
+        - name: check snapshot validation deployment
+          command: kubectl rollout status -w "deployment/snapshot-validation" -n {{ csi_namespace }}
+          changed_when: false
+      rescue:
+        - name: populate ca_bundle for snapshot webhook
+          shell: |
+            kubectl config view --raw -o json | jq -r '.clusters[0].cluster."certificate-authority-data"' | tr -d '"';
+          register: ca_bundle
+
+        - name: add snapshot webhook config
+          template:
+            src: ansiblefiles/{{ csi_version }}-snapshot-validation-webhook.yaml
+            dest: /root/.kube/{{ csi_version }}-snapshot-validation-webhook.yaml
+
+        - name: apply digitalocean snapshot webhook config
+          shell: |
+            kubectl apply -f /root/.kube/{{ csi_version }}-snapshot-validation-webhook.yaml;
+            kubectl rollout status -w "deployment/snapshot-validation" -n {{ csi_namespace }};
+
+        - name: rm digitalocean webhook file
+          file: 
+            path: /root/.kube/{{ csi_version }}-snapshot-validation-webhook.yaml
+            state: absent
+      when: cloud_provider == "digitalocean" and cloud_provider_token != ""
+
+    # Apply multiple times (dependencies take a second to fully apply)
+    # We're cheesing it and looping 3 times with 3 second delay for first iteration of this
+    - name: apply digitalocean csi config
+      shell: |
+        # Do *not* add a blank space after -f
+        kubectl apply -fhttps://raw.githubusercontent.com/digitalocean/csi-digitalocean/master/deploy/kubernetes/releases/csi-digitalocean-v{{ csi_version }}/crds.yaml;
+        kubectl apply -fhttps://raw.githubusercontent.com/digitalocean/csi-digitalocean/master/deploy/kubernetes/releases/csi-digitalocean-v{{ csi_version }}/driver.yaml;
+        kubectl apply -fhttps://raw.githubusercontent.com/digitalocean/csi-digitalocean/master/deploy/kubernetes/releases/csi-digitalocean-v{{ csi_version }}/snapshot-controller.yaml;
+        sleep 3;
+      with_sequence: count=3
+      when: cloud_provider == "digitalocean" and cloud_provider_token != ""
+
+
 - name: REBOOT GITLAB ENVIRONMENTS
   hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), [] ) }}"
   remote_user: root

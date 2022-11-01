@@ -433,6 +433,11 @@ module "kubernetes" {
     kubernetes_version = local.kubernetes_version
     container_orchestrators = var.container_orchestrators
 
+    cloud_provider = local.cloud_provider
+    cloud_provider_token = local.cloud_provider_token
+    csi_namespace = local.csi_namespace
+    csi_version = local.csi_version
+
     additional_ssl = var.additional_ssl
 }
 
@@ -529,6 +534,10 @@ locals {
     s3alias = local.s3aliases[local.active_s3_provider]
     s3bucket = local.s3buckets[local.active_s3_provider]
     region = local.regions[var.active_env_provider]
+    cloud_provider = local.cloud_providers[var.active_env_provider]
+    cloud_provider_token = local.cloud_provider_tokens[var.active_env_provider]
+    csi_namespace = local.csi_namespaces[var.active_env_provider]
+    csi_version = local.csi_versions[var.active_env_provider]
     vpc_private_ifaces = {
         "digital_ocean" = "eth1"
         "aws" = "ens5"
@@ -548,6 +557,28 @@ locals {
         "digital_ocean" = var.do_region
         "aws" = var.aws_region_alias
         "azure" = var.az_region
+    }
+    cloud_providers = {
+        "digital_ocean" = "digitalocean"
+        "aws" = ""
+        "azure" = ""
+    }
+    cloud_provider_tokens = {
+        "digital_ocean" = var.do_token
+        "aws" = ""
+        "azure" = ""
+    }
+    csi_namespaces = {
+        "digital_ocean" = "kube-system"
+        "aws" = ""
+        "azure" = ""
+    }
+    csi_versions = {
+        # For kubernetes 1.20 use digitalocean csi 3.0.0
+        # TODO: Correct csi version based on kubernetes version
+        "digital_ocean" = "3.0.0"
+        "aws" = ""
+        "azure" = ""
     }
 
     ###! workspace based

@@ -15,6 +15,11 @@ variable "active_env_provider" {}
 variable "kubernetes_version" {}
 variable "container_orchestrators" {}
 
+variable "cloud_provider" {}
+variable "cloud_provider_token" {}
+variable "csi_namespace" {}
+variable "csi_version" {}
+
 variable "additional_ssl" {}
 
 locals {
@@ -71,7 +76,11 @@ resource "null_resource" "kubernetes" {
                 admin_servers=${var.admin_servers}
                 server_count=${var.server_count}
                 active_env_provider=${var.active_env_provider}
-                import_gitlab=${var.import_gitlab}'
+                import_gitlab=${var.import_gitlab}
+                cloud_provider=${var.cloud_provider}
+                cloud_provider_token=${var.cloud_provider_token}
+                csi_namespace=${var.csi_namespace}
+                csi_version=${var.csi_version}'
         EOF
     }
 }
