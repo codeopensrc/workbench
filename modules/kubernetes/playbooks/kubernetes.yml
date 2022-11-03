@@ -300,11 +300,11 @@
       when: import_gitlab | bool == true
 
 
-
 - name: UPDATE COREDNS
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
   vars:
+    root_domain_name: "{{ root_domain_name }}"
     configmap_keys: []
   tasks:
     - name: get patchfiles
@@ -350,3 +350,16 @@
     - name: patch coredns deployment
       shell: 'kubectl patch deployment -n kube-system coredns --type merge --patch "$(cat /root/.kube/coredns-vol-patch.yml)"'
       ignore_errors: true
+
+
+- name: UPDATE KUBECONFIG
+  ## For now just the main config - so we dont clobber if merging locally
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  vars:
+    root_domain_name: "{{ root_domain_name }}"
+  tasks:
+    - name: update kubeconfig values
+      shell: |
+        sed -r -i "s|kubernetes|{{ root_domain_name }}|" $HOME/.kube/config
+      

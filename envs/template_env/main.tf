@@ -432,6 +432,7 @@ module "kubernetes" {
 
     kubernetes_version = local.kubernetes_version
     container_orchestrators = var.container_orchestrators
+    cleanup_kube_volumes = local.cleanup_kube_volumes
 
     cloud_provider = local.cloud_provider
     cloud_provider_token = local.cloud_provider_token
@@ -608,6 +609,7 @@ locals {
                 : local.last_gitlab_kube_version) )
         : var.kubernetes_version)
     kubernetes_version = var.kubernetes_version == "" ? "latest" : local.gitlab_kube_version
+    cleanup_kube_volumes = terraform.workspace == "default" ? false : var.cleanup_kube_volumes
 
     remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
         ? data.terraform_remote_state.cloud.outputs.hosts : {})

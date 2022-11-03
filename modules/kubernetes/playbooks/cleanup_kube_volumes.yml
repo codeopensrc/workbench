@@ -1,0 +1,8 @@
+---
+- name: CLEANUP KUBE VOLUMES
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: delete all pvcs in all namespaces
+      command: kubectl delete pvc --all --all-namespaces

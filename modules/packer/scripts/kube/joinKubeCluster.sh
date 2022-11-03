@@ -98,10 +98,10 @@ if [[ -n $JOIN_COMMAND ]]; then
     fi
 else
     if [[ -n $CERTIFICATE_KEY ]]; then
-        kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH}
-    else
         kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH} --control-plane \
             --apiserver-advertise-address $WORKER_VPC_IP --certificate-key $CERTIFICATE_KEY
+    else
+        kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH}
     fi
 fi
 

@@ -55,6 +55,7 @@ variable "container_orchestrators" {
     ]
 }
 
+variable "cleanup_kube_volumes" { default = true } #auto false if  "default" workspace
 ########## SOFTWARE VERSIONS ##########
 #######################################
 

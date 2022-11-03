@@ -14,6 +14,7 @@ variable "active_env_provider" {}
 
 variable "kubernetes_version" {}
 variable "container_orchestrators" {}
+variable "cleanup_kube_volumes" {}
 
 variable "cloud_provider" {}
 variable "cloud_provider_token" {}
@@ -44,6 +45,8 @@ locals {
     ]
 }
 
+### TODO: Adding/configuring additional users
+# https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#kubeconfig-additional-users
 resource "null_resource" "kubernetes" {
     count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
     triggers = {
@@ -92,6 +95,31 @@ resource "null_resource" "managed_kubernetes" {
             ansible-playbook ${path.module}/playbooks/managed_kubernetes.yml -i ${var.ansible_hostfile} --extra-vars \
                 'root_domain_name=${var.root_domain_name}
                 kube_services=${jsonencode(local.kube_services)}'
+        EOF
+    }
+}
+
+
+## Goal is to only cleanup kubernetes volumes on 'terraform destroy'
+## TODO: Forgot to test with attached volumes/volumes attached to pods..
+resource "null_resource" "cleanup_cluster_volumes" {
+    count = contains(var.container_orchestrators, "kubernetes") && var.cleanup_kube_volumes ? 1 : 0
+    ## Untested/Unsure how to handle with managed kubernetes atm
+    #count = contains(var.container_orchestrators, "managed_kubernetes") ? 1 : 0
+
+    depends_on = [
+        null_resource.kubernetes,
+        null_resource.managed_kubernetes,
+    ]
+
+    triggers = {
+        predestroy_hostfile = var.predestroy_hostfile
+    }
+
+    provisioner "local-exec" {
+        when = destroy
+        command = <<-EOF
+            ansible-playbook ${path.module}/playbooks/cleanup_kube_volumes.yml -i ${self.triggers.predestroy_hostfile}
         EOF
     }
 }
