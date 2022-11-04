@@ -2,12 +2,14 @@
 
 VERSION="1.22.1-00"
 HELM_VERSION="3.8.2-1"
+SKAFFOLD_VERSION="2.0.0"
 
-while getopts "v:h:" flag; do
+while getopts "v:h:s:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         v) VERSION=$OPTARG;;
         h) HELM_VERSION=$OPTARG;;
+        s) SKAFFOLD_VERSION=$OPTARG;;
     esac
 done
 
@@ -42,6 +44,14 @@ if [[ ! -f $HOME/.local/bin/helm ]] && [[ ! -f /usr/local/bin/helm ]] && [[ ! -f
     echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
     sudo apt-get update
     sudo apt-get install -y helm=${HELM_VERSION}
+fi
+
+##! Installs skaffold - deployment tool for kubernetes
+##! https://skaffold.dev/docs/install
+if [[ ! -f $HOME/.local/bin/skaffold ]] && [[ ! -f /usr/local/bin/skaffold ]] && [[ ! -f /usr/bin/skaffold ]]; then
+    curl -L https://storage.googleapis.com/skaffold/releases/v${SKAFFOLD_VERSION}/skaffold-linux-amd64 -o /tmp/skaffold-linux
+    install /tmp/skaffold-linux /usr/local/bin/skaffold
+    rm -rf /tmp/skaffold-linux
 fi
 
 ## This is to be run during packer init so disable kubelet service

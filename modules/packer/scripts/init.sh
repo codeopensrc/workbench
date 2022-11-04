@@ -7,11 +7,13 @@ cat /etc/apt/apt.conf.d/20auto-upgrades
 CONSUL_VERSION="1.10.0"
 DOCKER_COMPOSE_VERSION="1.29.2"
 GITLAB_VERSION="14.3.0-ce.0"
+BUILDCTL_VERSION="0.10.5"
 
-while getopts "c:d:g:a" flag; do
+while getopts "b:c:d:g:a" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) IS_ADMIN=true;;
+        b) BUILDCTL_VERSION=$OPTARG;;
         c) CONSUL_VERSION=$OPTARG;;
         d) DOCKER_COMPOSE_VERSION=$OPTARG;;
         g) GITLAB_VERSION=$OPTARG;;
@@ -123,6 +125,13 @@ chmod +x /usr/local/bin/mc
 curl https://releases.hashicorp.com/consul/"$CONSUL_VERSION"/consul_"$CONSUL_VERSION"_linux_amd64.zip -o /tmp/consul.zip \
  && unzip -o /tmp/consul.zip -d /usr/local/bin \
  && rm -rf /tmp/consul.zip
+
+
+#### buildctl
+curl -L https://github.com/moby/buildkit/releases/download/v${BUILDCTL_VERSION}/buildkit-v${BUILDCTL_VERSION}.linux-amd64.tar.gz -o /tmp/buildkit-linux.tar.gz \
+ && mkdir -p /tmp/buildkit-linux && tar -xzvf /tmp/buildkit-linux.tar.gz -C /tmp/buildkit-linux \
+ && mv /tmp/buildkit-linux/bin/buildctl /usr/local/bin \
+ && rm -rf /tmp/buildkit-linux*
 
 
 #### gitlab
