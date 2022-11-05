@@ -40,10 +40,12 @@ resource "null_resource" "build" {
                 --var 'consul_version=${var.packer_config.consul_version}' \
                 --var 'docker_version=${var.packer_config.docker_version}' \
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
+                --var 'buildctl_version=${var.packer_config.buildctl_version}' \
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'kubernetes_version=${var.packer_config.kubernetes_version}' \
                 --var 'helm_version=${var.packer_config.helm_version}' \
+                --var 'skaffold_version=${var.packer_config.skaffold_version}' \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'aws_key_name=${var.aws_key_name}' \
@@ -72,10 +74,12 @@ resource "null_resource" "build" {
                 --var 'consul_version=${var.packer_config.consul_version}' \
                 --var 'docker_version=${var.packer_config.docker_version}' \
                 --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
+                --var 'buildctl_version=${var.packer_config.buildctl_version}' \
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
                 --var 'kubernetes_version=${var.packer_config.kubernetes_version}' \
                 --var 'helm_version=${var.packer_config.helm_version}' \
+                --var 'skaffold_version=${var.packer_config.skaffold_version}' \
                 --var 'aws_access_key=${var.aws_access_key}' \
                 --var 'aws_secret_key=${var.aws_secret_key}' \
                 --var 'aws_key_name=${var.aws_key_name}' \

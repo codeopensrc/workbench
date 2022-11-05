@@ -82,11 +82,15 @@ variable "az_image_version" {
   type    = string
   default = ""
 }
+variable "docker_version" {
+  type    = string
+  default = ""
+}
 variable "docker_compose_version" {
   type    = string
   default = ""
 }
-variable "docker_version" {
+variable "buildctl_version" {
   type    = string
   default = ""
 }
@@ -103,6 +107,10 @@ variable "kubernetes_version" {
   default = ""
 }
 variable "helm_version" {
+  type    = string
+  default = ""
+}
+variable "skaffold_version" {
   type    = string
   default = ""
 }
@@ -217,10 +225,10 @@ build {
             "chmod +x /tmp/scripts/install/install_redis.sh",
             "chmod +x /tmp/scripts/install/install_kubernetes.sh",
             "chmod +x /tmp/scripts/move.sh",
-            "sudo bash /tmp/scripts/init.sh -c ${var.consul_version} -d ${var.docker_compose_version} ${var.gitlab_version != "" ? "-g ${var.gitlab_version} -a" : ""}",
+            "sudo bash /tmp/scripts/init.sh -b ${var.buildctl_version} -c ${var.consul_version} -d ${var.docker_compose_version} ${var.gitlab_version != "" ? "-g ${var.gitlab_version} -a" : ""}",
             "sudo bash /tmp/scripts/install/install_docker.sh -v ${var.docker_version}",
             "sudo bash /tmp/scripts/install/install_redis.sh -v ${var.redis_version}",
-            "sudo bash /tmp/scripts/install/install_kubernetes.sh -v ${var.kubernetes_version} -h ${var.helm_version}",
+            "sudo bash /tmp/scripts/install/install_kubernetes.sh -v ${var.kubernetes_version} -h ${var.helm_version} -s ${var.skaffold_version}",
             "sudo bash /tmp/scripts/move.sh"
         ]
     }

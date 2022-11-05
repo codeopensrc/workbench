@@ -75,9 +75,11 @@ variable "kubernetes_version" { default = "gitlab" }
 variable "gitlab_version" { default = "14.4.2-ce.0" }
 variable "docker_version" { default = "20.10.10" }
 variable "docker_compose_version" { default = "1.29.2" }
+variable "buildctl_version" { default = "0.10.5" }
 variable "consul_version" { default = "1.10.3" }
 variable "redis_version" { default = "5.0.9" }
 variable "helm_version" { default = "3.8.2-1" }  ## TODO kubernetes matrix
+variable "skaffold_version" { default = "2.0.0" }
 
 
 locals {
@@ -85,10 +87,12 @@ locals {
         gitlab_version = var.gitlab_version
         docker_version = var.docker_version
         docker_compose_version = var.docker_compose_version
+        buildctl_version = var.buildctl_version
         consul_version = var.consul_version
         redis_version = var.redis_version
         kubernetes_version = local.kubernetes_version
         helm_version = var.helm_version
+        skaffold_version = var.skaffold_version
         base_amis = var.base_amis
         digitalocean_image_os = var.digitalocean_image_os
         azure_image_os = var.azure_image_os
