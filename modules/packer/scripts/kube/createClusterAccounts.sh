@@ -8,6 +8,17 @@
 ##  to the code directly, mainly brainstormed thoughts. Many end up stale after we tried
 ##  it or figured out a solution though which can cause confusion
 
+############################################################
+### CHECK PERMISSIONS OF SERVICE ACCOUNTS
+#https://stackoverflow.com/questions/54889458/kubernetes-check-serviceaccount-permissions
+
+#EX:
+#The correct command is:
+#kubectl auth can-i <verb> <resource> --as=system:serviceaccount:<namespace>:<serviceaccountname> [-n <namespace>]
+
+#To check whether the tiller account has the right to create a ServiceMonitor object:
+#kubectl auth can-i create servicemonitor --as=system:serviceaccount:staging:tiller -n staging
+############################################################
 
 #Common error: fatal: unable to access 'https://gitlab-ci-token:token@example.com/repo/proj.git/': Could not resolve host: example.com
 #https://docs.gitlab.com/runner/executors/kubernetes.html#fatal-unable-to-access-httpsgitlab-ci-tokentokenexamplecomrepoprojgit-could-not-resolve-host-examplecom
@@ -47,18 +58,30 @@
 ############################################################
 ############################################################
 
-PROD_DEPLOY_ACCOUNT_NAME="deploy"
 REVIEW_DEPLOY_ACCOUNT_NAME="review"
+REVIEW_BUILDER_ACCOUNT_NAME="${REVIEW_DEPLOY_ACCOUNT_NAME}-buildkit"
+REVIEW_DEPLOY_FROM_NAMESPACE_NAME="review"
+REVIEW_BUILD_FROM_NAMESPACE_NAME="review"
+
+PROD_DEPLOY_ACCOUNT_NAME="deploy"
+PROD_BUILDER_ACCOUNT_NAME="${PROD_DEPLOY_ACCOUNT_NAME}-buildkit"
+PROD_DEPLOY_FROM_NAMESPACE_NAME="deploy"
+PROD_BUILD_FROM_NAMESPACE_NAME="deploy"
+
 RUNNER_HOST_DOMAIN=$(hostname -d)
 TAG_LIST="kubernetes"
+BUILDER_TAG_LIST="kubernetes_builder"
+BUILDKIT_POD_NAME="buildkitd-0"
 
 GL_DEPLOY_FILE_LOCATION=$HOME/.kube/gitlab-deploy-service-account.yaml
 GL_REVIEW_FILE_LOCATION=$HOME/.kube/gitlab-review-service-account.yaml
 GL_ADMIN_FILE_LOCATION=$HOME/.kube/gitlab-admin-service-account.yaml
 GL_NAMESPACE_FILE_LOCATION=$HOME/.kube/gitlab-namespaces.yaml
+GL_BUILDKIT_FILE_LOCATION=$HOME/.kube/gitlab-buildkit-service-account.yaml
+GL_BUILDKIT_CLUSTER_ROLE_NAME="buildkit-access-clusterrole"
+GL_BUILDER_CLUSTER_ROLE_NAME="builder-clusterrole"
 PUB_CA_FILE_LOCATION=$HOME/.kube/pub-ca.crt
 
-DEPLOY_FROM_NAMESPACE_NAME="deploy"
 NAMESPACES_DEFAULTS=( "review" "dev" "beta" "production" )
 NAMESPACES=("dev")
 
@@ -66,10 +89,11 @@ RUNNER_TOKEN=""
 KUBE_API_HOST_URL=""
 KUBE_VERSION="latest"
 
-while getopts "a:d:h:i:l:n:t:v:ru" flag; do
+while getopts "a:b:d:h:i:l:n:t:v:ru" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) KUBE_API_HOST_URL=$OPTARG;;
+        b) OPT_BUILDKIT_POD_NAME=$OPTARG;;
         d) RUNNER_HOST_DOMAIN=$OPTARG;;
         h) RUNNER_HOST_URL=$OPTARG;;
         i) KUBE_IMAGE=$OPTARG;;
@@ -101,8 +125,10 @@ if [[ -n "$RUNNER_HOST_URL" ]]; then DEFAULT_RUNNER_HOST_URL=$RUNNER_HOST_URL; f
 ##  -i causes the image to ignore the -d option
 DEFAULT_KUBE_IMAGE="registry.codeopensrc.com/os/workbench/kube:$KUBE_VERSION" #ok with this hardcoding atm
 if [[ -n "$KUBE_IMAGE" ]]; then DEFAULT_KUBE_IMAGE=$KUBE_IMAGE; fi
+if [[ -n "$OPT_BUILDKIT_POD_NAME" ]]; then BUILDKIT_POD_NAME=$OPT_BUILDKIT_POD_NAME; fi
 
 if [[ -n "$TAG_LIST_EXT" ]]; then TAG_LIST="${TAG_LIST},${TAG_LIST_EXT}"; fi
+if [[ -n "$TAG_LIST_EXT" ]]; then BUILDER_TAG_LIST="${BUILDER_TAG_LIST},${TAG_LIST_EXT}"; fi
 
 
 if [[ -n "$NAMESPACE" ]]; then NAMESPACES=($NAMESPACE); fi
@@ -153,9 +179,30 @@ cat <<EOF > $GL_NAMESPACE_FILE_LOCATION
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: $DEPLOY_FROM_NAMESPACE_NAME
+  name: $REVIEW_DEPLOY_FROM_NAMESPACE_NAME
   labels:
-    name: $DEPLOY_FROM_NAMESPACE_NAME
+    name: $REVIEW_DEPLOY_FROM_NAMESPACE_NAME
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $REVIEW_BUILD_FROM_NAMESPACE_NAME
+  labels:
+    name: $REVIEW_BUILD_FROM_NAMESPACE_NAME
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $PROD_DEPLOY_FROM_NAMESPACE_NAME
+  labels:
+    name: $PROD_DEPLOY_FROM_NAMESPACE_NAME
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $PROD_BUILD_FROM_NAMESPACE_NAME
+  labels:
+    name: $PROD_BUILD_FROM_NAMESPACE_NAME
 ---
 apiVersion: v1
 kind: Namespace
@@ -181,7 +228,44 @@ EOF
 
 kubectl apply -f $GL_NAMESPACE_FILE_LOCATION
 
+### cluster role to use kube-pod:// for buildkit
+### cluster role to launch builder pods
+cat <<EOF > $GL_BUILDKIT_FILE_LOCATION
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: $GL_BUILDKIT_CLUSTER_ROLE_NAME
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/exec"]
+  resourceNames: ["${BUILDKIT_POD_NAME}"]
+  verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: $GL_BUILDER_CLUSTER_ROLE_NAME
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["pods/exec", "pods/attach"]
+  verbs: ["create", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "update", "delete"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "update", "delete"]
+---
+EOF
 
+## Assuming the role must exist before using rolebindings on it
+kubectl apply -f $GL_BUILDKIT_FILE_LOCATION
 
 ### CA_FILE
 SECRET=$(kubectl get secrets | grep default-token | cut -d " " -f1)
@@ -205,20 +289,31 @@ for NAMESPACE in ${NAMESPACES[@]}; do
 
     if [[ $NAMESPACE = "review" ]]; then
         DEPLOY_ACCOUNT_NAME=$REVIEW_DEPLOY_ACCOUNT_NAME
+        BUILDER_ACCOUNT_NAME=$REVIEW_BUILDER_ACCOUNT_NAME
+        DEPLOY_FROM_NAMESPACE_NAME=$REVIEW_DEPLOY_FROM_NAMESPACE_NAME
+        BUILD_FROM_NAMESPACE_NAME=$REVIEW_BUILD_FROM_NAMESPACE_NAME
+
         GL_ACCOUNT_FILE_LOCATION=$GL_REVIEW_FILE_LOCATION
         ROLE_TYPE="admin"
         ACCESS_LEVEL="not_protected"
     else
         DEPLOY_ACCOUNT_NAME=$PROD_DEPLOY_ACCOUNT_NAME
+        BUILDER_ACCOUNT_NAME=$PROD_BUILDER_ACCOUNT_NAME
+        DEPLOY_FROM_NAMESPACE_NAME=$PROD_DEPLOY_FROM_NAMESPACE_NAME
+        BUILD_FROM_NAMESPACE_NAME=$PROD_BUILD_FROM_NAMESPACE_NAME
+
         GL_ACCOUNT_FILE_LOCATION=$GL_DEPLOY_FILE_LOCATION
         ROLE_TYPE="cluster-admin"
         ACCESS_LEVEL="ref_protected"
         TAG_LIST="${TAG_LIST/kubernetes/kubernetes_prod}"
+        BUILDER_TAG_LIST="${BUILDER_TAG_LIST/kubernetes_builder/kubernetes_builder_prod}"
     fi
 
     # 3.
     ## Create service account(s) (Currently doing per NS)
     ## Create a RoleBinding with the ClusterRole cluster-admin/admin privileges in each of the namespaces
+
+    ## TODO: NOTE: Understanding/implementation has slightly changed but keeping this here for the original train of thought
 
     ### Only need account in the 1 namespaces we launch FROM not TO
     ### Prety sure we need an account in the namespace regardless of rolebindings because it attempts to detect
@@ -245,8 +340,9 @@ for NAMESPACE in ${NAMESPACES[@]}; do
     ##  === If we're able to proxy to other pods on the cluster what else can they access
 
     ## Create accounts and rolebindings in the $DEPLOY_FROM_NAMESPACE_NAME
-    ## We use $NAMESPACE as we only want to create 2 accounts and rolebindings here
+    ## We use $NAMESPACE as we only want to create 2 accounts and rolebindings per namespace here
     if [[ $NAMESPACE = "review" || $NAMESPACE = "dev" ]]; then
+        ### $DEPLOY-kube-runner
 	cat <<-EOF >> $GL_ACCOUNT_FILE_LOCATION
 	apiVersion: v1
 	kind: ServiceAccount
@@ -269,10 +365,46 @@ for NAMESPACE in ${NAMESPACES[@]}; do
 	  apiGroup: rbac.authorization.k8s.io
 	---
 	EOF
+        ### $DEPLOY-kube-builder
+	cat <<-EOF >> $GL_BUILDKIT_FILE_LOCATION
+	apiVersion: v1
+	kind: ServiceAccount
+	metadata:
+	  name: $BUILDER_ACCOUNT_NAME
+	  namespace: $BUILD_FROM_NAMESPACE_NAME
+	---
+	apiVersion: rbac.authorization.k8s.io/v1
+	kind: RoleBinding
+	metadata:
+	  name: $BUILDER_ACCOUNT_NAME-builder-rolebinding
+	  namespace: $BUILD_FROM_NAMESPACE_NAME
+	subjects:
+	  - kind: ServiceAccount
+	    name: $BUILDER_ACCOUNT_NAME
+	    namespace: $BUILD_FROM_NAMESPACE_NAME
+	roleRef:
+	  kind: ClusterRole
+	  name: $GL_BUILDER_CLUSTER_ROLE_NAME
+	  apiGroup: rbac.authorization.k8s.io
+	---
+	apiVersion: rbac.authorization.k8s.io/v1
+	kind: ClusterRoleBinding
+	metadata:
+	  name: $BUILDER_ACCOUNT_NAME-access-clusterrolebinding
+	subjects:
+	  - kind: ServiceAccount
+	    name: $BUILDER_ACCOUNT_NAME
+	    namespace: $BUILD_FROM_NAMESPACE_NAME
+	roleRef:
+	  kind: ClusterRole
+	  name: $GL_BUILDKIT_CLUSTER_ROLE_NAME
+	  apiGroup: rbac.authorization.k8s.io
+	---
+	EOF
     fi
 
-    ## Create rolebindings to deploy to all BUT "review" namespace (which doesnt exist) as gitlab
-    ##  is managing all the deploy TO locations for the review service account
+    ## Create rolebindings to deploy to all BUT "review" namespace as gitlab
+    ##  is managing all the deploy TO locations
     if [[ $NAMESPACE != "review" ]]; then
 	cat <<-EOF >> $GL_ACCOUNT_FILE_LOCATION
 	apiVersion: rbac.authorization.k8s.io/v1
@@ -295,15 +427,19 @@ for NAMESPACE in ${NAMESPACES[@]}; do
 
     kubectl apply -f $GL_ACCOUNT_FILE_LOCATION
     # cli ref #kubectl create rolebinding dev-cluster-admin --clusterrole=cluster-admin --serviceaccount=dev:deploy --namespace=dev
+    kubectl apply -f $GL_BUILDKIT_FILE_LOCATION
 
 
     if [[ $NAMESPACE = "review" || $NAMESPACE = "dev" ]]; then
 
         ### SERVICE ACCOUNT TOKEN
-        SERVICE_TOKEN_TXT=$(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME describe secret $(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME get secret | grep $DEPLOY_ACCOUNT_NAME | awk '{print $1}'))
-        SERVICE_TOKEN=$(echo "$SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
-
+        DEPLOY_SERVICE_TOKEN_TXT=$(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME describe secret $(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME get secret | grep "${DEPLOY_ACCOUNT_NAME}-token" | awk '{print $1}'))
+        DEPLOY_SERVICE_TOKEN=$(echo "$DEPLOY_SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
         sudo gitlab-runner unregister --name "${DEPLOY_ACCOUNT_NAME}-kube-runner"
+
+        BUILDER_SERVICE_TOKEN_TXT=$(kubectl -n $BUILD_FROM_NAMESPACE_NAME describe secret $(kubectl -n $BUILD_FROM_NAMESPACE_NAME get secret | grep "${BUILDER_ACCOUNT_NAME}-token" | awk '{print $1}'))
+        BUILDER_SERVICE_TOKEN=$(echo "$BUILDER_SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
+        sudo gitlab-runner unregister --name "${BUILDER_ACCOUNT_NAME}-kube-builder"
 
         ## TODO: These will be default - for testing they are shared atm
             #--locked="false" \
@@ -323,7 +459,25 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --kubernetes-host "$KUBE_API_HOST_URL" \
             --kubernetes-namespace "$DEPLOY_FROM_NAMESPACE_NAME" \
             --kubernetes-service-account "$DEPLOY_ACCOUNT_NAME" \
-            --kubernetes-bearer_token "$SERVICE_TOKEN" \
+            --kubernetes-bearer_token "$DEPLOY_SERVICE_TOKEN" \
+            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION"
+
+        sudo gitlab-runner register \
+            --url "$DEFAULT_RUNNER_HOST_URL" \
+            --registration-token "$RUNNER_TOKEN" \
+            --non-interactive \
+            --executor kubernetes \
+            --tag-list "${BUILDER_TAG_LIST}" \
+            --locked="false" \
+            --run-untagged="false" \
+            --access-level="$ACCESS_LEVEL" \
+            --name "${BUILDER_ACCOUNT_NAME}-kube-builder" \
+            --kubernetes-image "$DEFAULT_KUBE_IMAGE" \
+            --kubernetes-pull-policy "always" \
+            --kubernetes-host "$KUBE_API_HOST_URL" \
+            --kubernetes-namespace "$BUILD_FROM_NAMESPACE_NAME" \
+            --kubernetes-service-account "$BUILDER_ACCOUNT_NAME" \
+            --kubernetes-bearer_token "$BUILDER_SERVICE_TOKEN" \
             --kubernetes-ca-file "$PUB_CA_FILE_LOCATION"
 
 
