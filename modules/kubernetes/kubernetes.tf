@@ -51,6 +51,9 @@ resource "null_resource" "kubernetes" {
     count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
     triggers = {
         num_nodes = var.server_count
+        kubecfg_cluster = "${var.root_domain_name}"
+        kubecfg_context = "${var.root_domain_name}-admin@kubernetes"
+        kubecfg_user = "${var.root_domain_name}-admin"
     }
 
     ## Run playbook with old ansible file and new names to find out the ones to be deleted, drain and removing them
@@ -84,6 +87,30 @@ resource "null_resource" "kubernetes" {
                 cloud_provider_token=${var.cloud_provider_token}
                 csi_namespace=${var.csi_namespace}
                 csi_version=${var.csi_version}'
+        EOF
+    }
+
+    ### Add cluster + context + user locally to kubeconfig
+    provisioner "local-exec" {
+        command = <<-EOF
+            scp root@${var.root_domain_name}:~/.kube/config $HOME/.kube/${var.root_domain_name}-kubeconfig
+            sed -i "s/kube-cluster-endpoint/gitlab.${var.root_domain_name}/" $HOME/.kube/${var.root_domain_name}-kubeconfig
+            KUBECONFIG=$HOME/.kube/config:$HOME/.kube/${var.root_domain_name}-kubeconfig
+            kubectl config view --flatten > /tmp/kubeconfig
+            cp --backup=numbered $HOME/.kube/config $HOME/.kube/config.bak
+            mv /tmp/kubeconfig $HOME/.kube/config
+            rm $HOME/.kube/${var.root_domain_name}-kubeconfig
+        EOF
+    }
+
+    ### Remove cluster + context + user locally from kubeconfig
+    ## Only runs on terraform destroy
+    provisioner "local-exec" {
+        when = destroy
+        command = <<-EOF
+            kubectl config delete-cluster ${self.triggers.kubecfg_cluster}
+            kubectl config delete-context ${self.triggers.kubecfg_context}
+            kubectl config delete-user ${self.triggers.kubecfg_user}
         EOF
     }
 }

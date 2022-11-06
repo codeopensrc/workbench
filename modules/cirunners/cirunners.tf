@@ -29,6 +29,12 @@ locals {
 #   with api scope, make a curl request to get the project level runners_token and use that
 # Programatically creating the project is a little tedious but honestly not a bad idea
 #  considering we can then just push the code and images up if we didnt/dont have a backup
+
+## TODO: Now that we're building (needs thorough testing first) using buildctl/buildkit inside
+##  kubernetes with the kubernetes executor, we dont (shouldnt) be creating shell runners meaning
+##  we dont really need this step anymore
+## If anything since we cant register runners until we have a working cluster, we can refactor this
+##  a bit and provision kubernetes runners after cluster is up
 resource "null_resource" "provision" {
     triggers = {
         num_machines = sum([var.lead_servers + var.build_servers])

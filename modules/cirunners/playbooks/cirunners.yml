@@ -9,7 +9,9 @@
 ## https://docs.gitlab.com/runner/configuration/advanced-configuration.html
 
 ## TODO: var.gitlab_enabled ? var.servers : 0;
-## TODO: On import remove old runners
+## atm we're just checking if we have an admin server, not if enabled
+
+### TODO: Refactor/deprecate the shell runners as we're going full kubernetes runners now with buildkit
 ---
 - name: GET GITLAB RUNNER TOKEN
   hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), []) }}"
@@ -141,11 +143,13 @@
                 *) TAG=${TAG} ;;
             esac
         fi
-        if [ "$TAG" = "prod" ]; then
-            ACCESS_LEVEL="ref_protected";
-            RUN_UNTAGGED="false";
-            #LOCKED="true"; ## When we need to worry about it
-        fi
+        case "$TAG" in
+            *prod*)
+                ACCESS_LEVEL="ref_protected";
+                RUN_UNTAGGED="false";
+                #LOCKED="true"; ## When we need to worry about it
+            ;;
+        esac
 
         if [ -z "$FOUND_NAME" ]; then
             sudo gitlab-runner register -n \
