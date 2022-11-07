@@ -13,6 +13,7 @@ variable "vpc_private_iface" {}
 variable "active_env_provider" {}
 
 variable "kubernetes_version" {}
+variable "buildkitd_version" {}
 variable "container_orchestrators" {}
 variable "cleanup_kube_volumes" {}
 
@@ -76,6 +77,7 @@ resource "null_resource" "kubernetes" {
         command = <<-EOF
             ansible-playbook ${path.module}/playbooks/kubernetes.yml -i ${var.ansible_hostfile} --extra-vars \
                 'kubernetes_version=${var.kubernetes_version}
+                buildkitd_version=${var.buildkitd_version}
                 gitlab_runner_tokens=${jsonencode(var.gitlab_runner_tokens)}
                 vpc_private_iface=${var.vpc_private_iface}
                 root_domain_name=${var.root_domain_name}

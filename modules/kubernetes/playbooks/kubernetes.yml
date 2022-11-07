@@ -22,6 +22,7 @@
   remote_user: root
   vars:
     kubernetes_version: "{{ kubernetes_version }}"
+    buildkitd_version: "{{ buildkitd_version }}"
     gitlab_tokens: "{{ gitlab_runner_tokens | from_json }}"
     kube_tokens: "'-t {{ gitlab_tokens['service'] }}'"
     vpc_private_iface: "{{ vpc_private_iface }}"
@@ -74,7 +75,6 @@
           - pyyaml ## Maybe dont need with "--user" arg now
         extra_args: --user
 
-    ##TODO: Pay attention to current scale
     ##TODO: Template k8s manifest or use helm instead of script
     - name: init nginxKubeProxy
       block:
@@ -89,6 +89,43 @@
         - name: install nginxKubeProxy
           command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
 
+    - name: scale nginx-proxy deployment
+      k8s_scale:
+        api_version: apps/v1
+        kind: deployment
+        name: nginx-proxy
+        namespace: default
+        replicas: "{{ (server_count | int == 1) | ternary(2, server_count) }}" ## Primitive but should work
+
+    - name: create buildkitd namespace
+      k8s:
+        api_version: v1
+        name: buildkitd
+        kind: namespace
+        state: present
+
+    ## Move to below CSI init if we start to use volumes
+    ## TODO: Eventually configure and deploy rootless version
+    - name: init buildkitd
+      block:
+        - name: check buildkitd started
+          changed_when: false
+          k8s:
+            api_version: apps/v1
+            kind: statefulset
+            name: buildkitd
+            namespace: buildkitd
+      rescue:
+        - name: copy buildkitd template to node
+          template:
+            src: ansiblefiles/buildkitd.yaml
+            dest: /tmp/buildkitd.yaml
+        - name: install buildkitd
+          k8s:
+            state: present
+            namespace: buildkitd
+            src: /tmp/buildkitd.yaml
+
     ##TODO: Check if exists before launching or pay attention to current scale
     - name: init minioKubeAzGateway
       command: bash $HOME/code/scripts/kube/minioKubeAzGateway.sh
@@ -102,7 +139,7 @@
       rescue:
         - name: create cluster serviceaccounts
           command: bash $HOME/code/scripts/kube/createClusterAccounts.sh -v {{ runner_img_version }} -d {{ root_domain_name }} \
-            -a {{ private_ip }} -l {{ root_domain_name }} {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u
+            -a {{ private_ip }} -l {{ root_domain_name }} -b buildkitd-0 {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u
       when: admin_servers | int > 0
 
     - name: add cluster to gitlab

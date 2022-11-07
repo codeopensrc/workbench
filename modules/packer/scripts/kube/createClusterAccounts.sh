@@ -71,7 +71,7 @@ PROD_BUILD_FROM_NAMESPACE_NAME="deploy"
 RUNNER_HOST_DOMAIN=$(hostname -d)
 TAG_LIST="kubernetes"
 BUILDER_TAG_LIST="kubernetes_builder"
-BUILDKIT_POD_NAME="buildkitd-0"
+BUILDKITD_POD_NAME="buildkitd-0"
 
 GL_DEPLOY_FILE_LOCATION=$HOME/.kube/gitlab-deploy-service-account.yaml
 GL_REVIEW_FILE_LOCATION=$HOME/.kube/gitlab-review-service-account.yaml
@@ -93,7 +93,7 @@ while getopts "a:b:d:h:i:l:n:t:v:ru" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) KUBE_API_HOST_URL=$OPTARG;;
-        b) OPT_BUILDKIT_POD_NAME=$OPTARG;;
+        b) OPT_BUILDKITD_POD_NAME=$OPTARG;;
         d) RUNNER_HOST_DOMAIN=$OPTARG;;
         h) RUNNER_HOST_URL=$OPTARG;;
         i) KUBE_IMAGE=$OPTARG;;
@@ -125,7 +125,7 @@ if [[ -n "$RUNNER_HOST_URL" ]]; then DEFAULT_RUNNER_HOST_URL=$RUNNER_HOST_URL; f
 ##  -i causes the image to ignore the -d option
 DEFAULT_KUBE_IMAGE="registry.codeopensrc.com/os/workbench/kube:$KUBE_VERSION" #ok with this hardcoding atm
 if [[ -n "$KUBE_IMAGE" ]]; then DEFAULT_KUBE_IMAGE=$KUBE_IMAGE; fi
-if [[ -n "$OPT_BUILDKIT_POD_NAME" ]]; then BUILDKIT_POD_NAME=$OPT_BUILDKIT_POD_NAME; fi
+if [[ -n "$OPT_BUILDKITD_POD_NAME" ]]; then BUILDKITD_POD_NAME=$OPT_BUILDKITD_POD_NAME; fi
 
 if [[ -n "$TAG_LIST_EXT" ]]; then TAG_LIST="${TAG_LIST},${TAG_LIST_EXT}"; fi
 if [[ -n "$TAG_LIST_EXT" ]]; then BUILDER_TAG_LIST="${BUILDER_TAG_LIST},${TAG_LIST_EXT}"; fi
@@ -238,7 +238,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["pods", "pods/exec"]
-  resourceNames: ["${BUILDKIT_POD_NAME}"]
+  resourceNames: ["${BUILDKITD_POD_NAME}"]
   verbs: ["get", "create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

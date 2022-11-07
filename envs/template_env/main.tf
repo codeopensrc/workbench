@@ -431,6 +431,7 @@ module "kubernetes" {
     active_env_provider = var.active_env_provider
 
     kubernetes_version = local.kubernetes_version
+    buildkitd_version = var.buildkitd_version
     container_orchestrators = var.container_orchestrators
     cleanup_kube_volumes = local.cleanup_kube_volumes
 
