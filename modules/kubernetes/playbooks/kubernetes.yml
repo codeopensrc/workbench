@@ -67,9 +67,27 @@
       changed_when: false
       #when: server_count | int == 1
 
-    ##TODO: Check if exists before launching or pay attention to current scale
+    - name: install k8s.core prerequisites
+      pip:
+        name:
+          - kubernetes 
+          - pyyaml ## Maybe dont need with "--user" arg now
+        extra_args: --user
+
+    ##TODO: Pay attention to current scale
+    ##TODO: Template k8s manifest or use helm instead of script
     - name: init nginxKubeProxy
-      command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
+      block:
+        - name: check nginxKubeProxy started
+          changed_when: false
+          k8s:
+            api_version: apps/v1
+            kind: deployment
+            name: nginx-proxy
+            namespace: default
+      rescue:
+        - name: install nginxKubeProxy
+          command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
 
     ##TODO: Check if exists before launching or pay attention to current scale
     - name: init minioKubeAzGateway

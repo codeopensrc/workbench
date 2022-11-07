@@ -4,5 +4,17 @@
   remote_user: root
   gather_facts: false
   tasks:
+    - name: patch pvcs allowing deletion
+      shell: |
+        PVCS=$(kubectl get pvc -A -o custom-columns=NAME:.metadata.name,NS:.metadata.namespace --no-headers | sed -r "s/\s+/ /g")
+        if [ -n "${PVCS}" ]; then
+            echo "${PVCS}" | while IFS= read -r PVC; do
+                PVCNAME=$(echo "$PVC" | cut -d " " -f1)
+                NS=$(echo "$PVC" | cut -d " " -f2)
+                echo "Patching $PVCNAME in $NS"
+                kubectl patch pvc $PVCNAME -n $NS -p '{"metadata":{"finalizers":null}}'
+            done
+        fi
+
     - name: delete all pvcs in all namespaces
       command: kubectl delete pvc --all --all-namespaces
