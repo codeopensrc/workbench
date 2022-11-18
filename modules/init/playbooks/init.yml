@@ -75,12 +75,19 @@
 - name: CHANGE HOSTNAME
   hosts: all
   remote_user: root
+  gather_facts: false
   vars:
     server_name_prefix: "{{ server_name_prefix }}"
     region: "{{ region }}"
     hostname: "{{ hostname }}"
     root_domain_name: "{{ root_domain_name }}"
   tasks:
+    ## Hoping this fixes random 'gather_facts' not working/timing out
+    - name: gather facts task
+      retries: 3
+      setup:
+        gather_timeout: 5
+
     - name: change hostname
       command: sudo hostnamectl set-hostname {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}
 

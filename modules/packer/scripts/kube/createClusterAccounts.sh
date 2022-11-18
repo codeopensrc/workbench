@@ -148,28 +148,32 @@ sudo usermod -aG docker gitlab-runner
 
 # 1.
 ## Create gitlab service account clusterwide
-cat <<EOF > $GL_ADMIN_FILE_LOCATION
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: gitlab
-  namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: gitlab-admin
-subjects:
-  - kind: ServiceAccount
-    name: gitlab
-    namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: cluster-admin
-  apiGroup: rbac.authorization.k8s.io
-EOF
+### New agent based approach should no longer need this
+### TODO: Would like to solve the dynamic namespace per branch/project type approach but
+###  for now would just like the original functionality to work (minus dynamic namespaces)
 
-kubectl apply -f $GL_ADMIN_FILE_LOCATION
+#cat <<EOF > $GL_ADMIN_FILE_LOCATION
+#apiVersion: v1
+#kind: ServiceAccount
+#metadata:
+#  name: gitlab
+#  namespace: kube-system
+#---
+#apiVersion: rbac.authorization.k8s.io/v1
+#kind: ClusterRoleBinding
+#metadata:
+#  name: gitlab-admin
+#subjects:
+#  - kind: ServiceAccount
+#    name: gitlab
+#    namespace: kube-system
+#roleRef:
+#  kind: ClusterRole
+#  name: cluster-admin
+#  apiGroup: rbac.authorization.k8s.io
+#EOF
+#
+#kubectl apply -f $GL_ADMIN_FILE_LOCATION
 
 
 
@@ -268,10 +272,11 @@ EOF
 kubectl apply -f $GL_BUILDKIT_FILE_LOCATION
 
 ### CA_FILE
-SECRET=$(kubectl get secrets | grep default-token | cut -d " " -f1)
-CERT=$(kubectl get secret ${SECRET} -o jsonpath="{['data']['ca\.crt']}" | base64 --decode)
+### TODO: Theres no longer a secret/default token to place at the pub-ca.crt location
+#SECRET=$(kubectl get secrets | grep default-token | cut -d " " -f1)
+#CERT=$(kubectl get secret ${SECRET} -o jsonpath="{['data']['ca\.crt']}" | base64 --decode)
 ## Another way
-#ANOTHER_CERT=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[].cluster.certificate-authority-data}' | base64 -d)
+CERT=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[].cluster.certificate-authority-data}' | base64 -d)
 
 ## When storing the decoded cert into a bash var it screws with newlines
 ## Our best alternative is using printf with newlines, but we it splits the space between BEGIN/END CERT
@@ -350,6 +355,15 @@ for NAMESPACE in ${NAMESPACES[@]}; do
 	  name: $DEPLOY_ACCOUNT_NAME
 	  namespace: $DEPLOY_FROM_NAMESPACE_NAME
 	---
+	apiVersion: v1
+	kind: Secret
+	metadata:
+	  name: ${DEPLOY_ACCOUNT_NAME}-secret
+	  namespace: $DEPLOY_FROM_NAMESPACE_NAME
+	  annotations:
+	    kubernetes.io/service-account.name: $DEPLOY_ACCOUNT_NAME
+	type: kubernetes.io/service-account-token
+	---
 	apiVersion: rbac.authorization.k8s.io/v1
 	kind: RoleBinding
 	metadata:
@@ -372,6 +386,15 @@ for NAMESPACE in ${NAMESPACES[@]}; do
 	metadata:
 	  name: $BUILDER_ACCOUNT_NAME
 	  namespace: $BUILD_FROM_NAMESPACE_NAME
+	---
+	apiVersion: v1
+	kind: Secret
+	metadata:
+	  name: ${BUILDER_ACCOUNT_NAME}-secret
+	  namespace: $BUILD_FROM_NAMESPACE_NAME
+	  annotations:
+	    kubernetes.io/service-account.name: $BUILDER_ACCOUNT_NAME
+	type: kubernetes.io/service-account-token
 	---
 	apiVersion: rbac.authorization.k8s.io/v1
 	kind: RoleBinding
@@ -432,25 +455,27 @@ for NAMESPACE in ${NAMESPACES[@]}; do
 
     if [[ $NAMESPACE = "review" || $NAMESPACE = "dev" ]]; then
 
+        ## Had an issue where the token was possibly created before the service account was created/propagated
+        ## Caused permission issues for the service account attached to runners
+        echo "Waiting 5 for service account propagation/token generation"
+        sleep 5;
+
         ### SERVICE ACCOUNT TOKEN
-        DEPLOY_SERVICE_TOKEN_TXT=$(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME describe secret $(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME get secret | grep "${DEPLOY_ACCOUNT_NAME}-token" | awk '{print $1}'))
+        DEPLOY_SERVICE_TOKEN_TXT=$(kubectl -n $DEPLOY_FROM_NAMESPACE_NAME describe secret ${DEPLOY_ACCOUNT_NAME}-secret)
         DEPLOY_SERVICE_TOKEN=$(echo "$DEPLOY_SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
         sudo gitlab-runner unregister --name "${DEPLOY_ACCOUNT_NAME}-kube-runner"
 
-        BUILDER_SERVICE_TOKEN_TXT=$(kubectl -n $BUILD_FROM_NAMESPACE_NAME describe secret $(kubectl -n $BUILD_FROM_NAMESPACE_NAME get secret | grep "${BUILDER_ACCOUNT_NAME}-token" | awk '{print $1}'))
+        BUILDER_SERVICE_TOKEN_TXT=$(kubectl -n $BUILD_FROM_NAMESPACE_NAME describe secret ${BUILDER_ACCOUNT_NAME}-secret)
         BUILDER_SERVICE_TOKEN=$(echo "$BUILDER_SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
         sudo gitlab-runner unregister --name "${BUILDER_ACCOUNT_NAME}-kube-builder"
 
         ## TODO: These will be default - for testing they are shared atm
-            #--locked="false" \
         sudo gitlab-runner register \
             --url "$DEFAULT_RUNNER_HOST_URL" \
             --registration-token "$RUNNER_TOKEN" \
             --non-interactive \
             --executor kubernetes \
             --tag-list "$TAG_LIST" \
-            --locked \
-            --paused \
             --run-untagged="false" \
             --access-level="$ACCESS_LEVEL" \
             --name "${DEPLOY_ACCOUNT_NAME}-kube-runner" \
@@ -460,7 +485,10 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --kubernetes-namespace "$DEPLOY_FROM_NAMESPACE_NAME" \
             --kubernetes-service-account "$DEPLOY_ACCOUNT_NAME" \
             --kubernetes-bearer_token "$DEPLOY_SERVICE_TOKEN" \
-            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION"
+            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION" \
+            --paused \
+            --locked
+            #--locked="false" 
 
         sudo gitlab-runner register \
             --url "$DEFAULT_RUNNER_HOST_URL" \
@@ -468,7 +496,6 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --non-interactive \
             --executor kubernetes \
             --tag-list "${BUILDER_TAG_LIST}" \
-            --locked="false" \
             --run-untagged="false" \
             --access-level="$ACCESS_LEVEL" \
             --name "${BUILDER_ACCOUNT_NAME}-kube-builder" \
@@ -478,7 +505,10 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --kubernetes-namespace "$BUILD_FROM_NAMESPACE_NAME" \
             --kubernetes-service-account "$BUILDER_ACCOUNT_NAME" \
             --kubernetes-bearer_token "$BUILDER_SERVICE_TOKEN" \
-            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION"
+            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION" \
+            --paused \
+            --locked
+            #--locked="false" 
 
 
             #--kubernetes-namespace "$NAMESPACE" \

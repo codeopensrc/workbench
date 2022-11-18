@@ -2,7 +2,7 @@
 variable "do_region" { default = "nyc3" }
 variable "digitalocean_image_os" {
     default = {
-        "nyc3" = "ubuntu-20-04-x64"
+        "nyc3" = "ubuntu-22-04-x64"
     }
 }
 
@@ -72,9 +72,8 @@ variable "mongo_version" { default = "4.4.6" } ## Not fully implemented - consul
 ##! kubernetes_version options: Valid version, recent version gitlab supports, or latest
 ##!   ex "1.22.3-00" | "gitlab" | "" (empty/latest uses latest)
 variable "kubernetes_version" { default = "gitlab" }
-variable "gitlab_version" { default = "14.4.2-ce.0" }
-variable "docker_version" { default = "20.10.10" }
-variable "docker_compose_version" { default = "1.29.2" }
+variable "gitlab_version" { default = "15.5.3-ce.0" }
+variable "docker_version" { default = "20.10.21" }
 variable "buildctl_version" { default = "0.10.5" }
 variable "buildkitd_version" { default = "0.10.5" }
 variable "consul_version" { default = "1.10.3" }
@@ -87,7 +86,6 @@ locals {
     packer_config = {
         gitlab_version = var.gitlab_version
         docker_version = var.docker_version
-        docker_compose_version = var.docker_compose_version
         buildctl_version = var.buildctl_version
         consul_version = var.consul_version
         redis_version = var.redis_version

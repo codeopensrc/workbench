@@ -113,6 +113,7 @@ resource "null_resource" "install_gitlab" {
     ###! Loaded prometheus config at /var/opt/gitlab/prometheus/prometheus.yml managed by gitlab.rb
 
     provisioner "remote-exec" {
+        ## KAS url default: wss://gitlab.example.com/-/kubernetes-agent/
         inline = [
             <<-EOF
                 sudo gitlab-ctl restart
@@ -127,6 +128,7 @@ resource "null_resource" "install_gitlab" {
                 sed -i "s|# letsencrypt\['auto_renew_day_of_month'\]|letsencrypt\['auto_renew_day_of_month'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|# nginx\['custom_nginx_config'\]|nginx\['custom_nginx_config'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|\"include /etc/nginx/conf\.d/example\.conf;\"|\"include /etc/nginx/conf\.d/\*\.conf;\"|" /etc/gitlab/gitlab.rb
+                sed -i "s|# gitlab_kas['enable'] = true|gitlab_kas['enable'] = true|" /etc/gitlab/gitlab.rb
 
                 CONFIG="prometheus['scrape_configs'] = [
                     {
@@ -376,6 +378,7 @@ resource "null_resource" "gitlab_plugins" {
 }
 
 ## On import, rm all imported runners with tags matching: root_domain_name
+## We only rm those matching our root_domain_name due to the "possibility" of external runners registered
 ## This should suffice until we can successfully fully migrate gitlab without downtime
 resource "null_resource" "rm_imported_runners" {
     count = var.admin_servers

@@ -95,7 +95,6 @@ resource "null_resource" "kubernetes" {
     ### Add cluster + context + user locally to kubeconfig
     provisioner "local-exec" {
         command = <<-EOF
-            scp root@${var.root_domain_name}:~/.kube/config $HOME/.kube/${var.root_domain_name}-kubeconfig
             sed -i "s/kube-cluster-endpoint/gitlab.${var.root_domain_name}/" $HOME/.kube/${var.root_domain_name}-kubeconfig
             KUBECONFIG=$HOME/.kube/config:$HOME/.kube/${var.root_domain_name}-kubeconfig
             kubectl config view --flatten > /tmp/kubeconfig

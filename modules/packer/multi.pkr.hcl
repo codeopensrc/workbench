@@ -86,10 +86,6 @@ variable "docker_version" {
   type    = string
   default = ""
 }
-variable "docker_compose_version" {
-  type    = string
-  default = ""
-}
 variable "buildctl_version" {
   type    = string
   default = ""
@@ -133,7 +129,6 @@ source "amazon-ebs" "main" {
         OS_Version             = "Ubuntu"
         aws_key_name           = "${var.aws_key_name}"
         consul_version         = "${var.consul_version}"
-        docker_compose_version = "${var.docker_compose_version}"
         docker_version         = "${var.docker_version}"
         gitlab_version         = "${var.gitlab_version}"
         redis_version          = "${var.redis_version}"
@@ -163,7 +158,6 @@ source "azure-arm" "main" {
         image_name             = var.packer_image_name
         os_version             = var.az_image_sku
         consul_version         = var.consul_version
-        docker_compose_version = var.docker_compose_version
         docker_version         = var.docker_version
         gitlab_version         = var.gitlab_version
         redis_version          = var.redis_version
@@ -225,7 +219,7 @@ build {
             "chmod +x /tmp/scripts/install/install_redis.sh",
             "chmod +x /tmp/scripts/install/install_kubernetes.sh",
             "chmod +x /tmp/scripts/move.sh",
-            "sudo bash /tmp/scripts/init.sh -b ${var.buildctl_version} -c ${var.consul_version} -d ${var.docker_compose_version} ${var.gitlab_version != "" ? "-g ${var.gitlab_version} -a" : ""}",
+            "sudo bash /tmp/scripts/init.sh -b ${var.buildctl_version} -c ${var.consul_version} ${var.gitlab_version != "" ? "-g ${var.gitlab_version} -a" : ""}",
             "sudo bash /tmp/scripts/install/install_docker.sh -v ${var.docker_version}",
             "sudo bash /tmp/scripts/install/install_redis.sh -v ${var.redis_version}",
             "sudo bash /tmp/scripts/install/install_kubernetes.sh -v ${var.kubernetes_version} -h ${var.helm_version} -s ${var.skaffold_version}",
@@ -241,4 +235,14 @@ build {
         inline = [ "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync" ]
         inline_shebang = "/bin/sh -x"
     }
+}
+
+## TODO: Conditionally add appropriate plugin for provider
+packer {
+  required_plugins {
+    digitalocean = {
+      version = ">= 1.0.4"
+      source  = "github.com/digitalocean/digitalocean"
+    }
+  }
 }

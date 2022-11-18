@@ -5,17 +5,15 @@ sed -i "s|1|0|" /etc/apt/apt.conf.d/20auto-upgrades
 cat /etc/apt/apt.conf.d/20auto-upgrades
 
 CONSUL_VERSION="1.10.0"
-DOCKER_COMPOSE_VERSION="1.29.2"
-GITLAB_VERSION="14.3.0-ce.0"
+GITLAB_VERSION="15.5.3-ce.0"
 BUILDCTL_VERSION="0.10.5"
 
-while getopts "b:c:d:g:a" flag; do
+while getopts "b:c:g:a" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) IS_ADMIN=true;;
         b) BUILDCTL_VERSION=$OPTARG;;
         c) CONSUL_VERSION=$OPTARG;;
-        d) DOCKER_COMPOSE_VERSION=$OPTARG;;
         g) GITLAB_VERSION=$OPTARG;;
     esac
 done
@@ -78,18 +76,16 @@ sudo apt-get install \
 
 sudo apt-mark unhold openssh-server
 
-#### docker-compose
-curl -L https://github.com/docker/compose/releases/download/"$DOCKER_COMPOSE_VERSION"/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
-
 ### According to https://github.com/pypa/get-pip
 ### We should be able to `python3 get-pip.py "pip < 21.2.3"` in order to pin
 ### When using the edge /get-pip.py it temporarily caused issues
 ###   /get-pip.py installs 21.2.3      /pip/3.5/get-pip.py installs 20.3.4
 
 #### pip
-curl -O https://bootstrap.pypa.io/pip/3.5/get-pip.py \
- && python3 get-pip.py \
+## https://pip.pypa.io/en/stable/installation/#standalone-zip-application
+## https://bootstrap.pypa.io/
+curl -O https://bootstrap.pypa.io/pip/get-pip.py \
+ && python3 get-pip.py "pip < 22.3.1" \
  && rm get-pip.py
 
 #### aws

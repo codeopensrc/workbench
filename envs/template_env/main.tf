@@ -594,6 +594,7 @@ locals {
 
     gitlab_kube_matrix = {
         "14.4.2-ce.0" = "1.20.11-00"
+        "15.5.3-ce.0" = "1.24.7-00"
     }
     ## values() order output is based on SORTED gitlab_versions, then reversed
     last_gitlab_kube_version = reverse(values(local.gitlab_kube_matrix))[0]

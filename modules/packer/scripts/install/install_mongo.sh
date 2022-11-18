@@ -34,12 +34,33 @@ fi
 sudo apt-get install -y gnupg;
 wget -qO - https://www.mongodb.org/static/pgp/server-$MONGO_MAJOR_MINOR.asc | sudo apt-key add -
 
-echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/$MONGO_MAJOR_MINOR multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-$MONGO_MAJOR_MINOR.list
+
+CODE_NAME=$(lsb_release -cs)
+## Mongodb doesn't have a package/release for 22.04 jammy at this time
+#https://askubuntu.com/questions/1402179/not-able-to-install-mongodb-in-ubuntu-22-04
+#https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/83
+
+## NOTE: This is insecure as its using an older vulnerable version libssl1
+## All DB's in this repo will be going into containers soon, mainly for this type of scenario
+## Use at your own risk
+if [[ $CODE_NAME = "jammy" ]]; then 
+    CODE_NAME=focal;
+    #wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.16_amd64.deb
+    #sudo apt-get update
+    #dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_amd64.deb
+    #rm libssl1.1_1.1.1f-1ubuntu2.16_amd64.deb
+
+    wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+    sudo apt-get update
+    dpkg -i libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+    rm libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+fi
+
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $CODE_NAME/mongodb-org/$MONGO_MAJOR_MINOR multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-$MONGO_MAJOR_MINOR.list
 
 sudo apt-get update
 
-sudo apt-get install -y mongodb-org=$MONGO_VERSION mongodb-org-server=$MONGO_VERSION mongodb-org-shell=$MONGO_VERSION mongodb-org-mongos=$MONGO_VERSION mongodb-org-tools=$MONGO_VERSION
-
+sudo apt install mongodb-org -y
 ## BIND_IPS can be a single address or comma deliminated set of ip/dns names
 
 sed -i "s|bindIp: 0.0.0.0|bindIp: $BIND_IPS|" /etc/mongod.conf;

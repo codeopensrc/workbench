@@ -39,7 +39,6 @@ resource "null_resource" "build" {
                 --var 'packer_image_size=${var.packer_image_size}' \
                 --var 'consul_version=${var.packer_config.consul_version}' \
                 --var 'docker_version=${var.packer_config.docker_version}' \
-                --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
                 --var 'buildctl_version=${var.packer_config.buildctl_version}' \
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \
@@ -73,7 +72,6 @@ resource "null_resource" "build" {
                 --var 'packer_image_size=${var.packer_image_size}' \
                 --var 'consul_version=${var.packer_config.consul_version}' \
                 --var 'docker_version=${var.packer_config.docker_version}' \
-                --var 'docker_compose_version=${var.packer_config.docker_compose_version}' \
                 --var 'buildctl_version=${var.packer_config.buildctl_version}' \
                 --var 'gitlab_version=${var.type == "large" ? var.packer_config.gitlab_version : ""}' \
                 --var 'redis_version=${var.packer_config.redis_version}' \

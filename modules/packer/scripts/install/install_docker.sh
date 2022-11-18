@@ -8,7 +8,7 @@ set -e
 ## `sudo apt-get install -y qemu-user-static`
 
 DOCKER_VER=""
-DEFAULT_DOCKER_VER="19.03.12"
+DEFAULT_DOCKER_VER="20.10.21"
 
 while getopts "v:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
@@ -36,19 +36,17 @@ apt-get install \
     gnupg-agent \
     software-properties-common -y
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
-add-apt-repository \
-   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-   $(lsb_release -cs) \
-   stable"
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+    | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 # Add 'edge' for even new releases
 
 apt-get update
 
 # Going to use for debugging why a particular version not available/installed
-apt-cache madison docker-ce
+apt-cache policy docker-ce
 
 
 # Trying to ramp up our vm provisioning/releases and keep up with gitlab and docker version releases
@@ -59,7 +57,7 @@ apt-cache madison docker-ce
 #  reliable and stable deployments due to potential mismatches (machine hang adds 30% deployment time minimum)
 
 # This will be more seamless when changing the version of an installed software package procs creating a new image
-apt-get install docker-ce=$FORMATTED_VER docker-ce-cli=$FORMATTED_VER containerd.io -y
+apt-get install docker-ce=$FORMATTED_VER docker-ce-cli=$FORMATTED_VER containerd.io docker-compose-plugin -y
 
 
 # Enable docker on boot

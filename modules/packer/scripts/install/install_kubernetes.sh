@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="1.22.1-00"
+VERSION="1.24.7-00"
 HELM_VERSION="3.8.2-1"
 SKAFFOLD_VERSION="2.0.0"
 
@@ -19,6 +19,9 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
     sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
     # Add apt
     ### TODO: detect os release for deb
+    ### Package manager maintainers sometimes dont port over to the latest release right away so keys/packages still
+    ###  point to an older releases repository. In this case we're still using 'xenial' even on the 'jammy' ubuntu release
+    ## https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
     echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
     # Install
     sudo apt-get update;
@@ -32,7 +35,7 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
 
     # apt list -a kubeadm | head -5
 
-    # Im assuming this prevents it from upgrading
+    # Prevents it from upgrading
     sudo apt-mark hold kubelet kubeadm kubectl
 fi
 

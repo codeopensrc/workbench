@@ -165,14 +165,12 @@ locals {
 locals {
     consul = "CN-${var.config.packer_config.consul_version}"
     docker = "DK-${var.config.packer_config.docker_version}"
-    dockerc = "DKC-${var.config.packer_config.docker_compose_version}"
     gitlab = "GL-${var.config.packer_config.gitlab_version}"
     redis = "R-${var.config.packer_config.redis_version}"
     kubernetes = "K-${var.config.packer_config.kubernetes_version}"
     image_str = join("_", [
         local.consul,
         local.docker,
-        local.dockerc,
         local.gitlab,
         local.redis,
         local.kubernetes
@@ -183,7 +181,6 @@ locals {
     do_tags = [
         "${replace(local.consul, ".", "-")}",
         "${replace(local.docker, ".", "-")}",
-        "${replace(local.dockerc, ".", "-")}",
         "${replace(local.gitlab, ".", "-")}",
         "${replace(local.redis, ".", "-")}",
         "${replace(local.kubernetes, ".", "-")}"
@@ -191,7 +188,6 @@ locals {
     do_small_tags = [
         "${replace(local.consul, ".", "-")}",
         "${replace(local.docker, ".", "-")}",
-        "${replace(local.dockerc, ".", "-")}",
         "${replace(local.redis, ".", "-")}",
         "${replace(local.kubernetes, ".", "-")}"
     ]

@@ -42,7 +42,8 @@
       rescue:
         - name: start cluster
           register: initcert
-          command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }}
+          ## TODO: Pass down helm and skaffold version
+          command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }} -h 3.8.2-1 -s 2.0.0
 
     - name: delete old cert certificate-key
       shell: 'kubectl delete secret -n kube-system kubeadm-certs || echo'
@@ -64,7 +65,9 @@
     ## Due to various configs/rotations, just untainting the master from get-go
     ##  no mater server count for the time being
     - name: untaint node if solo
-      shell: "kubectl taint nodes --all node-role.kubernetes.io/master- || echo"
+      shell: |
+          kubectl taint nodes --all node-role.kubernetes.io/control-plane- || echo
+          kubectl taint nodes --all node-role.kubernetes.io/master- || echo
       changed_when: false
       #when: server_count | int == 1
 
@@ -142,14 +145,24 @@
             -a {{ private_ip }} -l {{ root_domain_name }} -b buildkitd-0 {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u
       when: admin_servers | int > 0
 
-    - name: add cluster to gitlab
+    ### TODO: New agent based connection
+    #- name: add cluster to gitlab
+    #  block:
+    #    - name: check cluster added
+    #      command: consul kv get kube/gitlab_integrated
+    #      changed_when: false
+    #  rescue:
+    #    - name: add cluster
+    #      command: bash $HOME/code/scripts/kube/addClusterToGitlab.sh -d {{ root_domain_name }} -u -r
+    #  when: admin_servers | int > 0
+    - name: add agents to gitlab
       block:
-        - name: check cluster added
+        - name: check agents added
           command: consul kv get kube/gitlab_integrated
           changed_when: false
       rescue:
-        - name: add cluster
-          command: bash $HOME/code/scripts/kube/addClusterToGitlab.sh -d {{ root_domain_name }} -u -r
+        - name: add agents
+          command: bash $HOME/code/scripts/kube/addAgentsToGitlab.sh -d {{ root_domain_name }} -u
       when: admin_servers | int > 0
 
 
@@ -171,7 +184,8 @@
           changed_when: false
       rescue:
         - name: join cluster
-          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -k {{ certificate_key }}"
+          ##TODO: Pass down helm and skaffold version
+          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -k {{ certificate_key }} -h 3.8.2-1 -s 2.0.0"
 
     - name: untaint secondary control plane
       shell: "kubectl taint nodes {{ machine_name }} node-role.kubernetes.io/master- || echo"
@@ -194,7 +208,8 @@
           changed_when: false
       rescue:
         - name: join cluster
-          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }}"
+          ##TODO: Pass down helm and skaffold version
+          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -h 3.8.2-1 -s 2.0.0"
 
 
 # TODO: Implement csi config for aws then azure
@@ -418,3 +433,8 @@
       shell: |
         sed -r -i "s|kubernetes|{{ root_domain_name }}|" $HOME/.kube/config
       
+    - name: ansible kubeconfig file from remote to local.
+      fetch:
+        src: ~/.kube/config
+        dest: ~/.kube/{{ root_domain_name }}-kubeconfig
+        flat: yes
