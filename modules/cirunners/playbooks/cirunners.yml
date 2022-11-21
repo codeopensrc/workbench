@@ -67,7 +67,7 @@
 
 
 - name: INSTALL CIRUNNERS
-  hosts: "{{ (groups.admin | length > 0) | ternary(groups.lead+groups.build, []) }}"
+  hosts: "{{ (groups.admin | length > 0) | ternary(groups.build, []) }}"
   remote_user: root
   gather_facts: false
   tasks:
@@ -112,7 +112,7 @@
 
 ### TODO: Loop through `gitlab_runner_tokens` and register multiple types of runners
 - name: Handle runners
-  hosts: "{{ (groups.admin | length > 0) | ternary(groups.lead+groups.build, []) }}"
+  hosts: "{{ (groups.admin | length > 0) | ternary(groups.build, []) }}"
   remote_user: root
   #gather_facts: false
   vars:
@@ -138,8 +138,6 @@
         if [ {{ item }} = 1 ]; then
             case "$MACHINE_NAME" in
                 *build*) TAG=${TAG},unity ;;
-                *admin*) TAG=${TAG},prod ;;
-                *lead*) TAG=${TAG},prod ;;
                 *) TAG=${TAG} ;;
             esac
         fi

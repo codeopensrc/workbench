@@ -75,7 +75,6 @@ BUILDKITD_POD_NAME="buildkitd-0"
 
 GL_DEPLOY_FILE_LOCATION=$HOME/.kube/gitlab-deploy-service-account.yaml
 GL_REVIEW_FILE_LOCATION=$HOME/.kube/gitlab-review-service-account.yaml
-GL_ADMIN_FILE_LOCATION=$HOME/.kube/gitlab-admin-service-account.yaml
 GL_NAMESPACE_FILE_LOCATION=$HOME/.kube/gitlab-namespaces.yaml
 GL_BUILDKIT_FILE_LOCATION=$HOME/.kube/gitlab-buildkit-service-account.yaml
 GL_BUILDKIT_CLUSTER_ROLE_NAME="buildkit-access-clusterrole"
@@ -89,7 +88,7 @@ RUNNER_TOKEN=""
 KUBE_API_HOST_URL=""
 KUBE_VERSION="latest"
 
-while getopts "a:b:d:h:i:l:n:t:v:ru" flag; do
+while getopts "a:b:d:h:i:l:n:t:v:ou" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) KUBE_API_HOST_URL=$OPTARG;;
@@ -101,7 +100,7 @@ while getopts "a:b:d:h:i:l:n:t:v:ru" flag; do
         n) NAMESPACE=$OPTARG;;
         t) RUNNER_TOKEN=$OPTARG;;
         v) KUBE_VERSION=$OPTARG;;
-        r) REGISTER="true";;
+        o) OPEN_RUNNERS="true";;
         u) USE_NAMESPACES_DEFAULTS="true";;
     esac
 done
@@ -109,10 +108,12 @@ done
 ## TODO: Need to convert a string "dev,beta,production" into array
 
 
+if [[ -z "$RUNNER_TOKEN" ]]; then RUNNER_TOKEN=$(consul kv get gitlab/runner_token); exit; fi
 if [[ -z "$RUNNER_TOKEN" ]]; then
     ## Get tmp root password if using fresh instance. Otherwise this fails like it should
     TMP_ROOT_PW=$(sed -rn "s|Password: (.*)|\1|p" /etc/gitlab/initial_root_password)
     RUNNER_TOKEN=$(bash $HOME/code/scripts/misc/getRunnerToken.sh -u root -p $TMP_ROOT_PW -d $RUNNER_HOST_DOMAIN)
+    consul kv put gitlab/runner_token $RUNNER_TOKEN
 fi
 
 if [[ -z "$RUNNER_TOKEN" ]]; then echo "Runner token not provided. Use -t"; exit; fi
@@ -140,44 +141,17 @@ PORT_REG=":[0-9]{2,5}$"
 if [[ ! $KUBE_API_HOST_URL =~ "https://" ]]; then KUBE_API_HOST_URL="https://${KUBE_API_HOST_URL}"; fi
 if [[ ! $KUBE_API_HOST_URL =~ $PORT_REG ]]; then KUBE_API_HOST_URL="${KUBE_API_HOST_URL}:6443"; fi
 
-
+### We're deprecating shell runners completely eventually, only k8s runners going forward
+### The _only_ reason we have a shell runner is for unity builds on a build machine until
+###  we create special runners to build unity assets inside pods 
+### TODO: Use helm charts to install runners into cluster instead of binary on machine
+### TODO: Eventually minio credentials inside helm runners as well
 curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
 apt-cache madison gitlab-runner
 sudo apt-get install gitlab-runner jq -y
 sudo usermod -aG docker gitlab-runner
+sed -i "s|concurrent = 1|concurrent = 3|" /etc/gitlab-runner/config.toml
 
-# 1.
-## Create gitlab service account clusterwide
-### New agent based approach should no longer need this
-### TODO: Would like to solve the dynamic namespace per branch/project type approach but
-###  for now would just like the original functionality to work (minus dynamic namespaces)
-
-#cat <<EOF > $GL_ADMIN_FILE_LOCATION
-#apiVersion: v1
-#kind: ServiceAccount
-#metadata:
-#  name: gitlab
-#  namespace: kube-system
-#---
-#apiVersion: rbac.authorization.k8s.io/v1
-#kind: ClusterRoleBinding
-#metadata:
-#  name: gitlab-admin
-#subjects:
-#  - kind: ServiceAccount
-#    name: gitlab
-#    namespace: kube-system
-#roleRef:
-#  kind: ClusterRole
-#  name: cluster-admin
-#  apiGroup: rbac.authorization.k8s.io
-#EOF
-#
-#kubectl apply -f $GL_ADMIN_FILE_LOCATION
-
-
-
-# 2.
 ## Create namespaces
 cat <<EOF > $GL_NAMESPACE_FILE_LOCATION
 apiVersion: v1
@@ -272,12 +246,10 @@ EOF
 kubectl apply -f $GL_BUILDKIT_FILE_LOCATION
 
 ### CA_FILE
-### TODO: Theres no longer a secret/default token to place at the pub-ca.crt location
-#SECRET=$(kubectl get secrets | grep default-token | cut -d " " -f1)
-#CERT=$(kubectl get secret ${SECRET} -o jsonpath="{['data']['ca\.crt']}" | base64 --decode)
-## Another way
 CERT=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[].cluster.certificate-authority-data}' | base64 -d)
 
+#### We can probably just do the above straight into > $PUB_CA_FILE_LOCATION but for now
+####  keeping it cause it works and illustrates an interesting workaround
 ## When storing the decoded cert into a bash var it screws with newlines
 ## Our best alternative is using printf with newlines, but we it splits the space between BEGIN/END CERT
 ## This illustrates how to deal with it - would like a better way
@@ -314,7 +286,6 @@ for NAMESPACE in ${NAMESPACES[@]}; do
         BUILDER_TAG_LIST="${BUILDER_TAG_LIST/kubernetes_builder/kubernetes_builder_prod}"
     fi
 
-    # 3.
     ## Create service account(s) (Currently doing per NS)
     ## Create a RoleBinding with the ClusterRole cluster-admin/admin privileges in each of the namespaces
 
@@ -469,7 +440,12 @@ for NAMESPACE in ${NAMESPACES[@]}; do
         BUILDER_SERVICE_TOKEN=$(echo "$BUILDER_SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
         sudo gitlab-runner unregister --name "${BUILDER_ACCOUNT_NAME}-kube-builder"
 
-        ## TODO: These will be default - for testing they are shared atm
+        if [[ -n $OPEN_RUNNERS ]]; then
+            PAUSED_AND_LOCKED_ARGS="--locked='false'"
+        else
+            PAUSED_AND_LOCKED_ARGS="--paused --locked"
+        fi
+
         sudo gitlab-runner register \
             --url "$DEFAULT_RUNNER_HOST_URL" \
             --registration-token "$RUNNER_TOKEN" \
@@ -477,6 +453,7 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --executor kubernetes \
             --tag-list "$TAG_LIST" \
             --run-untagged="false" \
+            ${PAUSED_AND_LOCKED_ARGS} \
             --access-level="$ACCESS_LEVEL" \
             --name "${DEPLOY_ACCOUNT_NAME}-kube-runner" \
             --kubernetes-image "$DEFAULT_KUBE_IMAGE" \
@@ -485,10 +462,7 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --kubernetes-namespace "$DEPLOY_FROM_NAMESPACE_NAME" \
             --kubernetes-service-account "$DEPLOY_ACCOUNT_NAME" \
             --kubernetes-bearer_token "$DEPLOY_SERVICE_TOKEN" \
-            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION" \
-            --paused \
-            --locked
-            #--locked="false" 
+            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION"
 
         sudo gitlab-runner register \
             --url "$DEFAULT_RUNNER_HOST_URL" \
@@ -497,6 +471,7 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --executor kubernetes \
             --tag-list "${BUILDER_TAG_LIST}" \
             --run-untagged="false" \
+            ${PAUSED_AND_LOCKED_ARGS} \
             --access-level="$ACCESS_LEVEL" \
             --name "${BUILDER_ACCOUNT_NAME}-kube-builder" \
             --kubernetes-image "$DEFAULT_KUBE_IMAGE" \
@@ -505,10 +480,7 @@ for NAMESPACE in ${NAMESPACES[@]}; do
             --kubernetes-namespace "$BUILD_FROM_NAMESPACE_NAME" \
             --kubernetes-service-account "$BUILDER_ACCOUNT_NAME" \
             --kubernetes-bearer_token "$BUILDER_SERVICE_TOKEN" \
-            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION" \
-            --paused \
-            --locked
-            #--locked="false" 
+            --kubernetes-ca-file "$PUB_CA_FILE_LOCATION"
 
 
             #--kubernetes-namespace "$NAMESPACE" \

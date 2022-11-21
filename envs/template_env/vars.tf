@@ -70,7 +70,7 @@ variable "mongo_version" { default = "4.4.6" } ## Not fully implemented - consul
 
 ##! NOTE: Packer config variables - Software baked into image
 ##! kubernetes_version options: Valid version, recent version gitlab supports, or latest
-##!   ex "1.22.3-00" | "gitlab" | "" (empty/latest uses latest)
+##!   ex "1.24.7-00" | "gitlab" | "" (empty/latest uses latest)
 variable "kubernetes_version" { default = "gitlab" }
 variable "gitlab_version" { default = "15.5.3-ce.0" }
 variable "docker_version" { default = "20.10.21" }

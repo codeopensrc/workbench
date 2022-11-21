@@ -34,6 +34,9 @@ done
 ## Encrypt
 #gpg --encrypt -r KEY -r KEY FILE
 #gpg --encrypt --compress-algo 0 -z 0 "${RECIPIENTS[@]}" -o ${FILE}.gpg $FILE
+echo "== Attempting to remove any previous ${FILE}.gpg"
 rm ${FILE}.gpg
+
+echo "== Encrypting ${FILE} --> ${FILE}.gpg"
 gpg --encrypt -z 0 "${RECIPIENTS[@]}" -o ${FILE}.gpg $FILE
 

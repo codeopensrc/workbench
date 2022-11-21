@@ -66,7 +66,7 @@
 
     - name: download cli tools
       shell: |
-        curl -L clidot.net | bash
+        curl -L https://raw.githubusercontent.com/codeopensrc/os-cli-config/master/setup.sh | bash
         sed -i --follow-symlinks "s/use_remote_colors=false/use_remote_colors=true/" $HOME/.tmux.conf
       when: not file_data.stat.exists
 

@@ -63,9 +63,10 @@ locals {
     cidr_blocks = {
         "default" = "10.1.0.0/16"
     }
-    ## If only 1 machine, 4 runners
+    ## TODO: Unity builder inside pods
+    ## This is for shell runners on build machines only
     default_runners_per_machine = {
-        "default" = 2
+        "default" = 1
     }
     gitlab_runner_tokens_list = {
         "default" = { service = "" }
@@ -98,7 +99,7 @@ locals {
     server_name_prefix = lookup(local.server_name_prefixes, local.env)
 
     cidr_block = lookup(local.cidr_blocks, local.env)
-    num_runners_per_machine = lookup(local.default_runners_per_machine, local.env, 2)
+    num_runners_per_machine = lookup(local.default_runners_per_machine, local.env, 1)
 
     # Configures sendgrid SMTP for gitlab using verified domain sender identity
     # TODO: Maybe put in wiki some links to setup and get apikey from sendgrid

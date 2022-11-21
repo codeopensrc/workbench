@@ -108,6 +108,7 @@ resource "digitalocean_droplet" "main" {
     region   = var.config.region
     size     = each.value.cfg.server.size
     ssh_keys = [var.config.do_ssh_fingerprint]
+    ## Maybe start tagging with just root_domain_name
     tags = compact(flatten([
         each.value.role == "admin" ? "gitlab-${replace(var.config.root_domain_name, ".", "-")}" : "",
         each.value.cfg.server.roles,
@@ -138,8 +139,19 @@ resource "digitalocean_droplet" "main" {
             ssh-keygen -R ${self.ipv4_address};
 
             if [ "${terraform.workspace}" != "default" ]; then
-                ${contains(self.tags, "admin") ? "ssh-keygen -R \"${replace(regex("gitlab-[a-z]+-[a-z]+", join(",", self.tags)), "-", ".")}\"" : ""}
-                echo "Not default"
+                echo "Not default namespace, removing hostnames from known_hosts"
+                if [ "${contains(self.tags, "admin")}" = "true" ]; then
+                    echo "Has admin tag"
+                    DOMAIN=${replace(regex("gitlab-[a-z]+-[a-z]+", join(",", self.tags)), "-", ".")};
+                    ROOT_DOMAIN=$(echo "$DOMAIN" | sed "s/gitlab\.//");
+
+                    echo "Removing $DOMAIN from known_hosts";
+                    ssh-keygen -R "$DOMAIN";
+                    echo "Removing $ROOT_DOMAIN from known_hosts";
+                    ssh-keygen -R "$ROOT_DOMAIN";
+                 else
+                    echo "Does not have admin tag"
+                fi
             fi
             exit 0;
         EOF

@@ -17,6 +17,8 @@
 
 
 
+### TODO: Maybe launch the kubernetes cluster services from the first 'lead' server
+### nginxProxy (soon-to-be deprecated), buildkitd, gitlab-runner/gitlab-agents
 - name: HANDLE KUBERNETES ADMIN
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
@@ -142,19 +144,9 @@
       rescue:
         - name: create cluster serviceaccounts
           command: bash $HOME/code/scripts/kube/createClusterAccounts.sh -v {{ runner_img_version }} -d {{ root_domain_name }} \
-            -a {{ private_ip }} -l {{ root_domain_name }} -b buildkitd-0 {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u
+            -a {{ private_ip }} -l {{ root_domain_name }} -b buildkitd-0 {{ (gitlab_tokens['service'] != '') | ternary(kube_tokens, '') }} -u -o
       when: admin_servers | int > 0
 
-    ### TODO: New agent based connection
-    #- name: add cluster to gitlab
-    #  block:
-    #    - name: check cluster added
-    #      command: consul kv get kube/gitlab_integrated
-    #      changed_when: false
-    #  rescue:
-    #    - name: add cluster
-    #      command: bash $HOME/code/scripts/kube/addClusterToGitlab.sh -d {{ root_domain_name }} -u -r
-    #  when: admin_servers | int > 0
     - name: add agents to gitlab
       block:
         - name: check agents added

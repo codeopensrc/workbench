@@ -1,5 +1,17 @@
 #!/bin/bash
 
+#######
+####### SCRIPT SUNSET AS OF 11/20/22
+# Gitlab deprecated cert-based k8s cluster integration @ 15.0.0
+# Below are some docs revolving around it
+# In order to enable the cert based integration until 17 when its removed, in the rails console
+#  Feature.enable(:certificate_based_clusters)
+
+#https://docs.gitlab.com/ee/update/deprecations.html#self-managed-certificate-based-integration-with-kubernetes
+#https://gitlab.com/groups/gitlab-org/configure/-/epics/8#sunsetting-timeline-plan
+#https://docs.gitlab.com/ee/administration/feature_flags.html#enable-or-disable-the-feature
+#######
+
 CLUSTER_NAME_DEFAULTS=( "review" "dev" "beta" "production" )
 
 ## For conveniece and so it is not required to keep a PAT available, we create a temp
@@ -50,15 +62,32 @@ fi
 ## Admin > AppSettings > Network > Outbound requests
 CLUSTER_API_ADDR="https://$(kubectl get --raw /api | jq -r '.serverAddressByClientCIDRs[].serverAddress')"
 
-SECRET=$(kubectl get secrets | grep default-token | cut -d " " -f1)
-CERT=$(kubectl get secret ${SECRET} -o jsonpath="{['data']['ca\.crt']}" | base64 --decode)
+CERT=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[].cluster.certificate-authority-data}' | base64 -d)
 
 ## Gitlab accepts \r\n for newlines in cert pem
 FORMATTED_CERT=${CERT//$'\n'/'\r\n'}
 
-## NOTE: This requires the gitlab service account in kubernetes before running
-SERVICE_TOKEN_1=$(kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep gitlab | awk '{print $1}'))
-SERVICE_TOKEN=$(echo "$SERVICE_TOKEN_1" | sed -nr "s/token:\s+(.*)/\1/p")
+## NOTE: Adding the service account and clusterrolebinding was removed from createClusterAccounts.sh
+## I have not tried adding the service account and clusterrolebinding this way but it should work
+kubectl create serviceaccount gitlab --namespace=kube-system
+kubectl create clusterrolebinding gitlab-admin --clusterrole=cluster-admin --serviceaccount=kube-system:gitlab
+GL_ADMIN_FILE_LOCATION=$HOME/.kube/gitlab-admin-service-account.yaml
+cat <<EOF > $GL_ADMIN_FILE_LOCATION
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gitlab-secret
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: gitlab
+type: kubernetes.io/service-account-token
+EOF
+kubectl apply -f $GL_ADMIN_FILE_LOCATION
+
+sleep 10;
+SERVICE_TOKEN_TXT=$(kubectl -n kube-system describe secret gitlab-secret)
+SERVICE_TOKEN=$(echo "$SERVICE_TOKEN_TXT" | sed -nr "s/token:\s+(.*)/\1/p")
 
 
 for CLUSTER_NAME in ${CLUSTER_NAMES[@]}; do

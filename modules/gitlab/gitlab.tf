@@ -128,7 +128,8 @@ resource "null_resource" "install_gitlab" {
                 sed -i "s|# letsencrypt\['auto_renew_day_of_month'\]|letsencrypt\['auto_renew_day_of_month'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|# nginx\['custom_nginx_config'\]|nginx\['custom_nginx_config'\]|" /etc/gitlab/gitlab.rb
                 sed -i "s|\"include /etc/nginx/conf\.d/example\.conf;\"|\"include /etc/nginx/conf\.d/\*\.conf;\"|" /etc/gitlab/gitlab.rb
-                sed -i "s|# gitlab_kas['enable'] = true|gitlab_kas['enable'] = true|" /etc/gitlab/gitlab.rb
+                sed -i "s|# gitlab_kas\['enable'\] = true|gitlab_kas\['enable'\] = true|" /etc/gitlab/gitlab.rb
+                sed -i "s|# grafana\['enable'\] = false|grafana\['enable'\] = true|" /etc/gitlab/gitlab.rb
 
                 CONFIG="prometheus['scrape_configs'] = [
                     {
@@ -256,8 +257,13 @@ resource "null_resource" "restore_gitlab" {
     # Change known_hosts to new imported ssh keys from gitlab restore
     provisioner "local-exec" {
         command = <<-EOF
-            ssh-keygen -f ~/.ssh/known_hosts -R ${element(local.admin_public_ips, 0)}
-            ssh-keyscan -H ${element(local.admin_public_ips, 0)} >> ~/.ssh/known_hosts
+            ssh-keygen -f ~/.ssh/known_hosts -R "${element(local.admin_public_ips, 0)}"
+            ssh-keygen -f ~/.ssh/known_hosts -R "gitlab.${var.root_domain_name}"
+            ssh-keygen -f ~/.ssh/known_hosts -R "${var.root_domain_name}"
+            ssh-keyscan -H "${element(local.admin_public_ips, 0)}" >> ~/.ssh/known_hosts
+            ssh-keyscan -H "gitlab.${var.root_domain_name}" >> ~/.ssh/known_hosts
+            ssh-keyscan -H "${var.root_domain_name}" >> ~/.ssh/known_hosts
+
         EOF
     }
 }

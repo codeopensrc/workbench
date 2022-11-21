@@ -362,10 +362,9 @@ module "cirunners" {
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
 
-    lead_servers = local.lead_servers
     build_servers = local.build_servers
 
-    runners_per_machine = local.runners_per_machine
+    runners_per_machine = local.num_runners_per_machine
     root_domain_name = local.root_domain_name
 }
 
@@ -590,7 +589,6 @@ locals {
 
     ansible_hosts = module.cloud.ansible_hosts
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
-    runners_per_machine = local.lead_servers + local.build_servers == 1 ? 4 : local.num_runners_per_machine
 
     gitlab_kube_matrix = {
         "14.4.2-ce.0" = "1.20.11-00"

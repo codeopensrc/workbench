@@ -4,7 +4,6 @@ variable "predestroy_hostfile" {}
 
 variable "gitlab_runner_tokens" {}
 
-variable "lead_servers" {}
 variable "build_servers" {}
 
 variable "runners_per_machine" {}
@@ -14,7 +13,7 @@ locals {
     public_ips = flatten([
         for role, hosts in var.ansible_hosts: [
             for HOST in hosts: HOST.ip
-            if contains(HOST.roles, "lead") || contains(HOST.roles, "build")
+            if contains(HOST.roles, "build")
         ]
     ])
 }
@@ -36,9 +35,10 @@ locals {
 ## If anything since we cant register runners until we have a working cluster, we can refactor this
 ##  a bit and provision kubernetes runners after cluster is up
 resource "null_resource" "provision" {
+    count = var.build_servers > 0 ? 1 : 0
     triggers = {
-        num_machines = sum([var.lead_servers + var.build_servers])
-        num_runners = sum([var.lead_servers + var.build_servers]) * var.runners_per_machine
+        num_machines = var.build_servers
+        num_runners = var.build_servers * var.runners_per_machine
     }
     provisioner "local-exec" {
         command = <<-EOF
