@@ -34,12 +34,23 @@
         dest: /etc/nginx/conf.d/proxy.conf
       when: (subdomains | list) | length > 0
 
+    - name: rm if no docker_services
+      file:
+        path: /etc/nginx/conf.d/proxy.conf
+        state: absent
+      when: (subdomains | list) | length == 0
+
     - name: kube_services template
       template:
         src: ansiblefiles/kube_services.tmpl
         dest: /etc/nginx/conf.d/kube_services.conf
       when: (kube_subdomains | list) | length > 0
 
+    - name: rm if no kube_services
+      file:
+        path: /etc/nginx/conf.d/kube_services.conf
+        state: absent
+      when: (kube_subdomains | list) | length == 0
 
 - name: Nginx additional
   hosts: "{{ groups.admin }}"
@@ -108,6 +119,7 @@
 
     ##TODO: Do this the "ansible way"
     ##TODO: Turn into handler and run when notified
+    ## Less time-consuming way when deving - gitlab-ctl hup nginx
     - name: reconfigure gitlab nginx
       shell: "gitlab-ctl reconfigure"
 

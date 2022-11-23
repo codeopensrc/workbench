@@ -440,6 +440,8 @@ module "kubernetes" {
     csi_version = local.csi_version
 
     additional_ssl = var.additional_ssl
+
+    kube_apps = var.kube_apps
 }
 
 resource "null_resource" "configure_smtp" {

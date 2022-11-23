@@ -130,7 +130,7 @@ server {
     \n server_name *.'${ROOT_DOMAIN}';
     \n location /.well-known/ { return 302 "http://cert.'${ROOT_DOMAIN}':'${CERTPORT}'\$request_uri"; }
     \n '${COMMENT_IF_NO_SSL}'location / { return 302 https://\$host:443\$request_uri; }
-    \n '${COMMENT_IF_SSL}'location / { proxy_pass "http://\$x"; }
+    \n '${COMMENT_IF_SSL}'location / { proxy_pass "http://\$x"; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "Upgrade"; }
     \n
 }
 \n
@@ -142,7 +142,7 @@ server {
     \n ssl_prefer_server_ciphers on;
     \n '${COMMENT_IF_NO_SSL}'ssl_certificate     /etc/ssl/'${ROOT_DOMAIN}'/fullchain.pem;
     \n '${COMMENT_IF_NO_SSL}'ssl_certificate_key /etc/ssl/'${ROOT_DOMAIN}'/privkey.pem;
-    \n location / { proxy_pass "http://\$x"; }
+    \n location / { proxy_pass "http://\$x"; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "Upgrade"; }
     \n
 }\n'
 

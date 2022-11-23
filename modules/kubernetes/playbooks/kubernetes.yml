@@ -81,6 +81,7 @@
         extra_args: --user
 
     ##TODO: Template k8s manifest or use helm instead of script
+    ##TODO: Apps change to update deployment
     - name: init nginxKubeProxy
       block:
         - name: check nginxKubeProxy started

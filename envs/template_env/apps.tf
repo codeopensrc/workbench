@@ -57,6 +57,25 @@ variable "dbs_to_import" {
 ########## APPS ##########
 ########################
 
+## Migrating from app_definitions to kube_apps
+## Eventually we'll update our apps to properly use ingress and cloud load balancers once we're
+##  ready to fork up the extra pocket money for dev.
+## Until then the dns for these will be populated using var.additional_ssl in vars.tf
+## These are to be installed via helm in modules/kubernetes/playbooks/services.yml
+variable "kube_apps" {
+    type = map(object({
+        repo_url=string, repo_name=string, image_tag=string,
+    }))
+
+    default = {
+        template = {
+            "image_tag"   = "0.0.1"
+            "repo_url"    = "https://github.com/USER/REPO.git"
+            "repo_name"   = "REPO"
+        }
+    }
+}
+
 # TODO: Digital Ocean, Azure, and Google Cloud docker registry options
 # Initial Options: docker_hub, aws_ecr
 # Aditional Options will be: digital_ocean_registry, azure, google_cloud

@@ -24,6 +24,8 @@ variable "csi_version" {}
 
 variable "additional_ssl" {}
 
+variable "kube_apps" {}
+
 locals {
     all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
     old_all_names = flatten([for role, hosts in var.remote_state_hosts: hosts[*].name])
@@ -116,6 +118,25 @@ resource "null_resource" "kubernetes" {
     }
 }
 
+resource "null_resource" "services" {
+    count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
+    depends_on = [
+        null_resource.kubernetes,
+        null_resource.managed_kubernetes,
+    ]
+    triggers = {
+        num_nodes = var.server_count
+        num_apps = length(keys(var.kube_apps))
+    }
+    provisioner "local-exec" {
+        command = <<-EOF
+            ansible-playbook ${path.module}/playbooks/services.yml -i ${var.ansible_hostfile} --extra-vars \
+                'root_domain_name=${var.root_domain_name}
+                kube_apps=${jsonencode(var.kube_apps)}'
+        EOF
+    }
+}
+
 resource "null_resource" "managed_kubernetes" {
     count = contains(var.container_orchestrators, "managed_kubernetes") ? 1 : 0
     provisioner "local-exec" {
@@ -138,6 +159,7 @@ resource "null_resource" "cleanup_cluster_volumes" {
     depends_on = [
         null_resource.kubernetes,
         null_resource.managed_kubernetes,
+        null_resource.services,
     ]
 
     triggers = {
