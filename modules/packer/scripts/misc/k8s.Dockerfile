@@ -3,7 +3,7 @@ ARG BASE_IMAGE_TAG=3.14
 
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
-ARG KUBE_VERSION=1.22.1
+ARG KUBE_VERSION=1.24.7
 ARG HELM_VERSION=3.8.2
 ARG SKAFFOLD_VERSION=2.0.0
 ARG BUILDCTL_VERSION=0.10.5
@@ -13,7 +13,7 @@ ENV SKAFFOLD_VERSION=$SKAFFOLD_VERSION
 ENV BUILDCTL_VERSION=$BUILDCTL_VERSION
 
 RUN apk add --update ca-certificates \
-    && apk add --update bash git curl \
+    && apk add --update bash git curl jq \
     && curl -L https://dl.k8s.io/release/v${KUBE_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl \
     && chmod g+rwx /usr/local/bin/kubectl \
     && curl -L https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz -o /tmp/helm-linux.tar.gz \

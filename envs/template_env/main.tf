@@ -577,9 +577,7 @@ locals {
         "azure" = ""
     }
     csi_versions = {
-        # For kubernetes 1.20 use digitalocean csi 3.0.0
-        # TODO: Correct csi version based on kubernetes version
-        "digital_ocean" = "3.0.0"
+        "digital_ocean" = local.kube_do_csi_version
         "aws" = ""
         "azure" = ""
     }
@@ -610,7 +608,25 @@ locals {
                 ? reverse(local.kube_versions_found)[0]
                 : local.last_gitlab_kube_version) )
         : var.kubernetes_version)
-    kubernetes_version = var.kubernetes_version == "" ? "latest" : local.gitlab_kube_version
+    kubernetes_version = local.gitlab_kube_version
+
+    kube_do_csi_matrix = {
+        "1.20.11-00" = "3.0.0"
+        "1.24.7-00"  = "4.3.0"
+    }
+    ## values() order output is based on SORTED kubernetes_versions, then reversed
+    last_kube_do_csi_version = reverse(values(local.kube_do_csi_matrix))[0]
+    kubernetes_major_minor = regex("^[0-9]+.[0-9]+", local.kubernetes_version)
+    csi_versions_found = [
+        for KUBE_V, CSI_V in local.kube_do_csi_matrix: CSI_V
+        if length(regexall("^${local.kubernetes_major_minor}", KUBE_V)) > 0
+    ]
+    kube_do_csi_version = ( lookup(local.kube_do_csi_matrix, local.kubernetes_version, null) != null
+        ? local.kube_do_csi_matrix[local.kubernetes_version]
+        : (length(local.csi_versions_found) > 0
+            ? reverse(local.csi_versions_found)[0]
+            : local.last_kube_do_csi_version) )
+
     cleanup_kube_volumes = terraform.workspace == "default" ? false : var.cleanup_kube_volumes
 
     remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null

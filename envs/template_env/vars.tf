@@ -66,6 +66,7 @@ variable "consulexporter_version" { default = "0.7.1" }
 variable "loki_version" { default = "2.4.1" }
 variable "postgres_version" { default = "9.5" } ## Not fully implemented - consulchecks atm
 variable "mongo_version" { default = "4.4.6" } ## Not fully implemented - consulchecks atm
+variable "buildkitd_version" { default = "0.10.5" }
 
 
 ##! NOTE: Packer config variables - Software baked into image
@@ -75,7 +76,6 @@ variable "kubernetes_version" { default = "gitlab" }
 variable "gitlab_version" { default = "15.5.3-ce.0" }
 variable "docker_version" { default = "20.10.21" }
 variable "buildctl_version" { default = "0.10.5" }
-variable "buildkitd_version" { default = "0.10.5" }
 variable "consul_version" { default = "1.10.3" }
 variable "redis_version" { default = "5.0.9" }
 variable "helm_version" { default = "3.8.2-1" }  ## TODO kubernetes matrix

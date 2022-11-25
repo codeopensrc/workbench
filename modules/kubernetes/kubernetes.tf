@@ -97,12 +97,16 @@ resource "null_resource" "kubernetes" {
     ### Add cluster + context + user locally to kubeconfig
     provisioner "local-exec" {
         command = <<-EOF
-            sed -i "s/kube-cluster-endpoint/gitlab.${var.root_domain_name}/" $HOME/.kube/${var.root_domain_name}-kubeconfig
-            KUBECONFIG=$HOME/.kube/config:$HOME/.kube/${var.root_domain_name}-kubeconfig
-            kubectl config view --flatten > /tmp/kubeconfig
-            cp --backup=numbered $HOME/.kube/config $HOME/.kube/config.bak
-            mv /tmp/kubeconfig $HOME/.kube/config
-            rm $HOME/.kube/${var.root_domain_name}-kubeconfig
+            if [ -f $HOME/.kube/${var.root_domain_name}-kubeconfig ]; then
+                sed -i "s/kube-cluster-endpoint/gitlab.${var.root_domain_name}/" $HOME/.kube/${var.root_domain_name}-kubeconfig
+                KUBECONFIG=$HOME/.kube/config:$HOME/.kube/${var.root_domain_name}-kubeconfig
+                kubectl config view --flatten > /tmp/kubeconfig
+                cp --backup=numbered $HOME/.kube/config $HOME/.kube/config.bak
+                mv /tmp/kubeconfig $HOME/.kube/config
+                rm $HOME/.kube/${var.root_domain_name}-kubeconfig
+            else
+                echo "Could not find $HOME/.kube/${var.root_domain_name}-kubeconfig"
+            fi
         EOF
     }
 

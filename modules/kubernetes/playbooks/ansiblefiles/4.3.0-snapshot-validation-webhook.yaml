@@ -1,0 +1,115 @@
+# For kubernetes 1.24 use digitalocean csi 4.3.0
+# https://github.com/digitalocean/csi-digitalocean/blob/master/deploy/kubernetes/releases/csi-digitalocean-v4.3.0/snapshot-validation-webhook.yaml
+# https://github.com/kubernetes-csi/external-snapshotter/tree/master/deploy/kubernetes/webhook-example
+
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "validation-webhook.snapshot.storage.k8s.io"
+webhooks:
+  - name: "validation-webhook.snapshot.storage.k8s.io"
+    rules:
+      - apiGroups:   ["snapshot.storage.k8s.io"]
+        apiVersions: ["v1", "v1beta1"]
+        operations:  ["CREATE", "UPDATE"]
+        resources:   ["volumesnapshots", "volumesnapshotcontents"]
+        scope:       "*"
+    clientConfig:
+      service:
+        namespace: "{{ csi_namespace }}"
+        name: "snapshot-validation-service"
+        path: "/volumesnapshot"
+      caBundle: {{ ca_bundle.stdout }}
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 5
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snapshot-validation
+  namespace: {{ csi_namespace }}
+  labels:
+    app: snapshot-validation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: snapshot-validation
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: snapshot-validation
+    spec:
+      serviceAccountName: snapshot-validation
+      containers:
+        - name: snapshot-validation
+          image: k8s.gcr.io/sig-storage/snapshot-validation-webhook:v6.0.1
+          imagePullPolicy: IfNotPresent
+          args: ['--tls-cert-file=/etc/snapshot-validation-webhook/certs/cert.pem', '--tls-private-key-file=/etc/snapshot-validation-webhook/certs/key.pem']
+          ports:
+            - containerPort: 443
+          volumeMounts:
+            - name: snapshot-validation-webhook-certs
+              mountPath: /etc/snapshot-validation-webhook/certs
+              readOnly: true
+      volumes:
+        - name: snapshot-validation-webhook-certs
+          secret:
+            secretName: {{ snapshot_secret_name }}
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: snapshot-validation
+  namespace: {{ csi_namespace }}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: snapshot-validation-service
+  namespace: {{ csi_namespace }}
+spec:
+  selector:
+    app: snapshot-validation
+  ports:
+    - protocol: TCP
+      port: 443
+
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: snapshot-validation
+rules:
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list", "watch"]
+
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: snapshot-validation
+subjects:
+  - kind: ServiceAccount
+    name: snapshot-validation
+    namespace: {{ csi_namespace }}
+roleRef:
+  kind: ClusterRole
+  name: snapshot-validation
+  apiGroup: rbac.authorization.k8s.io

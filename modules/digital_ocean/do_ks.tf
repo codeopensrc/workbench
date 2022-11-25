@@ -1,5 +1,10 @@
 locals {
     ###! `doctl kubernetes options versions`
+    ###! As of 11/24/2022
+    #Slug            Kubernetes Version    Supported Features
+    #1.24.4-do.0     1.24.4                cluster-autoscaler, docr-integration, ha-control-plane, token-authentication
+    #1.23.10-do.0    1.23.10               cluster-autoscaler, docr-integration, ha-control-plane, token-authentication
+
     ###! As of 1/3/2022
     #Slug            Kubernetes Version    Supported Features
     #1.21.5-do.0     1.21.5                cluster-autoscaler, docr-integration, ha-control-plane, token-authentication
@@ -8,6 +13,7 @@ locals {
     
     kube_do_matrix = {
         "1.20.11-00" = "1.20.11-do.0"
+        "1.24.4-00" = "1.24.4-do.0"
     }
     last_kube_do_version = reverse(values(local.kube_do_matrix))[0]
     kube_major_minor = regex("^[0-9]+.[0-9]+", var.config.packer_config.kubernetes_version)
