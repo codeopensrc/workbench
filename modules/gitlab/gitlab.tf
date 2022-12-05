@@ -131,6 +131,13 @@ resource "null_resource" "install_gitlab" {
                 sed -i "s|# gitlab_kas\['enable'\] = true|gitlab_kas\['enable'\] = true|" /etc/gitlab/gitlab.rb
                 sed -i "s|# grafana\['enable'\] = false|grafana\['enable'\] = true|" /etc/gitlab/gitlab.rb
 
+                ### Optimization
+                sed -i "s|# puma\['worker_processes'\] = 2|puma\['worker_processes'\] = 0|" /etc/gitlab/gitlab.rb
+                sed -i "s|# sidekiq\['max_concurrency'\] = 50|sidekiq\['max_concurrency'\] = 10|" /etc/gitlab/gitlab.rb
+                sed -i "s|# prometheus_monitoring\['enable'\] = true|prometheus_monitoring\['enable'\] = false|" /etc/gitlab/gitlab.rb
+                sed -i "s|# prometheus\['enable'\] = true|prometheus\['enable'\] = true|" /etc/gitlab/gitlab.rb
+                sed -i "s|# node_exporter\['enable'\] = true|node_exporter\['enable'\] = true|" /etc/gitlab/gitlab.rb
+
                 CONFIG="prometheus['scrape_configs'] = [
                     {
                         'job_name': 'node-file',

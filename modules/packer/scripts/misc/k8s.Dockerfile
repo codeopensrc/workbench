@@ -13,7 +13,7 @@ ENV SKAFFOLD_VERSION=$SKAFFOLD_VERSION
 ENV BUILDCTL_VERSION=$BUILDCTL_VERSION
 
 RUN apk add --update ca-certificates \
-    && apk add --update bash git curl jq \
+    && apk add --update bash git curl jq coreutils sed \
     && curl -L https://dl.k8s.io/release/v${KUBE_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl \
     && chmod g+rwx /usr/local/bin/kubectl \
     && curl -L https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz -o /tmp/helm-linux.tar.gz \

@@ -197,8 +197,9 @@ kubeadm config images pull --cri-socket=unix:///var/run/cri-dockerd.sock
 
 ## Init cluster
 API_VPC_IP=$(grep "vpc.my_private_ip" /etc/hosts | cut -d " " -f1)
+FEATURE_GATES="--feature-gates=StatefulSetAutoDeletePVC=true"
 #https://kubernetes.io/docs/tasks/tls/certificate-rotation/  ## Hoping this works fine
-echo "KUBELET_EXTRA_ARGS=\"--node-ip=$API_VPC_IP --rotate-certificates\"" > /etc/default/kubelet
+echo "KUBELET_EXTRA_ARGS=\"--node-ip=$API_VPC_IP --rotate-certificates $FEATURE_GATES\"" > /etc/default/kubelet
 kubeadm init --upload-certs --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$API_VPC_IP --control-plane-endpoint="kube-cluster-endpoint:6443" --cri-socket=unix:///var/run/cri-dockerd.sock | grep -A 1 "^kubeadm join" | tee $HOME/.kube/joininfo.txt
 
 

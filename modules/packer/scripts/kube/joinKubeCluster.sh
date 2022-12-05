@@ -156,7 +156,8 @@ cd $DIR_BEFORE_INSTALL
 ## On worker node
 WORKER_VPC_IP=$(grep "vpc.my_private_ip" /etc/hosts | cut -d " " -f1)
 #https://kubernetes.io/docs/tasks/tls/certificate-rotation/  ## Not sure if we need --rotate-certificates on non-master
-echo "KUBELET_EXTRA_ARGS=\"--node-ip=$WORKER_VPC_IP\"" > /etc/default/kubelet
+FEATURE_GATES="--feature-gates=StatefulSetAutoDeletePVC=true"
+echo "KUBELET_EXTRA_ARGS=\"--node-ip=$WORKER_VPC_IP $FEATURE_GATES\"" > /etc/default/kubelet
 ## Replace  {API_VPC_IP}   {TOKEN}   and   {CERT_HASH}
 if [[ -n $JOIN_COMMAND ]]; then
     echo "Trying joincmd: $JOIN_COMMAND"
