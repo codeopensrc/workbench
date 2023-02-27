@@ -1,0 +1,10 @@
+image:
+  tag: "{{ apps['wekan'].image_tag }}"
+configMapData:
+  MONGO_URL: "mongodb://{{ hostvars[groups.db[0]].private_ip }}:27017/wekan"
+  ROOT_URL: "https://wekan.{{ root_domain_name }}"
+  OAUTH2_SERVER_URL: "https://gitlab.{{ root_domain_name }}/"
+  OAUTH2_ENABLED: true
+secretStringData:
+  OAUTH2_CLIENT_ID: "{{ wekan_app_id.stdout }}"
+  OAUTH2_SECRET: "{{ wekan_secret.stdout }}"

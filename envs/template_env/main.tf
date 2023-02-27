@@ -97,7 +97,7 @@ module "consul" {
     pg_password = var.pg_password
     dev_pg_password = var.dev_pg_password
 
-    ## Deletes /tmp/consul datadir
+    ## Deletes /etc/consul.d/data datadir
     ## Only use for testing/recovering from severely broken consul cluster config
     force_consul_rebootstrap = false
 }
@@ -441,7 +441,9 @@ module "kubernetes" {
 
     additional_ssl = var.additional_ssl
 
+    local_kubeconfig_path = var.local_kubeconfig_path
     kube_apps = var.kube_apps
+    kube_services = var.kube_services
 }
 
 resource "null_resource" "configure_smtp" {

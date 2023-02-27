@@ -4,7 +4,7 @@
   remote_user: root
   vars:
     root_domain_name: "{{ root_domain_name }}"
-    services: "{{ kube_services | from_json }}"
+    services: "{{ kube_app_services | from_json }}"
     tls_secret_name: "app-tls"
   tasks:
     ### Adding the TLS secret this way requires a file for --key and --cert
@@ -15,7 +15,7 @@
       #- name: apply lb patches
       #  command: 'kubectl patch service -n ingress-nginx ingress-nginx-controller --type merge --patch "$(cat /root/.kube/lb-svc-patch.yml)"'
 
-      ## Adds entry for each kube_service
+      ## Adds entry for each kube_app_service
     - name: update service ingress routing file
       template:
         src: ansiblefiles/ingress-route.yml

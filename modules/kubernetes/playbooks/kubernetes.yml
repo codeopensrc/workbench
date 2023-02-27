@@ -424,6 +424,7 @@
   tasks:
     - name: update kubeconfig values
       shell: |
+        sed -r -i "s|kubernetes-admin@kubernetes|{{ root_domain_name }}|" $HOME/.kube/config
         sed -r -i "s|kubernetes|{{ root_domain_name }}|" $HOME/.kube/config
       
     - name: ansible kubeconfig file from remote to local.

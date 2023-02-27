@@ -1,0 +1,60 @@
+## Lot less templating for general and more specific for now
+
+- name: LAUNCH MISC APPS
+  hosts: "{{ groups.lead | first }}"
+  remote_user: root
+  vars:
+    apps: "{{ kube_apps | from_json }}"
+    root_domain_name: "{{ root_domain_name }}"
+  tasks:
+    - name: get wekan oauth app_id
+      register: wekan_app_id
+      command: consul kv get wekan/app_id
+
+    - name: get wekan oauth secret
+      register: wekan_secret
+      command: consul kv get wekan/secret
+
+    - name: add wekan values file
+      template:
+        src: ansiblefiles/helm_values/wekan-values.yaml
+        dest: /root/.kube/wekan-values.yaml
+
+    - name: Git clone wekan repo
+      git:
+        repo: "{{ apps['wekan'].repo_url }}"
+        dest: "/root/repos/{{ apps['wekan'].repo_name }}"
+
+    - name: Deploy wekan chart
+      kubernetes.core.helm:
+        name: wekan
+        chart_ref: "/root/repos/{{ apps['wekan'].repo_name }}/helmchart"
+        namespace: production
+        create_namespace: true
+        wait: true
+        values_files:
+          - /root/.kube/wekan-values.yaml
+
+    - name: rm wekan-values file
+      file:
+        path: /root/.kube/wekan-values.yaml
+        state: absent
+    #TODO: Loop over apps
+    #  loop: "{{ apps | list }}"
+
+#    - name: add example values file
+#      template:
+#        src: ansiblefiles/example-values.yaml
+#        dest: /root/.kube/example-values.yaml
+#
+#    - name: Deploy example chart
+#      kubernetes.core.helm:
+#        name: example
+#        chart_ref: example
+#        chart_repo_url: "{{ apps['example'].chart_url }}"
+#        namespace: monitoring
+#        create_namespace: true
+#        chart_version: "{{ apps['example'].chart_version }}"
+#        wait: true
+#        values_files:
+#          - /root/.kube/example-values.yaml

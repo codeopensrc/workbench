@@ -6,7 +6,7 @@
     "datacenter": "{{ region }}",
     "bind_addr": "{{ private_ip }}",
     "client_addr": "0.0.0.0",
-    "data_dir": "/tmp/consul",
+    "data_dir": "/etc/consul.d/data",
     "log_level": "INFO",
     "node_name": "{{ machine_name }}",
     "server": true,

@@ -56,7 +56,7 @@ resource "null_resource" "prometheus_targets" {
         %{ endfor }
         ]
         EOF
-        destination = "/tmp/targets.json"
+        destination = "/opt/gitlab/etc/prometheus/targets.json"
     }
 
     provisioner "file" {
@@ -143,7 +143,7 @@ resource "null_resource" "install_gitlab" {
                         'job_name': 'node-file',
                         'honor_labels': true,
                         'file_sd_configs' => [
-                            'files' => ['/tmp/targets.json']
+                            'files' => ['/opt/gitlab/etc/prometheus/targets.json']
                         ],
                     },
                     {

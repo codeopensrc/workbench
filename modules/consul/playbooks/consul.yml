@@ -111,7 +111,7 @@
       command: "{{ item }}"
       with_items:
         - systemctl stop consul.service
-        - rm -rf /tmp/consul
+        - rm -rf /etc/consul.d/data
       when: force_rebootstrap | bool == true
 
     ##TODO: Ansible way dealing with enabling services

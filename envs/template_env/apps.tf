@@ -65,6 +65,7 @@ variable "dbs_to_import" {
 variable "kube_apps" {
     type = map(object({
         repo_url=string, repo_name=string, image_tag=string,
+        chart_url=string, chart_version=string,
     }))
 
     default = {
@@ -72,6 +73,27 @@ variable "kube_apps" {
             "image_tag"   = "0.0.1"
             "repo_url"    = "https://github.com/USER/REPO.git"
             "repo_name"   = "REPO"
+            "chart_url"     = ""
+            "chart_version" = ""
+        }
+    }
+}
+
+## Services running in the cluster to be consumed by other services
+variable "kube_services" {
+    type = map(object({
+        chart=string, namespace=string, enabled=bool,
+        chart_url=string, chart_version=string, opt_value_files=list(string)
+    }))
+
+    default = {
+        prometheus = {
+            "enabled"         = true
+            "chart"           = "prometheus"
+            "namespace"       = "monitoring"
+            "chart_url"       = "https://prometheus-community.github.io/helm-charts"
+            "chart_version"   = "19.6.1"
+            "opt_value_files" = ["prometheus-values.yaml"]
         }
     }
 }

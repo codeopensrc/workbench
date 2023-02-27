@@ -24,7 +24,9 @@ variable "csi_version" {}
 
 variable "additional_ssl" {}
 
+variable "local_kubeconfig_path" {}
 variable "kube_apps" {}
+variable "kube_services" {}
 
 locals {
     all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
@@ -41,11 +43,14 @@ locals {
             if contains(HOST.roles, "lead")
         ]
     ])
-    kube_services = [
+    kube_app_services = [
         for app in var.additional_ssl:
         { subdomain = format("%s.%s", app.subdomain_name, var.root_domain_name), name = app.service_name }
         if app.create_ssl_cert == true
     ]
+    app_helm_value_files_dir = "${path.module}/playbooks/ansiblefiles/helm_values"
+    app_helm_value_files = fileset("${local.app_helm_value_files_dir}/", "*[^.swp]")
+    app_helm_value_files_sha = sha1(join("", [for f in local.app_helm_value_files: filesha1("${local.app_helm_value_files_dir}/${f}")]))
 }
 
 ### TODO: Adding/configuring additional users
@@ -55,7 +60,7 @@ resource "null_resource" "kubernetes" {
     triggers = {
         num_nodes = var.server_count
         kubecfg_cluster = "${var.root_domain_name}"
-        kubecfg_context = "${var.root_domain_name}-admin@kubernetes"
+        kubecfg_context = "${var.root_domain_name}"
         kubecfg_user = "${var.root_domain_name}-admin"
     }
 
@@ -99,10 +104,10 @@ resource "null_resource" "kubernetes" {
         command = <<-EOF
             if [ -f $HOME/.kube/${var.root_domain_name}-kubeconfig ]; then
                 sed -i "s/kube-cluster-endpoint/gitlab.${var.root_domain_name}/" $HOME/.kube/${var.root_domain_name}-kubeconfig
-                KUBECONFIG=$HOME/.kube/config:$HOME/.kube/${var.root_domain_name}-kubeconfig
+                KUBECONFIG=${var.local_kubeconfig_path}:$HOME/.kube/${var.root_domain_name}-kubeconfig
                 kubectl config view --flatten > /tmp/kubeconfig
-                cp --backup=numbered $HOME/.kube/config $HOME/.kube/config.bak
-                mv /tmp/kubeconfig $HOME/.kube/config
+                cp --backup=numbered ${var.local_kubeconfig_path} ${var.local_kubeconfig_path}.bak
+                mv /tmp/kubeconfig ${var.local_kubeconfig_path}
                 rm $HOME/.kube/${var.root_domain_name}-kubeconfig
             else
                 echo "Could not find $HOME/.kube/${var.root_domain_name}-kubeconfig"
@@ -122,7 +127,7 @@ resource "null_resource" "kubernetes" {
     }
 }
 
-resource "null_resource" "services" {
+resource "null_resource" "apps" {
     count = contains(var.container_orchestrators, "kubernetes") ? 1 : 0
     depends_on = [
         null_resource.kubernetes,
@@ -131,14 +136,34 @@ resource "null_resource" "services" {
     triggers = {
         num_nodes = var.server_count
         num_apps = length(keys(var.kube_apps))
+        values_sha = local.app_helm_value_files_sha
     }
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/services.yml -i ${var.ansible_hostfile} --extra-vars \
+            ansible-playbook ${path.module}/playbooks/apps.yml -i ${var.ansible_hostfile} --extra-vars \
                 'root_domain_name=${var.root_domain_name}
                 kube_apps=${jsonencode(var.kube_apps)}'
         EOF
     }
+}
+
+resource "helm_release" "services" {
+    for_each = {
+        for servicename, service in var.kube_services:
+        servicename => service
+        if service.enabled && (contains(var.container_orchestrators, "kubernetes") ? 1 : 0) == 1
+    }
+    depends_on = [
+        null_resource.kubernetes,
+        null_resource.managed_kubernetes,
+    ]
+    name       = each.key
+    namespace  = each.value.namespace != "" ? each.value.namespace : "default"
+    chart      = each.value.chart
+    repository = each.value.chart_url
+    version    = each.value.chart_version
+    ## TODO: Use/handle values files as template files
+    values     = [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")]
 }
 
 resource "null_resource" "managed_kubernetes" {
@@ -147,7 +172,7 @@ resource "null_resource" "managed_kubernetes" {
         command = <<-EOF
             ansible-playbook ${path.module}/playbooks/managed_kubernetes.yml -i ${var.ansible_hostfile} --extra-vars \
                 'root_domain_name=${var.root_domain_name}
-                kube_services=${jsonencode(local.kube_services)}'
+                kube_app_services=${jsonencode(local.kube_app_services)}'
         EOF
     }
 }
@@ -163,7 +188,8 @@ resource "null_resource" "cleanup_cluster_volumes" {
     depends_on = [
         null_resource.kubernetes,
         null_resource.managed_kubernetes,
-        null_resource.services,
+        null_resource.apps,
+        helm_release.services,
     ]
 
     triggers = {

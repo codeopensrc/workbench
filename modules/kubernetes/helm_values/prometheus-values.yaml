@@ -1,0 +1,12 @@
+#server:
+#  ingress:
+#    enabled: true
+#    ingressClassName: nginx
+#    hosts:
+#      - prom.local.test
+kube-state-metrics:
+  extraArgs:
+    - "--metric-labels-allowlist=pods=[app.kubernetes.io/instance,app.kubernetes.io/name,imageTag]"
+prometheus-node-exporter:
+  service:
+    port: 9101

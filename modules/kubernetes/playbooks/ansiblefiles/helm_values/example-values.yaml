@@ -1,0 +1,6 @@
+#server:
+#  ingress:
+#    enabled: true
+#    ingressClassName: nginx
+#    hosts:
+#      - subdomain.local.test
