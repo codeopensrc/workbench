@@ -1,5 +1,5 @@
 image:
-  tag: "{{ apps['wekan'].image_tag }}"
+  tag: "{{ item.0.value.image_tag }}"
 configMapData:
   MONGO_URL: "mongodb://{{ hostvars[groups.db[0]].private_ip }}:27017/wekan"
   ROOT_URL: "https://wekan.{{ root_domain_name }}"

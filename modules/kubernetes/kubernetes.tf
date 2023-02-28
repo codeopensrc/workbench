@@ -136,6 +136,7 @@ resource "null_resource" "apps" {
     triggers = {
         num_nodes = var.server_count
         num_apps = length(keys(var.kube_apps))
+        enabled_apps = join(",", [for a in var.kube_apps: "${a.release_name}:${a.enabled}"])
         values_sha = local.app_helm_value_files_sha
     }
     provisioner "local-exec" {

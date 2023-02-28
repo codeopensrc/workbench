@@ -6,47 +6,75 @@
   vars:
     apps: "{{ kube_apps | from_json }}"
     root_domain_name: "{{ root_domain_name }}"
+    tmp_remote_values_dir: "/root/.kube"
   tasks:
+    ## TODO: pass in via consul provider
     - name: get wekan oauth app_id
       register: wekan_app_id
       command: consul kv get wekan/app_id
+      when: "'wekan' in (apps | list)"
 
+    ## TODO: pass in via consul provider
     - name: get wekan oauth secret
       register: wekan_secret
       command: consul kv get wekan/secret
+      when: "'wekan' in (apps | list)"
 
-    - name: add wekan values file
+    - name: add values files
       template:
-        src: ansiblefiles/helm_values/wekan-values.yaml
-        dest: /root/.kube/wekan-values.yaml
+        src: "ansiblefiles/helm_values/{{ item.1 }}"
+        dest: "{{ tmp_remote_values_dir }}/{{ item.1 }}"
+      loop: "{{ query('dict', apps) | subelements('value.opt_value_files') }}"
+      when: item.0.value.enabled
 
-    - name: Git clone wekan repo
+    - name: git clone repos
       git:
-        repo: "{{ apps['wekan'].repo_url }}"
-        dest: "/root/repos/{{ apps['wekan'].repo_name }}"
+        repo: "{{ item.value.repo_url }}"
+        dest: "/root/repos/{{ item.value.repo_name }}"
+      loop: "{{ query('dict', apps) }}"
+      when: "item.value.repo_url != '' and item.value.enabled"
 
-    - name: Deploy wekan chart
-      kubernetes.core.helm:
-        name: wekan
-        chart_ref: "/root/repos/{{ apps['wekan'].repo_name }}/helmchart"
-        namespace: production
-        create_namespace: true
-        wait: true
-        values_files:
-          - /root/.kube/wekan-values.yaml
-
-    - name: rm wekan-values file
+    - name: rm disabled git repos
       file:
-        path: /root/.kube/wekan-values.yaml
+        path: "/root/repos/{{ item.value.repo_name }}"
         state: absent
-    #TODO: Loop over apps
-    #  loop: "{{ apps | list }}"
+      loop: "{{ query('dict', apps) }}"
+      when: "item.value.repo_url != '' and not item.value.enabled"
 
-#    - name: add example values file
-#      template:
-#        src: ansiblefiles/example-values.yaml
-#        dest: /root/.kube/example-values.yaml
-#
+    - name: deploy charts with repo_url defined
+      kubernetes.core.helm:
+        state: "{{ item.value.enabled | ternary('present', 'absent') }}"
+        name: "{{ item.value.release_name }}"
+        chart_ref: "/root/repos/{{ item.value.repo_name }}/{{ item.value.chart_ref }}"
+        namespace: "{{ item.value.namespace }}"
+        create_namespace: "{{ item.value.create_namespace | default(true) }}"
+        wait: "{{ item.value.wait | default(300) }}"
+        values_files: "{{ item.value.opt_value_files | map('regex_replace', '^(.*)', tmp_remote_values_dir+'/\\1') | list }}"
+      loop: "{{ query('dict', apps) }}"
+      when: "item.value.repo_url != ''"
+
+
+    - name: deploy charts with chart_url defined
+      kubernetes.core.helm:
+        state: "{{ item.value.enabled | ternary('present', 'absent') }}"
+        name: "{{ item.value.release_name }}"
+        chart_ref: "{{ item.value.chart_ref }}"
+        chart_repo_url: "{{ item.value.chart_url }}"
+        namespace: "{{ item.value.namespace }}"
+        create_namespace: "{{ item.value.create_namespace | default(true) }}"
+        chart_version: "{{ item.value.chart_version | default('latest') }}"
+        wait: "{{ item.value.wait | default(300) }}"
+        values_files: "{{ item.value.opt_value_files | map('regex_replace', '^(.*)', tmp_remote_values_dir+'/\\1')) | list }}"
+      loop: "{{ query('dict', apps) }}"
+      when: "item.value.chart_url != ''"
+
+    - name: rm values file
+      file:
+        path: "{{ tmp_remote_values_dir }}/{{ item.1 }}"
+        state: absent
+      loop: "{{ query('dict', apps) | subelements('value.opt_value_files') }}"
+
+
 #    - name: Deploy example chart
 #      kubernetes.core.helm:
 #        name: example

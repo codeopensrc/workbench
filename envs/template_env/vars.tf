@@ -71,8 +71,8 @@ variable "buildkitd_version" { default = "0.10.5" }
 
 
 ##! NOTE: Packer config variables - Software baked into image
-##! kubernetes_version options: Valid version, recent version gitlab supports, or latest
-##!   ex "1.24.7-00" | "gitlab" | "" (empty/latest uses latest)
+##! kubernetes_version options: Valid version or recent version gitlab supports
+##!   ex "1.24.7-00" | "gitlab"
 variable "kubernetes_version" { default = "gitlab" }
 variable "gitlab_version" { default = "15.5.3-ce.0" }
 variable "docker_version" { default = "20.10.21" }

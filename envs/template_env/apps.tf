@@ -64,18 +64,27 @@ variable "dbs_to_import" {
 ## These are to be installed via helm in modules/kubernetes/playbooks/services.yml
 variable "kube_apps" {
     type = map(object({
-        repo_url=string, repo_name=string, image_tag=string,
-        chart_url=string, chart_version=string,
+        enabled=bool, image_tag=string, repo_name=string, repo_url=string,
+        release_name=string, chart_url=string, chart_version=string,
+        chart_ref=string, namespace=string, create_namespace=bool,
+        wait=bool, opt_value_files=list(string),
     }))
 
     default = {
-        template = {
-            "image_tag"   = "0.0.1"
-            "repo_url"    = "https://github.com/USER/REPO.git"
-            "repo_name"   = "REPO"
-            "chart_url"     = ""
-            "chart_version" = ""
-        }
+        example = {
+            "enabled"          = false
+            "image_tag"        = "0.0.1"
+            "repo_name"        = "REPO"
+            "repo_url"         = "https://github.com/USER/REPO.git"
+            "release_name"     = "example"
+            "chart_url"        = ""
+            "chart_version"    = ""
+            "chart_ref"        = "helmchart"
+            "namespace"        = "default"
+            "create_namespace" = true
+            "wait"             = true
+            "opt_value_files"  = ["example-values.yaml"]
+        },
     }
 }
 
@@ -88,7 +97,7 @@ variable "kube_services" {
 
     default = {
         prometheus = {
-            "enabled"         = true
+            "enabled"         = false
             "chart"           = "prometheus"
             "namespace"       = "monitoring"
             "chart_url"       = "https://prometheus-community.github.io/helm-charts"
