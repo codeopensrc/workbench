@@ -91,6 +91,7 @@
     loki_version: "{{ loki_version }}"
     admin_ip: "{{ (groups.admin | length > 0) | ternary((groups.admin | first), '') }}"
     admin_private_ip: "{{ (admin_ip != '') | ternary(hostvars[admin_ip].private_ip, '') }}"
+    fqdn: "{{ fqdn }}"
   tasks:
     - name: end_play if no admin ip
       meta: end_play
@@ -158,12 +159,20 @@
         - sudo systemctl start promtail
         - sudo systemctl enable promtail
 
+    - name: check run admin tasks
+      set_fact:
+        run_admin_task: true
+      with_items:
+        - "admin"
+        - fqdn
+      when: "item in machine_name"
+
     - name: start loki
       command: "{{ item }}"
       with_items:
         - sudo systemctl start loki.service
         - sudo systemctl enable loki.service
-      when: "'admin' in machine_name"
+      when: "run_admin_task is defined"
 
     ##TODO: Without consul bootstrapped yet - will this error
     - name: start consulexporter
@@ -171,11 +180,11 @@
       with_items:
         - sudo systemctl start consulexporter
         - sudo systemctl enable consulexporter
-      when: "'admin' in machine_name"
+      when: "run_admin_task is defined"
 
     - name: start nodeexporter
       command: "{{ item }}"
       with_items:
         - sudo systemctl start nodeexporter
         - sudo systemctl enable nodeexporter
-      when: "'admin' not in machine_name"
+      when: "run_admin_task is defined"

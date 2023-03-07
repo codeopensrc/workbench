@@ -1,5 +1,6 @@
 ########## Digital Ocean ##########
 variable "do_region" { default = "nyc3" }
+variable "do_cloud_controller_version" { default = "0.1.42" }
 variable "digitalocean_image_os" {
     default = {
         "nyc3" = "ubuntu-22-04-x64"
@@ -39,6 +40,13 @@ variable "stun_port" { default = "" }
 variable "postgres_port" { default = "5432" } ## Not fully implemented - consulchecks atm
 variable "redis_port" { default = "6379" } ## Not fully implemented - consulchecks atm
 variable "mongo_port" { default = "27017" } ## Not fully implemented - consulchecks atm
+variable "kubernetes_nginx_nodeports" {
+    default = {
+        http = 32080
+        https = 32443
+        tcp = 32808
+    }
+}
 
 variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }

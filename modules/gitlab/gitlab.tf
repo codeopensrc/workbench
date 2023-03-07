@@ -56,7 +56,7 @@ resource "null_resource" "prometheus_targets" {
         %{ endfor }
         ]
         EOF
-        destination = "/opt/gitlab/etc/prometheus/targets.json"
+        destination = "/var/opt/gitlab/prometheus/targets.json"
     }
 
     provisioner "file" {
@@ -143,7 +143,7 @@ resource "null_resource" "install_gitlab" {
                         'job_name': 'node-file',
                         'honor_labels': true,
                         'file_sd_configs' => [
-                            'files' => ['/opt/gitlab/etc/prometheus/targets.json']
+                            'files' => ['/var/opt/gitlab/prometheus/targets.json']
                         ],
                     },
                     {
@@ -152,6 +152,18 @@ resource "null_resource" "install_gitlab" {
                         'consul_sd_configs' => [
                             'server': 'localhost:8500',
                             'services' => ['consulexporter']
+                        ]
+                    },
+                    {
+                        'job_name': 'federate',
+                        'honor_labels': true,
+                        'scrape_interval': '10s',
+                        'metrics_path': '/federate',
+                        'params' => {
+                          'match[]' => ['{app_kubernetes_io_name=\"kube-state-metrics\"}']
+                        },
+                        'static_configs' => [
+                            'targets' => ['prom.k8s-internal.${var.root_domain_name}']
                         ]
                     }
                 ]"

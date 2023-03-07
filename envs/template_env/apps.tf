@@ -71,38 +71,48 @@ variable "kube_apps" {
     }))
 
     default = {
-        example = {
-            "enabled"          = false
-            "image_tag"        = "0.0.1"
-            "repo_name"        = "REPO"
-            "repo_url"         = "https://github.com/USER/REPO.git"
-            "release_name"     = "example"
-            "chart_url"        = ""
-            "chart_version"    = ""
-            "chart_ref"        = "helmchart"
-            "namespace"        = "default"
-            "create_namespace" = true
-            "wait"             = true
-            "opt_value_files"  = ["example-values.yaml"]
-        },
+        #example = {
+        #    "enabled"          = false
+        #    "image_tag"        = "0.0.1"
+        #    "repo_name"        = "REPO"
+        #    "repo_url"         = "https://github.com/USER/REPO.git"
+        #    "release_name"     = "example"
+        #    "chart_url"        = ""
+        #    "chart_version"    = ""
+        #    "chart_ref"        = "helmchart"
+        #    "namespace"        = "default"
+        #    "create_namespace" = true
+        #    "wait"             = true
+        #    "opt_value_files"  = ["example-values.yaml"]
+        #},
     }
 }
 
 ## Services running in the cluster to be consumed by other services
 variable "kube_services" {
     type = map(object({
-        chart=string, namespace=string, enabled=bool,
+        enabled=bool, chart=string, namespace=string, create_namespace=bool,
         chart_url=string, chart_version=string, opt_value_files=list(string)
     }))
 
     default = {
         prometheus = {
-            "enabled"         = false
-            "chart"           = "prometheus"
-            "namespace"       = "monitoring"
-            "chart_url"       = "https://prometheus-community.github.io/helm-charts"
-            "chart_version"   = "19.6.1"
-            "opt_value_files" = ["prometheus-values.yaml"]
+            "enabled"          = false
+            "chart"            = "prometheus"
+            "namespace"        = "monitoring"
+            "create_namespace" = true
+            "chart_url"        = "https://prometheus-community.github.io/helm-charts"
+            "chart_version"    = "19.6.1"
+            "opt_value_files"  = ["prometheus-values.yaml"]
+        }
+        nginx = {
+            "enabled"          = false
+            "chart"            = "ingress-nginx"
+            "namespace"        = "ingress-nginx"
+            "create_namespace" = true
+            "chart_url"        = "https://kubernetes.github.io/ingress-nginx"
+            "chart_version"    = "4.5.2"
+            "opt_value_files"  = ["nginx-values.yaml"]
         }
     }
 }

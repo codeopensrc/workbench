@@ -23,6 +23,7 @@
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
   vars:
+    cloud_provider: "{{ cloud_provider }}"
     kubernetes_version: "{{ kubernetes_version }}"
     buildkitd_version: "{{ buildkitd_version }}"
     gitlab_tokens: "{{ gitlab_runner_tokens | from_json }}"
@@ -36,6 +37,31 @@
     nginx_args: "{{ (admin_servers | int == 0) | ternary('-p default', '') }}"
     runner_img_version: "{{ kubernetes_version | regex_replace('-00') }}"
   tasks:
+    ## NOTE: It says it does not persist through reboots
+    #May have to follow the disable instructions and use the global digitalocean config
+    - name: modify digitalocean extra nameservers task 1
+      tags: dns
+      lineinfile:
+        path: /etc/netplan/50-cloud-init.yaml
+        regexp: '- 67.207.67.3'
+        state: absent
+      when: cloud_provider == "digitalocean"
+
+    - name: modify digitalocean extra nameservers task 2
+      tags: dns
+      command: mv /etc/systemd/resolved.conf.d/DigitalOcean.conf /etc/systemd/resolved.conf.d/DigitalOcean.conf.bak
+      args:
+        removes: /etc/systemd/resolved.conf.d/DigitalOcean.conf
+        creates: /etc/systemd/resolved.conf.d/DigitalOcean.conf.bak
+      when: cloud_provider == "digitalocean"
+
+    - name: modify digitalocean extra nameservers task 3
+      tags: dns
+      shell: |
+        netplan apply
+        systemctl restart systemd-resolved.service
+      when: cloud_provider == "digitalocean"
+
     - name: init cluster
       block:
         - name: check cluster started
@@ -45,7 +71,7 @@
         - name: start cluster
           register: initcert
           ## TODO: Pass down helm and skaffold version
-          command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }} -h 3.8.2-1 -s 2.0.0
+          command: bash $HOME/code/scripts/kube/startKubeCluster.sh -v {{ kubernetes_version }} -i {{ vpc_private_iface }} -p {{ cloud_provider }} -h 3.8.2-1 -s 2.0.0
 
     - name: delete old cert certificate-key
       shell: 'kubectl delete secret -n kube-system kubeadm-certs || echo'
@@ -166,6 +192,7 @@
   remote_user: root
   gather_facts: no
   vars:
+    cloud_provider: "{{ cloud_provider }}"
     kubernetes_version: "{{ kubernetes_version }}"
     cluster_admin_hostname: "{{ (groups.admin + groups.lead) | first }}"
     certificate_key: "{{ hostvars[cluster_admin_hostname]['certificate_key'].stdout }}"
@@ -178,7 +205,7 @@
       rescue:
         - name: join cluster
           ##TODO: Pass down helm and skaffold version
-          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -k {{ certificate_key }} -h 3.8.2-1 -s 2.0.0"
+          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -k {{ certificate_key }} -p {{ cloud_provider }} -h 3.8.2-1 -s 2.0.0"
 
     - name: untaint secondary control plane
       shell: "kubectl taint nodes {{ machine_name }} node-role.kubernetes.io/master- || echo"
@@ -192,6 +219,7 @@
   remote_user: root
   gather_facts: no
   vars:
+    cloud_provider: "{{ cloud_provider }}"
     kubernetes_version: "{{ kubernetes_version }}"
   tasks:
     - name: join cluster
@@ -202,7 +230,7 @@
       rescue:
         - name: join cluster
           ##TODO: Pass down helm and skaffold version
-          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -h 3.8.2-1 -s 2.0.0"
+          shell: "bash $HOME/code/scripts/kube/joinKubeCluster.sh -v {{ kubernetes_version }} -p {{ cloud_provider }} -h 3.8.2-1 -s 2.0.0"
 
 
 # TODO: Implement csi config for aws then azure
@@ -211,9 +239,11 @@
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
   gather_facts: no
+  tags: do
   vars:
     cloud_provider: "{{ cloud_provider }}"
     cloud_provider_token: "{{ cloud_provider_token }}"
+    cloud_controller_version: "{{ cloud_controller_version }}"
     csi_namespace: "{{ csi_namespace }}"
     csi_version: "{{ csi_version }}"
     snapshot_secret_name: "snapshot-validation-secret"
@@ -238,6 +268,28 @@
             path: /root/.kube/csi-secret.yaml
             state: absent
       when: cloud_provider == "digitalocean" and cloud_provider_token != ""
+
+    ## DO_CLUSTER_VPC_ID is set on the machine in /etc/environment on creation
+    - name: create configmap for digital ocean vpc_id
+      shell: |
+        kubectl create configmap cluster-vpc-id -n {{ csi_namespace }} \
+            --from-literal=DO_CLUSTER_VPC_ID=${DO_CLUSTER_VPC_ID} \
+             -o yaml --dry-run | kubectl apply -f -
+      when: cloud_provider == "digitalocean" and cloud_provider_token != ""
+
+    - name: add digitalocean cloud-controller-manager file
+      template:
+        src: ansiblefiles/{{ cloud_controller_version }}-do-cloud-manager.yml
+        dest: /root/.kube/{{ cloud_controller_version }}-do-cloud-manager.yml
+      when: cloud_provider == "digitalocean" and cloud_provider_token != ""
+
+    ### TODO: Load balancer only auto attaches non-control plane droplets
+    ### Spent many hours troubleshooting that and does not fit current use case
+    ### We also have to update certain dns to LB ips which is not configured at this time
+    #- name: deploy digitalocean cloud-controller-manager
+    #  shell: |
+    #    kubectl apply -f /root/.kube/{{ cloud_controller_version }}-do-cloud-manager.yml
+    #  when: cloud_provider == "digitalocean" and cloud_provider_token != ""
 
     # TODO: Do this using cert-manager
     - name: ensure snapshot validation secret present
@@ -421,6 +473,7 @@
   remote_user: root
   vars:
     root_domain_name: "{{ root_domain_name }}"
+  tags: pull
   tasks:
     - name: update kubeconfig values
       shell: |

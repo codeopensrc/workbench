@@ -98,7 +98,9 @@ resource "digitalocean_droplet" "main" {
         cfg.key => { cfg = cfg, ind = ind, role = cfg.role }
     }
 
-    name     = "${var.config.server_name_prefix}-${var.config.region}-${each.value.role}-${substr(uuid(), 0, 4)}"
+    name = (each.value.role == "admin"
+        ? "gitlab.${var.config.root_domain_name}"
+        : "${var.config.server_name_prefix}-${var.config.region}-${each.value.role}-${substr(uuid(), 0, 4)}")
     #Priorty = Provided image id -> Latest image with matching filters -> Build if no matches
     image = (each.value.cfg.server.image != "" ? each.value.cfg.server.image
         : (length(data.digitalocean_images.latest[each.value.cfg.image_alias].images) > 0
@@ -122,7 +124,10 @@ resource "digitalocean_droplet" "main" {
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
 
     provisioner "remote-exec" {
-        inline = [ "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys" ]
+        inline = [ 
+            "cat /home/ubuntu/.ssh/authorized_keys | sudo tee /root/.ssh/authorized_keys",
+            "echo \"DO_CLUSTER_VPC_ID=${digitalocean_vpc.terraform_vpc.id}\" >> /etc/environment",
+        ]
         connection {
             host     = self.ipv4_address
             type     = "ssh"
@@ -142,7 +147,7 @@ resource "digitalocean_droplet" "main" {
                 echo "Not default namespace, removing hostnames from known_hosts"
                 if [ "${contains(self.tags, "admin")}" = "true" ]; then
                     echo "Has admin tag"
-                    DOMAIN=${replace(regex("gitlab-[a-z]+-[a-z]+", join(",", self.tags)), "-", ".")};
+                    DOMAIN=${length(regexall("gitlab-[a-z]+-[a-z]+", join(",", self.tags))) > 0 ? replace(regex("gitlab-[a-z]+-[a-z]+", join(",", self.tags)), "-", ".") : ""};
                     ROOT_DOMAIN=$(echo "$DOMAIN" | sed "s/gitlab\.//");
 
                     echo "Removing $DOMAIN from known_hosts";

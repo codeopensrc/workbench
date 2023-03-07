@@ -1,12 +1,15 @@
-#server:
-#  ingress:
-#    enabled: true
-#    ingressClassName: nginx
+server:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/whitelist-source-range: "127.0.0.1"
 #    hosts:
 #      - prom.local.test
 kube-state-metrics:
   extraArgs:
     - "--metric-labels-allowlist=pods=[app.kubernetes.io/instance,app.kubernetes.io/name,imageTag]"
 prometheus-node-exporter:
+  enabled: false
   service:
     port: 9101

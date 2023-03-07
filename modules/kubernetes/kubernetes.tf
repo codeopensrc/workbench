@@ -19,6 +19,7 @@ variable "cleanup_kube_volumes" {}
 
 variable "cloud_provider" {}
 variable "cloud_provider_token" {}
+variable "cloud_controller_version" {}
 variable "csi_namespace" {}
 variable "csi_version" {}
 
@@ -27,6 +28,7 @@ variable "additional_ssl" {}
 variable "local_kubeconfig_path" {}
 variable "kube_apps" {}
 variable "kube_services" {}
+variable "kubernetes_nginx_nodeports" {}
 
 locals {
     all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
@@ -51,6 +53,24 @@ locals {
     app_helm_value_files_dir = "${path.module}/playbooks/ansiblefiles/helm_values"
     app_helm_value_files = fileset("${local.app_helm_value_files_dir}/", "*[^.swp]")
     app_helm_value_files_sha = sha1(join("", [for f in local.app_helm_value_files: filesha1("${local.app_helm_value_files_dir}/${f}")]))
+
+    tf_helm_values = {
+        prometheus = <<-EOF
+        server:
+          ingress:
+            hosts:
+            - prom.k8s-internal.${var.root_domain_name}
+        EOF
+        nginx = <<-EOF
+        controller:
+          service:
+            nodePorts:
+              http: ${var.kubernetes_nginx_nodeports.http}
+              https: ${var.kubernetes_nginx_nodeports.https}
+              tcp:
+                8080: ${var.kubernetes_nginx_nodeports.tcp}
+        EOF
+    }
 }
 
 ### TODO: Adding/configuring additional users
@@ -94,6 +114,7 @@ resource "null_resource" "kubernetes" {
                 import_gitlab=${var.import_gitlab}
                 cloud_provider=${var.cloud_provider}
                 cloud_provider_token=${var.cloud_provider_token}
+                cloud_controller_version=${var.cloud_controller_version}
                 csi_namespace=${var.csi_namespace}
                 csi_version=${var.csi_version}'
         EOF
@@ -158,13 +179,16 @@ resource "helm_release" "services" {
         null_resource.kubernetes,
         null_resource.managed_kubernetes,
     ]
-    name       = each.key
-    namespace  = each.value.namespace != "" ? each.value.namespace : "default"
-    chart      = each.value.chart
-    repository = each.value.chart_url
-    version    = each.value.chart_version
-    ## TODO: Use/handle values files as template files
-    values     = [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")]
+    name             = each.key
+    chart            = each.value.chart
+    namespace        = each.value.namespace != "" ? each.value.namespace : "default"
+    create_namespace = each.value.create_namespace
+    repository       = each.value.chart_url
+    version          = each.value.chart_version
+    values           = concat(
+        [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
+        [for key, values in local.tf_helm_values: values if key == each.key]
+    )
 }
 
 resource "null_resource" "managed_kubernetes" {

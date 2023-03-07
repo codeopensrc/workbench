@@ -109,6 +109,27 @@ resource "digitalocean_record" "default_a_leader" {
     value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
+resource "digitalocean_record" "default_a_k8s_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    name   = "*.k8s"
+    domain = digitalocean_domain.default.name
+    type   = "A"
+    ttl    = "300"
+    value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+}
+
+resource "digitalocean_record" "default_a_k8s_internal_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    name   = "*.k8s-internal"
+    domain = digitalocean_domain.default.name
+    type   = "A"
+    ttl    = "300"
+    ##TODO:  Not sure how internal will work on managed_kubernetes yet
+    ## Feel like an additional internal nginx deployment is how itll work
+    ## This is currently used for machines to resolve to pod IPs using their k8s ingress resource
+    value  = "127.0.0.1"
+}
+
 resource "digitalocean_record" "default_a_leader_root" {
     count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name   = "@"

@@ -20,6 +20,7 @@
     services: "{{ docker_services | from_json }}"
 
     kube_nginx_ip: "{{ kubernetes_nginx_ip }}"
+    kube_nginx_nodeports: "{{ kubernetes_nginx_nodeports | from_json }}"
     kube_nginx_port: "{{ kubernetes_nginx_port }}"
     kube_subdomains: "{{ kubernetes_subdomains | from_json }}"
   tasks:

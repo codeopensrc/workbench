@@ -158,3 +158,20 @@
   #
   #
   #meta: end_host
+  #
+  #
+  #
+  #    - name: set run admin tasks
+  #      set_fact:
+  #        run_admin_task: true
+  #      with_items:
+  #          - "admin"
+  #          - root_domain_name
+  #      when: "item in machine_name"
+  #
+  #    - name: start loki
+  #      command: "{{ item }}"
+  #      with_items:
+  #        - sudo systemctl start loki.service
+  #        - sudo systemctl enable loki.service
+  #      when: "run_admin_task is defined"

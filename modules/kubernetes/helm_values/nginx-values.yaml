@@ -1,0 +1,7 @@
+controller:
+  config:
+    enable-real-ip: "true"
+    use-forwarded-headers: "true"
+  service:
+    type: NodePort
+    externalTrafficPolicy: "Local"

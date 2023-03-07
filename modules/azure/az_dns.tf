@@ -144,6 +144,35 @@ resource "azurerm_dns_a_record" "default_a_leader" {
     #], 0)
 }
 
+resource "azurerm_dns_a_record" "default_a_k8s_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    name            = "*.k8s"
+    zone_name           = azurerm_dns_zone.default.name
+    resource_group_name = azurerm_resource_group.main.name
+    ttl                 = 300
+    records  = [ local.dns_lead ]
+    #target_resource_id   = element([
+    #    for key, pip in azurerm_public_ip.main: pip.id
+    #    if pip.ip_address == local.dns_lead
+    #], 0)
+}
+
+resource "azurerm_dns_a_record" "default_a_k8s_internal_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    name            = "*.k8s-internal"
+    zone_name           = azurerm_dns_zone.default.name
+    resource_group_name = azurerm_resource_group.main.name
+    ttl                 = 300
+    ##TODO:  Not sure how internal will work on managed_kubernetes yet
+    ## Feel like an additional internal nginx deployment is how itll work
+    ## This is currently used for machines to resolve to pod IPs using their k8s ingress resource
+    records  = [ "127.0.0.1" ]
+    #target_resource_id   = element([
+    #    for key, pip in azurerm_public_ip.main: pip.id
+    #    if pip.ip_address == local.dns_lead
+    #], 0)
+}
+
 resource "azurerm_dns_a_record" "default_a_leader_root" {
     count           = contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name            = "@"

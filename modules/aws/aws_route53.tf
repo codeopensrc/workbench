@@ -132,6 +132,29 @@ resource "aws_route53_record" "default_a_leader" {
     records  = [ local.dns_lead ]
 }
 
+resource "aws_route53_record" "default_a_k8s_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    zone_id         = aws_route53_zone.default.zone_id
+    name            = "*.k8s"
+    allow_overwrite = true
+    ttl             = "300"
+    type            = "A"
+    records = [ local.dns_lead ]
+}
+
+resource "aws_route53_record" "default_a_k8s_internal_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    zone_id         = aws_route53_zone.default.zone_id
+    name            = "*.k8s-internal"
+    allow_overwrite = true
+    ttl             = "300"
+    type            = "A"
+    ##TODO:  Not sure how internal will work on managed_kubernetes yet
+    ## Feel like an additional internal nginx deployment is how itll work
+    ## This is currently used for machines to resolve to pod IPs using their k8s ingress resource
+    records  = [ "127.0.0.1" ]
+}
+
 resource "aws_route53_record" "default_a_leader_root" {
     count           = contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     zone_id         = aws_route53_zone.default.zone_id

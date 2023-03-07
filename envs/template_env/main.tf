@@ -216,6 +216,7 @@ module "nginx" {
     additional_ssl = var.additional_ssl
 
     cert_port = local.config.cert_port
+    kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
 }
 
 ##NOTE: Uses ansible
@@ -436,6 +437,7 @@ module "kubernetes" {
 
     cloud_provider = local.cloud_provider
     cloud_provider_token = local.cloud_provider_token
+    cloud_controller_version = local.cloud_controller_version
     csi_namespace = local.csi_namespace
     csi_version = local.csi_version
 
@@ -444,6 +446,7 @@ module "kubernetes" {
     local_kubeconfig_path = var.local_kubeconfig_path
     kube_apps = var.kube_apps
     kube_services = var.kube_services
+    kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
 }
 
 resource "null_resource" "configure_smtp" {
@@ -541,6 +544,7 @@ locals {
     region = local.regions[var.active_env_provider]
     cloud_provider = local.cloud_providers[var.active_env_provider]
     cloud_provider_token = local.cloud_provider_tokens[var.active_env_provider]
+    cloud_controller_version = local.cloud_controller_versions[var.active_env_provider]
     csi_namespace = local.csi_namespaces[var.active_env_provider]
     csi_version = local.csi_versions[var.active_env_provider]
     vpc_private_ifaces = {
@@ -570,6 +574,11 @@ locals {
     }
     cloud_provider_tokens = {
         "digital_ocean" = var.do_token
+        "aws" = ""
+        "azure" = ""
+    }
+    cloud_controller_versions = {
+        "digital_ocean" = var.do_cloud_controller_version
         "aws" = ""
         "azure" = ""
     }

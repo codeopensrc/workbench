@@ -139,6 +139,10 @@ locals {
 
 ## dns
 locals {
+    create_kube_records = anytrue([
+        for item in var.config.container_orchestrators: 
+        length(regexall("kubernetes", item)) > 0
+    ])
     cname_aliases = [
         for app in var.config.app_definitions:
         [app.subdomain_name, format("${app.subdomain_name}.db")]

@@ -4,11 +4,12 @@
 VERSION="1.24.7-00"
 HELM_VERSION="3.8.2-1"
 SKAFFOLD_VERSION="2.0.0"
+USE_DOCKER_SHIM="true"
 
 ## TODO: Predict interface, eth1 if available otherwise eth0 
 NET_IFACE=eth1
 
-while getopts "i:v:h:s:gr" flag; do
+while getopts "i:v:h:s:p:gr" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         i) NET_IFACE=$OPTARG;;
@@ -17,6 +18,7 @@ while getopts "i:v:h:s:gr" flag; do
         h) HELM_VERSION=$OPTARG;;
         s) SKAFFOLD_VERSION=$OPTARG;;
         r) RESET="true";;
+        p) CLOUD_PROVIDER=$OPTARG;;
     esac
 done
 
@@ -29,6 +31,9 @@ function getclusterjoin() {
 
 if [[ -n $GET_JOIN ]]; then getclusterjoin; exit; fi
 
+if [[ $USE_DOCKER_SHIM = "true" ]]; then
+    ADDITIONAL_FLAGS="--cri-socket=unix:///var/run/cri-dockerd.sock"
+fi
 
 ## TODO: Detect currently installed kubectl and install/upgrade if our provided version different
 
@@ -76,8 +81,6 @@ if [[ ! -f $HOME/.local/bin/skaffold ]] && [[ ! -f /usr/local/bin/skaffold ]] &&
     rm -rf /tmp/skaffold-linux
 fi
 
-## Moving to installation and stopping kubelet in packer, so ensure its enabled here
-systemctl start kubelet
 
 ### Reset cluster
 ### ATM these are instuctions and not runnable via arg
@@ -109,7 +112,7 @@ if [[ $RESET = "true" ]]; then
     ############################################################
 
     #### On main/controlplane
-    #kubeadm reset
+    #kubeadm reset --cri-socket=unix:///var/run/cri-dockerd.sock
     #rm -rf /etc/cni/net.d
     #rm $HOME/.kube/config  or  rm -rf $HOME/.kube   to nuke it
     #iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
@@ -136,71 +139,75 @@ EOF
 
 sudo sysctl --system
 
-
-## Ive run on each node so far, not sure if we just need on controlplane
-## configure cgroup driver
-### TODO: Docs no longer show these being needed/used
-### So far worked without it
-
-#sudo mkdir -p /etc/docker
-#cat <<EOF | sudo tee /etc/docker/daemon.json
-#{
-#  "exec-opts": ["native.cgroupdriver=systemd"],
-#  "log-driver": "json-file",
-#  "log-opts": {
-#    "max-size": "100m"
-#  },
-#  "storage-driver": "overlay2"
-#}
-#EOF
-#sudo systemctl enable docker
-#sudo systemctl daemon-reload
-#sudo systemctl restart docker
-
-
 mkdir -p $HOME/.kube
 rm $HOME/.kube/joininfo.txt
-
-## The cgroup driver is systemd by default in 1.22+ kubernetes versions
-#https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/configure-cgroup-driver/#configuring-the-kubelet-cgroup-driver
 
 ### Kubernetes 1.24+ deprecated the dockershim integrated in kubernetes for the container runtime
 ### The following steps install an adapter to continue using the Docker Engine that is CRI compliant
 ### This has to be done on each node
-### TODO: Now that we have to install go.. adapt this to install specific go versions
+if [[ "$USE_DOCKER_SHIM" = "true" ]]; then
+    ## configure cgroup driver
+    ## The cgroup driver is systemd by default in 1.22+ kubernetes versions
+    #https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/configure-cgroup-driver/#configuring-the-kubelet-cgroup-driver
+    ### If using the cri-dockerd adapter (which we are) we need this to rotate logs (think just the log-driver/size part)
+    sudo mkdir -p /etc/docker
+	cat <<-EOF | sudo tee /etc/docker/daemon.json
+	{
+	  "exec-opts": ["native.cgroupdriver=systemd"],
+	  "log-driver": "json-file",
+	  "log-opts": {
+	    "max-size": "100m"
+	  },
+	  "storage-driver": "overlay2"
+	}
+	EOF
+    sudo systemctl enable docker
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
 
-DIR_BEFORE_INSTALL=$PWD
-### Start
-###Install GO###
-curl -Lo go1.19.3.linux-amd64.tar.gz https://go.dev/dl/go1.19.3.linux-amd64.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go1.19.3.linux-amd64.tar.gz
-rm go1.19.3.linux-amd64.tar.gz
-source ~/.bash_profile
+    DIR_BEFORE_INSTALL=$PWD
 
-git clone https://github.com/Mirantis/cri-dockerd.git /etc/cri-dockerd
-cd /etc/cri-dockerd
-mkdir bin
-go build -o bin/cri-dockerd
-install -o root -g root -m 0755 bin/cri-dockerd /usr/local/bin/cri-dockerd
-cp -a packaging/systemd/* /etc/systemd/system
-sed -i -e 's,/usr/bin/cri-dockerd,/usr/local/bin/cri-dockerd,' /etc/systemd/system/cri-docker.service
-cat /etc/systemd/system/cri-docker.service
-systemctl daemon-reload
-systemctl enable cri-docker.service
-systemctl enable --now cri-docker.socket
-### End
+    ###Install GO###
+    ### TODO: Now that we have to install go.. adapt this to install specific go versions
+    curl -Lo go1.19.3.linux-amd64.tar.gz https://go.dev/dl/go1.19.3.linux-amd64.tar.gz
+    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.19.3.linux-amd64.tar.gz
+    rm go1.19.3.linux-amd64.tar.gz
+    source ~/.bash_profile
 
-cd $DIR_BEFORE_INSTALL
+    git clone https://github.com/Mirantis/cri-dockerd.git /etc/cri-dockerd
+    cd /etc/cri-dockerd
+    mkdir bin
+    go build -o bin/cri-dockerd
+    install -o root -g root -m 0755 bin/cri-dockerd /usr/local/bin/cri-dockerd
+    cp -a packaging/systemd/* /etc/systemd/system
+    sed -i -e 's,/usr/bin/cri-dockerd,/usr/local/bin/cri-dockerd,' /etc/systemd/system/cri-docker.service
+    cat /etc/systemd/system/cri-docker.service
+    systemctl daemon-reload
+    systemctl enable cri-docker.service
+    systemctl enable --now cri-docker.socket
+
+    cd $DIR_BEFORE_INSTALL
+fi
 
 ## Get images
-kubeadm config images pull --cri-socket=unix:///var/run/cri-dockerd.sock
+kubeadm config images pull $ADDITIONAL_FLAGS
 
-## Init cluster
 API_VPC_IP=$(grep "vpc.my_private_ip" /etc/hosts | cut -d " " -f1)
 FEATURE_GATES="--feature-gates=StatefulSetAutoDeletePVC=true"
+if [[ $CLOUD_PROVIDER = "digitalocean" ]]; then 
+    DROPLET_ID=$(curl http://169.254.169.254/metadata/v1/id)
+    CLOUD_ARGS="--cloud-provider=external --provider-id=digitalocean://${DROPLET_ID}"; 
+    #kubectl patch node NODE_NAME -p '{"spec":{"providerID":"digitalocean://DROPLET_ID"}}'
+fi
+
 #https://kubernetes.io/docs/tasks/tls/certificate-rotation/  ## Hoping this works fine
-echo "KUBELET_EXTRA_ARGS=\"--node-ip=$API_VPC_IP --rotate-certificates $FEATURE_GATES\"" > /etc/default/kubelet
-kubeadm init --upload-certs --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$API_VPC_IP --control-plane-endpoint="kube-cluster-endpoint:6443" --cri-socket=unix:///var/run/cri-dockerd.sock | grep -A 1 "^kubeadm join" | tee $HOME/.kube/joininfo.txt
+echo "KUBELET_EXTRA_ARGS=\"--node-ip=$API_VPC_IP --rotate-certificates $CLOUD_ARGS $FEATURE_GATES\"" > /etc/default/kubelet
+sudo systemctl daemon-reload
+systemctl start kubelet
+sleep 5
+
+## Init cluster
+kubeadm init --upload-certs --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$API_VPC_IP --control-plane-endpoint="kube-cluster-endpoint:6443" $ADDITIONAL_FLAGS | grep -A 1 "^kubeadm join" | tee $HOME/.kube/joininfo.txt
 
 
 ### On control-plane copy config file to local dir so we can run commands

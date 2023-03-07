@@ -7,6 +7,8 @@ variable "root_domain_name" { default = "" }
 variable "additional_domains" { default = {} }
 variable "additional_ssl" { default = [] }
 variable "cert_port" {}
+variable "kubernetes_nginx_nodeports" {}
+
 variable "app_definitions" {
     type = map(object({ pull=string, stable_version=string, use_stable=string,
         repo_url=string, repo_name=string, docker_registry=string, docker_registry_image=string,
@@ -61,6 +63,7 @@ resource "null_resource" "provision" {
                 docker_services=${jsonencode(local.docker_services)}
                 kubernetes_nginx_ip="${element(local.lead_private_ips, 0)}"
                 kubernetes_nginx_port="31000"
+                kubernetes_nginx_nodeports="${jsonencode(var.kubernetes_nginx_nodeports)}"
                 kubernetes_subdomains=${jsonencode(local.kubernetes_subdomains)}
                 additional_domains=${jsonencode(var.additional_domains)}
                 proxy_ip="172.17.0.1"'

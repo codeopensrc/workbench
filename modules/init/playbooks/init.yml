@@ -88,20 +88,28 @@
       setup:
         gather_timeout: 5
 
+    - name: check using hostname
+      set_fact:
+        use_hostname: true
+      with_items:
+        - "admin"
+        - root_domain_name
+      when: "item in machine_name"
+
     - name: change hostname
-      command: sudo hostnamectl set-hostname {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}
+      command: sudo hostnamectl set-hostname {{ (use_hostname is defined) | ternary(hostname, machine_name) }}
 
     - name: add hostname
       lineinfile:
         path: /etc/hosts
         regexp: '^127.0.1.1'
-        line: '127.0.1.1 {{ ("admin" in machine_name) | ternary(hostname, root_domain_name) }} {{ machine_name }}'
+        line: '127.0.1.1 {{ (use_hostname is defined) | ternary(hostname, root_domain_name) }} {{ machine_name }}'
 
     - name: add public_ip alias
       lineinfile:
         path: /etc/hosts
-        regexp: '^{{ inventory_hostname }} {{ root_domain_name }} {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}'
-        line: '{{ inventory_hostname }} {{ root_domain_name }} {{ ("admin" in machine_name) | ternary(hostname, machine_name) }}'
+        regexp: '^{{ inventory_hostname }} {{ root_domain_name }} {{ (use_hostname is defined) | ternary(hostname, machine_name) }}'
+        line: '{{ inventory_hostname }} {{ root_domain_name }} {{ (use_hostname is defined) | ternary(hostname, machine_name) }}'
 
     - name: add private_ip alias
       lineinfile:

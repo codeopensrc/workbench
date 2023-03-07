@@ -6,8 +6,9 @@ PATH=$PATH:/usr/bin
 VERSION="1.24.7-00"
 HELM_VERSION="3.8.2-1"
 SKAFFOLD_VERSION="2.0.0"
+USE_DOCKER_SHIM="true"
 
-while getopts "i:t:h:j:k:v:c:s:" flag; do
+while getopts "i:t:h:j:k:v:c:s:p:" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         i) API_VPC_IP=$OPTARG;;
@@ -18,8 +19,13 @@ while getopts "i:t:h:j:k:v:c:s:" flag; do
         v) VERSION=$OPTARG;;
         h) HELM_VERSION=$OPTARG;;
         s) SKAFFOLD_VERSION=$OPTARG;;
+        p) CLOUD_PROVIDER=$OPTARG;;
     esac
 done
+
+if [[ $USE_DOCKER_SHIM = "true" ]]; then
+    ADDITIONAL_JOIN_FLAGS="--cri-socket=unix:///var/run/cri-dockerd.sock"
+fi
 
 ## TODO: Detect currently installed kubectl and install/upgrade if our provided version different
 
@@ -67,9 +73,6 @@ if [[ ! -f $HOME/.local/bin/skaffold ]] && [[ ! -f /usr/local/bin/skaffold ]] &&
     rm -rf /tmp/skaffold-linux
 fi
 
-## Moving to installation and stopping kubelet in packer, so ensure its enabled here
-systemctl start kubelet
-
 
 if [[ -z $JOIN_COMMAND ]]; then
     echo "No join specified, trying consul"
@@ -98,80 +101,83 @@ EOF
 
 sudo sysctl --system
 
-
-## Ive run on each node so far, not sure if we just need on controlplane
-## configure cgroup driver
-### TODO: Docs no longer show these being needed/used
-### So far worked without it
-
-#sudo mkdir -p /etc/docker
-#cat <<EOF | sudo tee /etc/docker/daemon.json
-#{
-#  "exec-opts": ["native.cgroupdriver=systemd"],
-#  "log-driver": "json-file",
-#  "log-opts": {
-#    "max-size": "100m"
-#  },
-#  "storage-driver": "overlay2"
-#}
-#EOF
-#sudo systemctl enable docker
-#sudo systemctl daemon-reload
-#sudo systemctl restart docker
-
-
 mkdir -p $HOME/.kube
-
-## The cgroup driver is systemd by default in 1.22+ kubernetes versions
-#https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/configure-cgroup-driver/#configuring-the-kubelet-cgroup-driver
 
 ### Kubernetes 1.24+ deprecated the dockershim integrated in kubernetes for the container runtime
 ### The following steps install an adapter to continue using the Docker Engine that is CRI compliant
 ### This has to be done on each node
-### TODO: Now that we have to install go.. adapt this to install specific go versions
+if [[ "$USE_DOCKER_SHIM" = "true" ]]; then
+    ## configure cgroup driver
+    ## The cgroup driver is systemd by default in 1.22+ kubernetes versions
+    #https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/configure-cgroup-driver/#configuring-the-kubelet-cgroup-driver
+    ### If using the cri-dockerd adapter (which we are) we need this to rotate logs (think just the log-driver/size part)
+    sudo mkdir -p /etc/docker
+	cat <<-EOF | sudo tee /etc/docker/daemon.json
+	{
+	  "exec-opts": ["native.cgroupdriver=systemd"],
+	  "log-driver": "json-file",
+	  "log-opts": {
+	    "max-size": "100m"
+	  },
+	  "storage-driver": "overlay2"
+	}
+	EOF
+    sudo systemctl enable docker
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
 
-DIR_BEFORE_INSTALL=$PWD
-### Start
-###Install GO###
-curl -Lo go1.19.3.linux-amd64.tar.gz https://go.dev/dl/go1.19.3.linux-amd64.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go1.19.3.linux-amd64.tar.gz
-rm go1.19.3.linux-amd64.tar.gz
-source ~/.bash_profile
+    DIR_BEFORE_INSTALL=$PWD
 
-git clone https://github.com/Mirantis/cri-dockerd.git /etc/cri-dockerd
-cd /etc/cri-dockerd
-mkdir bin
-go build -o bin/cri-dockerd
-install -o root -g root -m 0755 bin/cri-dockerd /usr/local/bin/cri-dockerd
-cp -a packaging/systemd/* /etc/systemd/system
-sed -i -e 's,/usr/bin/cri-dockerd,/usr/local/bin/cri-dockerd,' /etc/systemd/system/cri-docker.service
-cat /etc/systemd/system/cri-docker.service
-systemctl daemon-reload
-systemctl enable cri-docker.service
-systemctl enable --now cri-docker.socket
-### End
+    ###Install GO###
+    ### TODO: Now that we have to install go.. adapt this to install specific go versions
+    curl -Lo go1.19.3.linux-amd64.tar.gz https://go.dev/dl/go1.19.3.linux-amd64.tar.gz
+    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.19.3.linux-amd64.tar.gz
+    rm go1.19.3.linux-amd64.tar.gz
+    source ~/.bash_profile
 
-cd $DIR_BEFORE_INSTALL
+    git clone https://github.com/Mirantis/cri-dockerd.git /etc/cri-dockerd
+    cd /etc/cri-dockerd
+    mkdir bin
+    go build -o bin/cri-dockerd
+    install -o root -g root -m 0755 bin/cri-dockerd /usr/local/bin/cri-dockerd
+    cp -a packaging/systemd/* /etc/systemd/system
+    sed -i -e 's,/usr/bin/cri-dockerd,/usr/local/bin/cri-dockerd,' /etc/systemd/system/cri-docker.service
+    cat /etc/systemd/system/cri-docker.service
+    systemctl daemon-reload
+    systemctl enable cri-docker.service
+    systemctl enable --now cri-docker.socket
 
-## On worker node
+    cd $DIR_BEFORE_INSTALL
+fi
+
 WORKER_VPC_IP=$(grep "vpc.my_private_ip" /etc/hosts | cut -d " " -f1)
-#https://kubernetes.io/docs/tasks/tls/certificate-rotation/  ## Not sure if we need --rotate-certificates on non-master
 FEATURE_GATES="--feature-gates=StatefulSetAutoDeletePVC=true"
-echo "KUBELET_EXTRA_ARGS=\"--node-ip=$WORKER_VPC_IP $FEATURE_GATES\"" > /etc/default/kubelet
-## Replace  {API_VPC_IP}   {TOKEN}   and   {CERT_HASH}
+if [[ $CLOUD_PROVIDER = "digitalocean" ]]; then 
+    DROPLET_ID=$(curl http://169.254.169.254/metadata/v1/id)
+    CLOUD_ARGS="--cloud-provider=external --provider-id=digitalocean://${DROPLET_ID}"; 
+    #kubectl patch node NODE_NAME -p '{"spec":{"providerID":"digitalocean://DROPLET_ID"}}'
+fi
+
+#https://kubernetes.io/docs/tasks/tls/certificate-rotation/  ## Not sure if we need --rotate-certificates on non-master
+echo "KUBELET_EXTRA_ARGS=\"--node-ip=$WORKER_VPC_IP $CLOUD_ARGS $FEATURE_GATES\"" > /etc/default/kubelet
+sudo systemctl daemon-reload
+systemctl start kubelet
+sleep 5
+
+## Join cluster
 if [[ -n $JOIN_COMMAND ]]; then
     echo "Trying joincmd: $JOIN_COMMAND"
     if [[ -n $CERTIFICATE_KEY ]]; then
-        $JOIN_COMMAND --control-plane --apiserver-advertise-address $WORKER_VPC_IP --certificate-key $CERTIFICATE_KEY
+        $JOIN_COMMAND --control-plane --apiserver-advertise-address $WORKER_VPC_IP --certificate-key $CERTIFICATE_KEY $ADDITIONAL_JOIN_FLAGS
     else
-        $JOIN_COMMAND
+        $JOIN_COMMAND $ADDITIONAL_JOIN_FLAGS
     fi
 else
     if [[ -n $CERTIFICATE_KEY ]]; then
         kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${CERT_HASH} --control-plane \
-            --apiserver-advertise-address $WORKER_VPC_IP --certificate-key $CERTIFICATE_KEY
+            --apiserver-advertise-address $WORKER_VPC_IP --certificate-key $CERTIFICATE_KEY $ADDITIONAL_JOIN_FLAGS
     else
-        kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${CERT_HASH}
+        kubeadm join ${API_VPC_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${CERT_HASH} $ADDITIONAL_JOIN_FLAGS
     fi
 fi
 
