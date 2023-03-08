@@ -6,5 +6,5 @@ configMapData:
   OAUTH2_SERVER_URL: "https://gitlab.{{ root_domain_name }}/"
   OAUTH2_ENABLED: true
 secretStringData:
-  OAUTH2_CLIENT_ID: "{{ wekan_app_id.stdout }}"
-  OAUTH2_SECRET: "{{ wekan_secret.stdout }}"
+  OAUTH2_CLIENT_ID: "{{ wekan_app_id.data | ternary(wekan_app_id.data.Value, '') }}"
+  OAUTH2_SECRET: "{{ wekan_secret.data | ternary(wekan_secret.data.Value, '') }}"

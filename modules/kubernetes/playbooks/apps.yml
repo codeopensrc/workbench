@@ -8,16 +8,21 @@
     root_domain_name: "{{ root_domain_name }}"
     tmp_remote_values_dir: "/root/.kube"
   tasks:
-    ## TODO: pass in via consul provider
+    - name: install consule prerequisites
+      pip:
+        name:
+          - python-consul
+
     - name: get wekan oauth app_id
+      community.general.consul_kv:
+        key: wekan/app_id
       register: wekan_app_id
-      command: consul kv get wekan/app_id
       when: "'wekan' in (apps | list)"
 
-    ## TODO: pass in via consul provider
     - name: get wekan oauth secret
+      community.general.consul_kv:
+        key: wekan/secret
       register: wekan_secret
-      command: consul kv get wekan/secret
       when: "'wekan' in (apps | list)"
 
     - name: add values files
