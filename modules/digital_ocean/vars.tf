@@ -221,12 +221,13 @@ locals {
     }
 }
 
-## managed_kubernetes
+## kubernetes/managed_kubernetes
 locals {
     use_lb = contains(var.config.container_orchestrators, "managed_kubernetes")
-    lb_name = "${var.config.server_name_prefix}-${var.config.region}-lb"
-    lb_http_nodeport = 31000  ## Must be valid kubernetes nodeport: 30000-32767
-    lb_https_nodeport = 32000 ## Must be valid kubernetes nodeport: 30000-32767
+    use_kube_managed_lb = length(local.cfg_servers) == 1 && local.create_kube_records
+    lb_name = "${var.config.do_lb_name}"
+    lb_http_nodeport = var.config.kubernetes_nginx_nodeports.http ## Must be valid kubernetes nodeport: 30000-32767
+    lb_https_nodeport = var.config.kubernetes_nginx_nodeports.https ## Must be valid kubernetes nodeport: 30000-32767
 }
 
 terraform {

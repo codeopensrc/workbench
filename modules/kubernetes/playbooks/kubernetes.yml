@@ -22,6 +22,7 @@
 - name: HANDLE KUBERNETES ADMIN
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
+  tags: admin
   vars:
     cloud_provider: "{{ cloud_provider }}"
     kubernetes_version: "{{ kubernetes_version }}"
@@ -190,6 +191,7 @@
   ### (lead) NOT IN (admin+lead | first)
   hosts: "{{ (groups.lead) | difference( ((groups.admin + groups.lead) | first) ) }}"
   remote_user: root
+  tags: controlplane
   gather_facts: no
   vars:
     cloud_provider: "{{ cloud_provider }}"
@@ -217,6 +219,7 @@
   ### (db+build) NOT IN (admin+lead)
   hosts: "{{ (groups.db + groups.build) | difference(groups.admin + groups.lead) }}"
   remote_user: root
+  tags: worker
   gather_facts: no
   vars:
     cloud_provider: "{{ cloud_provider }}"
@@ -350,9 +353,39 @@
       when: cloud_provider == "digitalocean" and cloud_provider_token != ""
 
 
+- name: APPLY CERTMANAGER ISSUER
+  hosts: "{{ (groups.admin + groups.lead) | first }}"
+  remote_user: root
+  tags: cert
+  vars:
+    root_domain_name: "{{ root_domain_name }}"
+    contact_email: "{{ contact_email }}"
+    kube_dir: "/root/.kube"
+    certmanager_namespace: "cert-manager"
+  tasks:
+    - name: create cert-manager namespace
+      k8s:
+        api_version: v1
+        name: "{{ certmanager_namespace }}"
+        kind: namespace
+        state: present
+
+    - name: add cert cluster issuers
+      template:
+        src: ansiblefiles/cert-clusterissuers.yaml
+        dest: "{{ kube_dir }}/cert-clusterissuers.yaml"
+
+    - name: apply cert issuers
+      k8s:
+        namespace: "{{ certmanager_namespace }}"
+        state: present
+        src: "{{ kube_dir }}/cert-clusterissuers.yaml"
+
+
 - name: REBOOT GITLAB ENVIRONMENTS
   hosts: "{{ (groups.admin | length > 0) | ternary( (groups.admin|first), [] ) }}"
   remote_user: root
+  tags: gitlab
   vars:
     root_domain_name: "{{ root_domain_name }}"
     import_gitlab: "{{ import_gitlab }}"
@@ -418,6 +451,7 @@
 - name: UPDATE COREDNS
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
+  tags: coredns
   vars:
     root_domain_name: "{{ root_domain_name }}"
     configmap_keys: []
@@ -471,9 +505,9 @@
   ## For now just the main config - so we dont clobber if merging locally
   hosts: "{{ (groups.admin + groups.lead) | first }}"
   remote_user: root
+  tags: pull
   vars:
     root_domain_name: "{{ root_domain_name }}"
-  tags: pull
   tasks:
     - name: update kubeconfig values
       shell: |

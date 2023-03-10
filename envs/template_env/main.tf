@@ -426,6 +426,7 @@ module "kubernetes" {
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
     root_domain_name = local.root_domain_name
+    contact_email = var.contact_email
     import_gitlab = var.import_gitlab
     vpc_private_iface = local.vpc_private_iface
     active_env_provider = var.active_env_provider
@@ -547,6 +548,8 @@ locals {
     cloud_controller_version = local.cloud_controller_versions[var.active_env_provider]
     csi_namespace = local.csi_namespaces[var.active_env_provider]
     csi_version = local.csi_versions[var.active_env_provider]
+    lb_name = local.lb_names[var.active_env_provider]
+
     vpc_private_ifaces = {
         "digital_ocean" = "eth1"
         "aws" = "ens5"
@@ -592,6 +595,12 @@ locals {
         "aws" = ""
         "azure" = ""
     }
+    lb_names = {
+        "digital_ocean" = "${local.server_name_prefix}-${local.region}-lb"
+        "aws" = ""
+        "azure" = ""
+    }
+
 
     ###! workspace based
     ansible_hostfile = "./${terraform.workspace}_ansible_hosts"
@@ -730,11 +739,13 @@ locals {
         app_ips = var.app_ips
         station_ips = var.station_ips
         cert_port = 7080
+        kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
 
         ## Credentials/Cloud
         do_token = var.do_token
         do_region = var.do_region
         do_ssh_fingerprint = var.do_ssh_fingerprint
+        do_lb_name = local.lb_name
 
         aws_key_name = var.aws_key_name
         aws_access_key = var.aws_access_key

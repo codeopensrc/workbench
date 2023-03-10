@@ -163,3 +163,45 @@ resource "digitalocean_droplet" "main" {
         on_failure = continue
     }
 }
+
+## Creating LB here if kubernetes so dns can point to the ip for single node atm
+## TODO: Logic in kubernetes module to update DNS to nginx ingress controller 
+## provisioned loadbalancer IP if workers > 0
+## Otherwise we could _maybe_ just have the loadbalancer ignore all changes
+## We'd also have to export the load balancer id which im not fond of
+resource "digitalocean_loadbalancer" "main" {
+    count  = local.use_lb || local.use_kube_managed_lb ? 1 : 0
+    name   = local.lb_name
+    region = var.config.region
+
+    lifecycle {
+        ignore_changes = [name]
+    }
+
+    forwarding_rule {
+        entry_port      = 80
+        entry_protocol  = "tcp"
+        target_port     = local.lb_http_nodeport
+        target_protocol = "tcp"
+    }
+    forwarding_rule {
+        entry_port      = 443
+        entry_protocol  = "tcp"
+        target_port     = local.lb_https_nodeport
+        target_protocol = "tcp"
+    }
+
+    healthcheck {
+        check_interval_seconds = 3
+        port     = local.lb_http_nodeport
+        protocol = "tcp"
+    }
+    #enable_proxy_protocol = true
+    vpc_uuid = digitalocean_vpc.terraform_vpc.id
+
+    ##TODO: If nginx takes over it wipes droplet ids atm
+    droplet_ids = (local.use_kube_managed_lb
+        ? [ for name, attr in digitalocean_droplet.main: attr.id ]
+        : []
+    )
+}

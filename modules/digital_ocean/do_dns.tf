@@ -107,6 +107,8 @@ resource "digitalocean_record" "default_a_leader" {
     type   = "A"
     ttl    = "300"
     value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    ##TODO: Once all apps migrated over to kubernetes/ingress
+    #value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
 resource "digitalocean_record" "default_a_k8s_leader" {
@@ -115,7 +117,7 @@ resource "digitalocean_record" "default_a_k8s_leader" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
 resource "digitalocean_record" "default_a_k8s_internal_leader" {
@@ -137,6 +139,8 @@ resource "digitalocean_record" "default_a_leader_root" {
     type   = "A"
     ttl    = "300"
     value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    ##TODO: Maybe once all apps migrated over to kubernetes/ingress - not sure yet
+    #value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
 resource "digitalocean_record" "additional_ssl" {

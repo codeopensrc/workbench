@@ -96,6 +96,15 @@ variable "kube_services" {
     }))
 
     default = {
+        certmanager = {
+            "enabled"          = false
+            "chart"            = "cert-manager"
+            "namespace"        = "cert-manager"
+            "create_namespace" = true
+            "chart_url"        = "https://charts.jetstack.io"
+            "chart_version"    = "v1.11.0"
+            "opt_value_files"  = ["certmanager-values.yaml"]
+        }
         prometheus = {
             "enabled"          = false
             "chart"            = "prometheus"

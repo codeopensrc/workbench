@@ -29,32 +29,6 @@ locals {
 }
 
 
-resource "digitalocean_loadbalancer" "main" {
-    count  = local.use_lb ? 1 : 0
-    name   = local.lb_name
-    region = var.config.region
-
-    forwarding_rule {
-        entry_port      = 80
-        entry_protocol  = "tcp"
-        target_port     = local.lb_http_nodeport
-        target_protocol = "tcp"
-    }
-    forwarding_rule {
-        entry_port      = 443
-        entry_protocol  = "tcp"
-        target_port     = local.lb_https_nodeport
-        target_protocol = "tcp"
-    }
-
-    healthcheck {
-        check_interval_seconds = 3
-        port     = local.lb_http_nodeport
-        protocol = "tcp"
-    }
-    enable_proxy_protocol = true
-    vpc_uuid = digitalocean_vpc.terraform_vpc.id
-}
 
 ##! To save a copy of the kubeconfig locally
 ##! Must be authenticated to use `doctl kubernetes` command

@@ -8,6 +8,7 @@ variable "server_count" {}
 
 variable "gitlab_runner_tokens" {}
 variable "root_domain_name" {}
+variable "contact_email" {}
 variable "import_gitlab" {}
 variable "vpc_private_iface" {}
 variable "active_env_provider" {}
@@ -29,6 +30,8 @@ variable "local_kubeconfig_path" {}
 variable "kube_apps" {}
 variable "kube_services" {}
 variable "kubernetes_nginx_nodeports" {}
+#variable "lb_name" {}
+#variable "lb_id" {}
 
 locals {
     all_names = flatten([for role, hosts in var.ansible_hosts: hosts[*].name])
@@ -61,6 +64,13 @@ locals {
             hosts:
             - prom.k8s-internal.${var.root_domain_name}
         EOF
+        ###TODO: _maybe_ tell nginx to use our lb based on id when more 1+ workers
+        ###   or make an api call to change DNS to our new nginx loadbalancer ip without pre-provisioning it
+        ### atm digital ocean removes/wont assign droplets to lb if its a control-plane
+        #service:
+        #  type: LoadBalancer
+        #  annotations: 
+        #    kubernetes.digitalocean.com/load-balancer-id: "${var.lb_id}"
         nginx = <<-EOF
         controller:
           service:
@@ -102,12 +112,14 @@ resource "null_resource" "kubernetes" {
     ##  azure private iface = eth0
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/kubernetes.yml -i ${var.ansible_hostfile} --extra-vars \
+            ansible-playbook ${path.module}/playbooks/kubernetes.yml -i ${var.ansible_hostfile} \
+                --extra-vars \
                 'kubernetes_version=${var.kubernetes_version}
                 buildkitd_version=${var.buildkitd_version}
                 gitlab_runner_tokens=${jsonencode(var.gitlab_runner_tokens)}
                 vpc_private_iface=${var.vpc_private_iface}
                 root_domain_name=${var.root_domain_name}
+                contact_email=${var.contact_email}
                 admin_servers=${var.admin_servers}
                 server_count=${var.server_count}
                 active_env_provider=${var.active_env_provider}
@@ -169,6 +181,7 @@ resource "null_resource" "apps" {
     }
 }
 
+## TODO: Probably separate and create helm module
 resource "helm_release" "services" {
     for_each = {
         for servicename, service in var.kube_services:
