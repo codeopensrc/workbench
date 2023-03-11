@@ -649,6 +649,11 @@ locals {
 
     cleanup_kube_volumes = terraform.workspace == "default" ? false : var.cleanup_kube_volumes
 
+    create_kube_records = anytrue([
+        for item in var.container_orchestrators: 
+        length(regexall("kubernetes", item)) > 0
+    ])
+
     remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
         ? data.terraform_remote_state.cloud.outputs.hosts : {})
 
@@ -740,6 +745,7 @@ locals {
         station_ips = var.station_ips
         cert_port = 7080
         kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
+        create_kube_records = local.create_kube_records
 
         ## Credentials/Cloud
         do_token = var.do_token

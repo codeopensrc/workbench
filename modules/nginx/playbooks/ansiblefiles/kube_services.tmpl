@@ -38,24 +38,7 @@ server {
 
 server {
     listen *:80;
-    server_name *.dev.{{ root_domain_name }};
-    resolver 127.0.0.53;
-
-    location /.well-known/ {
-        proxy_pass http://{{ cert_domain }}:{{ cert_port }}$request_uri;
-    }
-
-    location / {
-        ## proxy_cache important for multiple dynamic subdomains
-        proxy_cache off;
-        proxy_set_header Host $host;
-        proxy_pass http://{{ kube_nginx_ip }}:{{ kube_nginx_port }};
-    }
-}
-
-server {
-    listen *:80;
-    server_name *.beta.{{ root_domain_name }} {{ kube_subdomains | join(" ") }};
+    server_name {{ kube_subdomains | join(" ") }};
     resolver 127.0.0.53;
 
     location /.well-known/ {
@@ -69,7 +52,7 @@ server {
 
 server {
     #listen 443 ssl;
-    server_name *.beta.{{ root_domain_name }} {{ kube_subdomains | join(" ") }};
+    server_name {{ kube_subdomains | join(" ") }};
     server_tokens off;
 
     #ssl_certificate     /etc/letsencrypt/live/{{ root_domain_name }}/fullchain.pem;

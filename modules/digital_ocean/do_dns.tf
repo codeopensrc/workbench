@@ -147,18 +147,19 @@ resource "digitalocean_record" "default_a_leader_root" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
-    ##TODO: Maybe once all apps migrated over to kubernetes/ingress - not sure yet
-    #value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
 resource "digitalocean_record" "additional_ssl" {
     count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? length(var.config.additional_ssl) : 0
     name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
     domain = digitalocean_domain.default.name
-    type   = "CNAME"
     ttl    = "300"
-    value  = "${var.config.root_domain_name}."
+    type   = local.use_lb || local.use_kube_managed_lb ? "A" : "CNAME"
+    value  = (local.use_lb || local.use_kube_managed_lb
+        ? (local.has_admin ? local.dns_admin : local.dns_lead)
+        : "${var.config.root_domain_name}."
+    )
 }
 
 resource "digitalocean_record" "misc_cname" {

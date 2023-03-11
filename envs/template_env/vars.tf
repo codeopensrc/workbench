@@ -227,7 +227,7 @@ variable "db_arecord_aliases" {
 }
 
 variable "leader_arecord_aliases" {
-    default = [ "*.dev", "*.beta" ]
+    default = [ ]
 }
 
 variable "additional_ssl" {
