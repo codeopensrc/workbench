@@ -144,12 +144,27 @@ resource "azurerm_dns_a_record" "default_a_leader" {
     #], 0)
 }
 
+resource "azurerm_dns_a_record" "default_a_wildcard_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    name            = "*"
+    zone_name           = azurerm_dns_zone.default.name
+    resource_group_name = azurerm_resource_group.main.name
+    ttl                 = 300
+    #TODO: Loadbalancer
+    records  = [ local.dns_lead ]
+    #target_resource_id   = element([
+    #    for key, pip in azurerm_public_ip.main: pip.id
+    #    if pip.ip_address == local.dns_lead
+    #], 0)
+}
+
 resource "azurerm_dns_a_record" "default_a_k8s_leader" {
     count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name            = "*.k8s"
     zone_name           = azurerm_dns_zone.default.name
     resource_group_name = azurerm_resource_group.main.name
     ttl                 = 300
+    #TODO: Loadbalancer
     records  = [ local.dns_lead ]
     #target_resource_id   = element([
     #    for key, pip in azurerm_public_ip.main: pip.id

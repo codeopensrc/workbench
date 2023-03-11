@@ -132,6 +132,17 @@ resource "aws_route53_record" "default_a_leader" {
     records  = [ local.dns_lead ]
 }
 
+resource "aws_route53_record" "default_a_wildcard_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    zone_id         = aws_route53_zone.default.zone_id
+    name            = "*"
+    allow_overwrite = true
+    ttl             = "300"
+    type            = "A"
+    ## TODO: Loadbalancer
+    records = [ local.dns_lead ]
+}
+
 resource "aws_route53_record" "default_a_k8s_leader" {
     count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     zone_id         = aws_route53_zone.default.zone_id
@@ -139,6 +150,7 @@ resource "aws_route53_record" "default_a_k8s_leader" {
     allow_overwrite = true
     ttl             = "300"
     type            = "A"
+    ## TODO: Loadbalancer
     records = [ local.dns_lead ]
 }
 

@@ -111,6 +111,15 @@ resource "digitalocean_record" "default_a_leader" {
     #value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
+resource "digitalocean_record" "default_a_wildcard_leader" {
+    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
+    name   = "*"
+    domain = digitalocean_domain.default.name
+    type   = "A"
+    ttl    = "300"
+    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+}
+
 resource "digitalocean_record" "default_a_k8s_leader" {
     count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name   = "*.k8s"
