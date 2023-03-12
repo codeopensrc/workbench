@@ -55,6 +55,7 @@
         create_namespace: "{{ item.value.create_namespace | default(true) }}"
         wait: "{{ item.value.wait | default(300) }}"
         values_files: "{{ item.value.opt_value_files | map('regex_replace', '^(.*)', tmp_remote_values_dir+'/\\1') | list }}"
+        dependency_update: true
       loop: "{{ query('dict', apps) }}"
       when: "item.value.repo_url != ''"
 
@@ -70,6 +71,7 @@
         chart_version: "{{ item.value.chart_version | default('latest') }}"
         wait: "{{ item.value.wait | default(300) }}"
         values_files: "{{ item.value.opt_value_files | map('regex_replace', '^(.*)', tmp_remote_values_dir+'/\\1')) | list }}"
+        dependency_update: true
       loop: "{{ query('dict', apps) }}"
       when: "item.value.chart_url != ''"
 

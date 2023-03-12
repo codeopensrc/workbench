@@ -32,7 +32,7 @@
 ## https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#add-imagepullsecrets-to-a-service-account
 
 ### Allow namespaced project level service accounts to
-###  Deploy to dev, beta, and prod
+###  Deploy to beta, and prod
 
 ### Allow environment level service accounts to delete themselves
 ### OR namespaced project level service accoun to delete
@@ -81,8 +81,8 @@ GL_BUILDKIT_CLUSTER_ROLE_NAME="buildkit-access-clusterrole"
 GL_BUILDER_CLUSTER_ROLE_NAME="builder-clusterrole"
 PUB_CA_FILE_LOCATION=$HOME/.kube/pub-ca.crt
 
-NAMESPACES_DEFAULTS=( "review" "dev" "beta" "production" )
-NAMESPACES=("dev")
+NAMESPACES_DEFAULTS=( "review" "beta" "production" )
+NAMESPACES=("review")
 
 RUNNER_TOKEN=""
 KUBE_API_HOST_URL=""
@@ -105,7 +105,7 @@ while getopts "a:b:d:h:i:l:n:t:v:ou" flag; do
     esac
 done
 
-## TODO: Need to convert a string "dev,beta,production" into array
+## TODO: Need to convert a string "beta,production" into array
 
 
 if [[ -z "$RUNNER_TOKEN" ]]; then RUNNER_TOKEN=$(consul kv get gitlab/runner_token); exit; fi
@@ -181,13 +181,6 @@ metadata:
   name: $PROD_BUILD_FROM_NAMESPACE_NAME
   labels:
     name: $PROD_BUILD_FROM_NAMESPACE_NAME
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: dev
-  labels:
-    name: dev
 ---
 apiVersion: v1
 kind: Namespace
@@ -297,19 +290,19 @@ for NAMESPACE in ${NAMESPACES[@]}; do
     ###  for the namespace if im correct
     ### The namespace provided to the runner is where we CREATE the build/runner pods so
     ###  we at least need permissions in each of those namespaces. 
-    ### Id like to have 2 service accounts, review and deploy, 4 namespaces, deploy dev beta prod
+    ### Id like to have 2 service accounts, review and deploy, 3 namespaces, deploy beta prod
     ### What I thought is beinding the reiew and deploy account in the appropriate namespaces would be enough
     ### But that only allows to DEPLOY to those namespaces, the service account itself must exist in the namespace
     ###  in order to create pods FROM that namespace, is what im getting as a conclusion
     ### So we dont need a REVIEW namespace because it is gitlab managed and deploys to the respective namespaces
 
-    ### One deploy namespace to launch FROM and dev beta prod namespaces to launch TO and separate the apps
+    ### One deploy namespace to launch FROM and beta prod namespaces to launch TO and separate the apps
     ### We could technically deploy from default but I feel like thats just bad practice
     ### First rolebinding declares our role in the DEPLOYFROM namespace for DEPLOYACCOUNT 
     ### Second rolebinding declares our role in the DEPLOYTO namespace for DEPLOYACCOUNT
 
     ###  The second rolebinding is needed because they are NOT "gitlab managed clusters" - This is so we can
-    ###   have multiple dev/beta/prod deployments across projects under one namespace - a convention of how we organize apps/runners
+    ###   have multiple beta/prod deployments across projects under one namespace - a convention of how we organize apps/runners
     ###   Also our subdomain -> service dns resolving requires a predefined namespace versus dynamic namespaces (the type gitlab gives per project)
 
     ### === This does bring to attention networking security across namespaces and what they can access since theyre in the same network
@@ -317,7 +310,7 @@ for NAMESPACE in ${NAMESPACES[@]}; do
 
     ## Create accounts and rolebindings in the $DEPLOY_FROM_NAMESPACE_NAME
     ## We use $NAMESPACE as we only want to create 2 accounts and rolebindings per namespace here
-    if [[ $NAMESPACE = "review" || $NAMESPACE = "dev" ]]; then
+    if [[ $NAMESPACE = "review" ]]; then
         ### $DEPLOY-kube-runner
 	cat <<-EOF >> $GL_ACCOUNT_FILE_LOCATION
 	apiVersion: v1
@@ -424,7 +417,7 @@ for NAMESPACE in ${NAMESPACES[@]}; do
     kubectl apply -f $GL_BUILDKIT_FILE_LOCATION
 
 
-    if [[ $NAMESPACE = "review" || $NAMESPACE = "dev" ]]; then
+    if [[ $NAMESPACE = "review" ]]; then
 
         ## Had an issue where the token was possibly created before the service account was created/propagated
         ## Caused permission issues for the service account attached to runners

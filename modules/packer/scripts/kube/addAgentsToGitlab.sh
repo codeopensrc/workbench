@@ -5,7 +5,7 @@
 
 ## For now a single agent works - going to use 1 until we have a reason not to
 AGENT_NAME_DEFAULTS=( "review" )
-#AGENT_NAME_DEFAULTS=( "review" "dev" "beta" "production" )
+#AGENT_NAME_DEFAULTS=( "review" "beta" "production" )
 
 GL_CLUSTER_AGENT_ROLE_NAME=gitlab-agent-clusterrole
 GL_AGENT_FILE_LOCATION=$HOME/.kube/gitlab-agent-service-account.yaml
@@ -221,7 +221,6 @@ for AGENT_NAME in ${AGENT_NAMES[@]}; do
     ###! https://gitlab.codeopensrc.com/os/workbench/-/issues/45
     ### For now we'll just mimic runner permissions until we determine exact permissions needed
     ### Agent names mimic our runner namespaces
-    #if [[ $AGENT_NAME = "review" ]] || [[ $AGENT_NAME = "dev" ]]; then 
     #if [[ $AGENT_NAME = "review" ]]; then 
     #    cat <<-EOF >> $GL_AGENT_FILE_LOCATION
     #    apiVersion: v1

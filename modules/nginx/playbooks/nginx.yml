@@ -29,6 +29,11 @@
         path: /etc/nginx/conf.d
         state: directory
 
+    - name: k8s template
+      template:
+        src: ansiblefiles/k8s.tmpl
+        dest: /etc/nginx/conf.d/k8s.conf
+
     - name: docker_services template
       template:
         src: ansiblefiles/mainproxy.tmpl
