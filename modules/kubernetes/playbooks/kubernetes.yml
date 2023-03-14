@@ -107,29 +107,6 @@
           - pyyaml ## Maybe dont need with "--user" arg now
         extra_args: --user
 
-    ##TODO: Template k8s manifest or use helm instead of script
-    ##TODO: Apps change to update deployment
-    - name: init nginxKubeProxy
-      block:
-        - name: check nginxKubeProxy started
-          changed_when: false
-          k8s:
-            api_version: apps/v1
-            kind: deployment
-            name: nginx-proxy
-            namespace: default
-      rescue:
-        - name: install nginxKubeProxy
-          command: bash $HOME/code/scripts/kube/nginxKubeProxy.sh -r {{ root_domain_name }} {{ nginx_args }}
-
-    - name: scale nginx-proxy deployment
-      k8s_scale:
-        api_version: apps/v1
-        kind: deployment
-        name: nginx-proxy
-        namespace: default
-        replicas: "{{ (server_count | int == 1) | ternary(2, server_count) }}" ## Primitive but should work
-
     - name: create buildkitd namespace
       k8s:
         api_version: v1

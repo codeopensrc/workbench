@@ -1,5 +1,13 @@
 #!/bin/bash
 
+
+##############
+##############
+#### NOTE: Script officially sunset by ingress-nginx helmchart
+#### Keeping it around for a bit for the creativity used
+##############
+##############
+
 ROOT_DOMAIN=$(consul kv get domainname)
 CONSUL_KV_APPS="applist/"
 PROD_NS="production"
