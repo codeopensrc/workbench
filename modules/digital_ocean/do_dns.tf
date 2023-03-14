@@ -61,7 +61,7 @@ resource "digitalocean_record" "default_stun_a" {
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.dns_lead
+    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
 }
 
 resource "digitalocean_record" "default_cname" {

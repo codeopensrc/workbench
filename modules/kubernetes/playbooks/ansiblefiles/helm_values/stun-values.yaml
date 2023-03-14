@@ -1,0 +1,13 @@
+app:
+  image:
+    tag: "{{ item.0.value.image_tag }}"
+  svcDiscovery:
+    consul:
+      enabled: true
+      env:
+        CONSUL_HOST: consul.{{ root_domain_name }}
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    hosts:
+      - host: stun.{{ root_domain_name }}

@@ -36,7 +36,7 @@ variable "azure_image_os" {
 
 ########## MISC CONFIG/VARIABLES ##########
 ############################################
-variable "stun_port" { default = "" }
+variable "stun_port" { default = 3478 }
 variable "postgres_port" { default = "5432" } ## Not fully implemented - consulchecks atm
 variable "redis_port" { default = "6379" } ## Not fully implemented - consulchecks atm
 variable "mongo_port" { default = "27017" } ## Not fully implemented - consulchecks atm
@@ -44,7 +44,14 @@ variable "kubernetes_nginx_nodeports" {
     default = {
         http = 32080
         https = 32443
-        tcp = 32808
+        #udp = {
+        #    3478 = "default/stun-app:3478"
+        #    9000 = "udp_svc_namespace/udp_svc_name:3478"
+        #}
+        #tcp = {
+        #    3478 = "default/stun-app:3478"
+        #    9000 = "tcp_svc_namespace/tcp_svc_name:3478"
+        #}
     }
 }
 

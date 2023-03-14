@@ -57,6 +57,14 @@ locals {
     app_helm_value_files = fileset("${local.app_helm_value_files_dir}/", "*[^.swp]")
     app_helm_value_files_sha = sha1(join("", [for f in local.app_helm_value_files: filesha1("${local.app_helm_value_files_dir}/${f}")]))
 
+    kube_formatted_udp_ports = join("\n  ", [
+        for port, dest in lookup(var.kubernetes_nginx_nodeports, "udp", {}):
+        "${port}: ${dest}"
+    ])
+    kube_formatted_tcp_ports = join("\n  ", [
+        for port, dest in lookup(var.kubernetes_nginx_nodeports, "tcp", {}):
+        "${port}: ${dest}"
+    ])
     tf_helm_values = {
         prometheus = <<-EOF
         server:
@@ -72,13 +80,15 @@ locals {
         #  annotations: 
         #    kubernetes.digitalocean.com/load-balancer-id: "${var.lb_id}"
         nginx = <<-EOF
+        tcp:
+          ${local.kube_formatted_tcp_ports}
+        udp:
+          ${local.kube_formatted_udp_ports}
         controller:
           service:
             nodePorts:
               http: ${var.kubernetes_nginx_nodeports.http}
               https: ${var.kubernetes_nginx_nodeports.https}
-              tcp:
-                8080: ${var.kubernetes_nginx_nodeports.tcp}
         EOF
     }
 }

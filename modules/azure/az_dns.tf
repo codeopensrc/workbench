@@ -80,6 +80,7 @@ resource "azurerm_dns_a_record" "default_stun_a" {
     zone_name           = azurerm_dns_zone.default.name
     resource_group_name = azurerm_resource_group.main.name
     ttl                 = 300
+    #TODO: Loadbalancer
     records             = [ local.dns_lead ]
     #target_resource_id   = element([
     #    for key, pip in azurerm_public_ip.main: pip.id

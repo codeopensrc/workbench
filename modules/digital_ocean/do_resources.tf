@@ -190,6 +190,24 @@ resource "digitalocean_loadbalancer" "main" {
         target_port     = local.lb_https_nodeport
         target_protocol = "tcp"
     }
+    dynamic "forwarding_rule" {
+        for_each = local.lb_udp_nodeports
+        content {
+            entry_port      = forwarding_rule.key
+            entry_protocol  = "udp"
+            target_port     = forwarding_rule.value
+            target_protocol = "udp"
+        }
+    }
+    dynamic "forwarding_rule" {
+        for_each = local.lb_tcp_nodeports
+        content {
+            entry_port      = forwarding_rule.key
+            entry_protocol  = "tcp"
+            target_port     = forwarding_rule.value
+            target_protocol = "tcp"
+        }
+    }
 
     healthcheck {
         check_interval_seconds = 3

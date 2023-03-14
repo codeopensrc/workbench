@@ -79,6 +79,7 @@ resource "aws_route53_record" "default_stun_a" {
     allow_overwrite = true
     type            = "A"
     ttl             = "300"
+    ## TODO: Loadbalancer
     records  = [ local.dns_lead ]
 }
 

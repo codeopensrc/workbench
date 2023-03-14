@@ -205,6 +205,26 @@ locals {
     }
 }
 
+##TODO
+## kubernetes/managed_kubernetes
+#locals {
+#    use_lb = contains(var.config.container_orchestrators, "managed_kubernetes")
+#    use_kube_managed_lb = length(local.cfg_servers) == 1 && local.create_kube_records
+#    lb_name = "${var.config.do_lb_name}"
+#    lb_http_nodeport = var.config.kubernetes_nginx_nodeports.http ## Must be valid kubernetes nodeport: 30000-32767
+#    lb_https_nodeport = var.config.kubernetes_nginx_nodeports.https ## Must be valid kubernetes nodeport: 30000-32767
+#    lb_starting_udp_nodeport = 31100
+#    lb_starting_tcp_nodeport = 31200
+#    lb_udp_nodeports = {
+#        for ind, port in keys(lookup(var.config.kubernetes_nginx_nodeports, "udp", {})):
+#        "${port}" => sum([local.lb_starting_udp_nodeport, ind])
+#    }
+#    lb_tcp_nodeports = {
+#        for ind, port in keys(lookup(var.config.kubernetes_nginx_nodeports, "tcp", {})):
+#        "${port}" => sum([local.lb_starting_tcp_nodeport, ind])
+#    }
+#}
+
 terraform {
     required_providers {
         azurerm = {

@@ -85,6 +85,34 @@ variable "kube_apps" {
         #    "wait"             = true
         #    "opt_value_files"  = ["example-values.yaml"]
         #},
+        wekan = {
+            "enabled"          = false
+            "image_tag"        = "v5.35"
+            "repo_name"        = "wekan"
+            "repo_url"         = "https://gitlab.codeopensrc.com/os/wekan.git"
+            "release_name"     = "wekan"
+            "chart_url"        = ""
+            "chart_version"    = ""
+            "chart_ref"        = "charts/wekan"
+            "namespace"        = "default"
+            "create_namespace" = true
+            "wait"             = true
+            "opt_value_files"  = ["wekan-values.yaml"]
+        },
+        stun = {
+            "enabled"          = false
+            "image_tag"        = "d2d06a6"
+            "repo_name"        = "stun"
+            "repo_url"         = "https://gitlab.codeopensrc.com/os/stunserver.git"
+            "release_name"     = "stun"
+            "chart_url"        = ""
+            "chart_version"    = ""
+            "chart_ref"        = "charts/stun"
+            "namespace"        = "default"
+            "create_namespace" = true
+            "wait"             = true
+            "opt_value_files"  = ["stun-values.yaml"]
+        },
     }
 }
 
@@ -167,32 +195,5 @@ variable "app_definitions" {
         #     "custom_init"           = ""
         #     "custom_vars"           = ""# <<-EOF EOF
         # }
-        wekan = {
-            "pull"                  = "true"
-            "stable_version"        = "v5.35"
-            "use_stable"            = "false"
-            "repo_url"              = "https://gitlab.codeopensrc.com/os/wekan.git"
-            "repo_name"             = "wekan"
-            "docker_registry"       = "docker_hub"
-            "docker_registry_image" = "wekanteam/wekan"
-            "docker_registry_url"   = ""
-            "docker_registry_user"  = ""
-            "docker_registry_pw"    = ""
-            "service_name"          = "wekan"              ## Docker/Consul service name
-            "green_service"         = "wekan_main:4110"    ## Docker/Consul service name
-            "blue_service"          = "wekan_dev"          ## Docker/Consul service name
-            "default_active"        = "green"
-            "create_dns_record"     = "true"    ## Affects dns and letsencrypt
-            "create_dev_dns"        = "false"    ## Affects dns and letsencrypt
-            "create_ssl_cert"       = "true"    ## Affects dns and letsencrypt
-            "subdomain_name"        = "wekan"       ## Affects dns and letsencrypt
-            "use_custom_backup"     = "false"
-            "custom_backup_file"    = ""
-            "backup_frequency"      = ""
-            "use_custom_restore"    = "false"
-            "custom_restore_file"   = ""
-            "custom_init"           = ""
-            "custom_vars"           = ""# <<-EOF EOF
-        }
     }
 }
