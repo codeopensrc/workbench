@@ -29,57 +29,6 @@ locals {
     hosts = flatten(values(var.ansible_hosts))
 }
 
-resource "null_resource" "prometheus_targets" {
-    count = var.admin_servers
-
-    triggers = {
-        num_targets = var.server_count
-    }
-
-    ## 9107 is consul exporter
-    provisioner "file" {
-            #{
-            #    "targets": ["localhost:9107"]
-            #}
-        content = <<-EOF
-        [
-        %{ for ind, HOST in local.hosts }
-            {
-                "targets": ["${contains(HOST.roles, "admin") ? "localhost" : HOST.private_ip}:9100"],
-                "labels": {
-                    "hostname": "${contains(HOST.roles, "admin") ? "gitlab.${var.root_domain_name}" : HOST.name}",
-                    "public_ip": "${HOST.ip}",
-                    "private_ip": "${HOST.private_ip}",
-                    "nodename": "${HOST.name}"
-                }
-            }${ind < length(local.hosts) - 1 ? "," : ""}
-        %{ endfor }
-        ]
-        EOF
-        destination = "/var/opt/gitlab/prometheus/targets.json"
-    }
-
-    provisioner "file" {
-        content = <<-EOF
-        {
-            "service": {
-                "name": "consulexporter",
-                "port": 9107
-            }
-        }
-        EOF
-        destination = "/etc/consul.d/conf.d/consulexporter.json"
-    }
-
-    provisioner "remote-exec" {
-        inline = [ "consul reload" ]
-    }
-
-    connection {
-        host = element(local.admin_public_ips, 0)
-        type = "ssh"
-    }
-}
 
 
 ### NOTE: GITLAB MEMORY
@@ -197,6 +146,61 @@ resource "null_resource" "install_gitlab" {
     }
 }
 
+resource "null_resource" "prometheus_targets" {
+    count = var.admin_servers
+    depends_on = [
+        null_resource.install_gitlab,
+    ]
+
+    triggers = {
+        num_targets = var.server_count
+    }
+
+    ## 9107 is consul exporter
+    provisioner "file" {
+            #{
+            #    "targets": ["localhost:9107"]
+            #}
+        content = <<-EOF
+        [
+        %{ for ind, HOST in local.hosts }
+            {
+                "targets": ["${contains(HOST.roles, "admin") ? "localhost" : HOST.private_ip}:9100"],
+                "labels": {
+                    "hostname": "${contains(HOST.roles, "admin") ? "gitlab.${var.root_domain_name}" : HOST.name}",
+                    "public_ip": "${HOST.ip}",
+                    "private_ip": "${HOST.private_ip}",
+                    "nodename": "${HOST.name}"
+                }
+            }${ind < length(local.hosts) - 1 ? "," : ""}
+        %{ endfor }
+        ]
+        EOF
+        destination = "/var/opt/gitlab/prometheus/targets.json"
+    }
+
+    provisioner "file" {
+        content = <<-EOF
+        {
+            "service": {
+                "name": "consulexporter",
+                "port": 9107
+            }
+        }
+        EOF
+        destination = "/etc/consul.d/conf.d/consulexporter.json"
+    }
+
+    provisioner "remote-exec" {
+        inline = [ "consul reload" ]
+    }
+
+    connection {
+        host = element(local.admin_public_ips, 0)
+        type = "ssh"
+    }
+}
+
 
 ### TODO: Add Temp PAT token once and ensure removed at end of provisioning
 ### Can be found by searching 'sudo gitlab-rails runner'
@@ -273,17 +277,37 @@ resource "null_resource" "restore_gitlab" {
         }
     }
 
+    ### Change known_hosts to new imported ssh keys from gitlab restore
+    ##provisioner "local-exec" {
+    ##    command = <<-EOF
+    ##        ssh-keygen -f ~/.ssh/known_hosts -R "${element(local.admin_public_ips, 0)}"
+    ##        ssh-keygen -f ~/.ssh/known_hosts -R "gitlab.${var.root_domain_name}"
+    ##        ssh-keygen -f ~/.ssh/known_hosts -R "${var.root_domain_name}"
+    ##        ssh-keyscan -H "${element(local.admin_public_ips, 0)}" >> ~/.ssh/known_hosts
+    ##        ssh-keyscan -H "gitlab.${var.root_domain_name}" >> ~/.ssh/known_hosts
+    ##        ssh-keyscan -H "${var.root_domain_name}" >> ~/.ssh/known_hosts
+
+    ##    EOF
+    ##}
+}
+
+resource "null_resource" "update_known_hosts" {
+    count = var.admin_servers
+    depends_on = [
+        null_resource.install_gitlab,
+        null_resource.restore_gitlab,
+    ]
     # Change known_hosts to new imported ssh keys from gitlab restore
     provisioner "local-exec" {
         command = <<-EOF
-            ssh-keygen -f ~/.ssh/known_hosts -R "${element(local.admin_public_ips, 0)}"
-            ssh-keygen -f ~/.ssh/known_hosts -R "gitlab.${var.root_domain_name}"
-            ssh-keygen -f ~/.ssh/known_hosts -R "${var.root_domain_name}"
+            ssh-keygen -f ~/.ssh/known_hosts -R "${element(local.admin_public_ips, 0)}" || true
+            ssh-keygen -f ~/.ssh/known_hosts -R "gitlab.${var.root_domain_name}" || true
+            ssh-keygen -f ~/.ssh/known_hosts -R "${var.root_domain_name}" || true
             ssh-keyscan -H "${element(local.admin_public_ips, 0)}" >> ~/.ssh/known_hosts
             ssh-keyscan -H "gitlab.${var.root_domain_name}" >> ~/.ssh/known_hosts
-            ssh-keyscan -H "${var.root_domain_name}" >> ~/.ssh/known_hosts
-
         EOF
+            ## root_domain_name is configured to route to www webapp now
+            ## ssh-keyscan -H "${var.root_domain_name}" >> ~/.ssh/known_hosts || true
     }
 }
 
@@ -292,6 +316,7 @@ resource "null_resource" "gitlab_plugins" {
     depends_on = [
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
+        null_resource.update_known_hosts,
     ]
 
     ###! TODO: Conditionally deal with plugins if the subdomains are present etc.
@@ -410,6 +435,7 @@ resource "null_resource" "rm_imported_runners" {
     depends_on = [
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
+        null_resource.update_known_hosts,
         null_resource.gitlab_plugins,
     ]
     provisioner "local-exec" {
@@ -427,6 +453,7 @@ resource "null_resource" "reauthorize_mattermost" {
     depends_on = [
         null_resource.install_gitlab,
         null_resource.restore_gitlab,
+        null_resource.update_known_hosts,
     ]
 
     provisioner "remote-exec" {

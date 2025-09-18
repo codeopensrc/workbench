@@ -352,11 +352,12 @@
         src: ansiblefiles/cert-clusterissuers.yaml
         dest: "{{ kube_dir }}/cert-clusterissuers.yaml"
 
-    - name: apply cert issuers
-      k8s:
-        namespace: "{{ certmanager_namespace }}"
-        state: present
-        src: "{{ kube_dir }}/cert-clusterissuers.yaml"
+    ###! https://github.com/cert-manager/cert-manager/issues/3246
+    #- name: apply cert issuers
+    #  k8s:
+    #    namespace: "{{ certmanager_namespace }}"
+    #    state: present
+    #    src: "{{ kube_dir }}/cert-clusterissuers.yaml"
 
 
 - name: REBOOT GITLAB ENVIRONMENTS

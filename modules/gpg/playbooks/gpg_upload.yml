@@ -23,6 +23,7 @@
         content: "{{ bot_gpg_passphrase }}"
 
     ### Temporarily using remote pubkeys as recipients
+    ##TODO: Generate a list id key ids and try:   gpg --recv-keys KEY_ID   instead (must be upload to a keyserver)
     - name: download pubkeys
       shell: "/usr/local/bin/mc cp {{ s3alias }}/{{ s3bucket }}/{{ tmp_pubkeylist }} $HOME/{{ tmp_pubkeylist }}"
 

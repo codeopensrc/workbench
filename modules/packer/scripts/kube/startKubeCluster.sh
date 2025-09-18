@@ -2,6 +2,7 @@
 
 ### Until its integrated and stable in our images, install/detect here
 VERSION="1.24.7-00"
+MAJOR_VERSION="1.24"
 HELM_VERSION="3.8.2-1"
 SKAFFOLD_VERSION="2.0.0"
 USE_DOCKER_SHIM="true"
@@ -14,6 +15,7 @@ while getopts "i:v:h:s:p:gr" flag; do
     case "$flag" in
         i) NET_IFACE=$OPTARG;;
         v) VERSION=$OPTARG;;
+        m) MAJOR_VERSION=$OPTARG;;  ## temp till we can parse it
         g) GET_JOIN="true";;
         h) HELM_VERSION=$OPTARG;;
         s) SKAFFOLD_VERSION=$OPTARG;;
@@ -46,7 +48,10 @@ if [[ ! -f $HOME/.local/bin/kubectl ]] && [[ ! -f /usr/local/bin/kubectl ]] && [
     ### Package manager maintainers sometimes dont port over to the latest release right away so keys/packages still
     ###  point to an older releases repository. In this case we're still using 'xenial' even on the 'jammy' ubuntu release
     ## https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
-    echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+    #echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+    echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${MAJOR_VERSION}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v${MAJOR_VERSION}/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
     # Install
     sudo apt-get update;
     ## dpkg can stay briefly locked after update..
@@ -169,12 +174,15 @@ if [[ "$USE_DOCKER_SHIM" = "true" ]]; then
 
     ###Install GO###
     ### TODO: Now that we have to install go.. adapt this to install specific go versions
-    curl -Lo go1.19.3.linux-amd64.tar.gz https://go.dev/dl/go1.19.3.linux-amd64.tar.gz
-    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.19.3.linux-amd64.tar.gz
-    rm go1.19.3.linux-amd64.tar.gz
+    GO_VERSION=1.19.3 ##OLD
+    #GO_VERSION=2.23.0
+    curl -Lo go${GO_VERSION}.linux-amd64.tar.gz https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
+    rm -rf /usr/local/go && tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+    rm go${GO_VERSION}.linux-amd64.tar.gz
     source ~/.bash_profile
 
     git clone https://github.com/Mirantis/cri-dockerd.git /etc/cri-dockerd
+    (cd /etc/cri-dockerd && git reset --hard v0.3.5)
     cd /etc/cri-dockerd
     mkdir bin
     go build -o bin/cri-dockerd
@@ -190,6 +198,7 @@ if [[ "$USE_DOCKER_SHIM" = "true" ]]; then
 fi
 
 ## Get images
+kubeadm config images pull --image-repository registry.k8s.io $ADDITIONAL_FLAGS
 kubeadm config images pull $ADDITIONAL_FLAGS
 
 API_VPC_IP=$(grep "vpc.my_private_ip" /etc/hosts | cut -d " " -f1)

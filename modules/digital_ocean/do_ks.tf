@@ -207,6 +207,16 @@ resource "null_resource" "configure_ingress_controller" {
             "kubectl delete pod -n ingress-nginx -l 'app.kubernetes.io/component=admission-webhook'"
         ]
     }
+    provisioner "remote-exec" {
+        inline = [
+            "git clone https://gitlab.codeopensrc.com/kc/website.git repos/website",
+            "git clone https://gitlab.codeopensrc.com/os/react-template.git repos/react-template",
+            "cp repos/website/.env.tmpl repos/website/.env",
+            "cp repos/react-template/.env.tmpl repos/react-template/.env",
+            "(cd repos/website/ && bash kube-deploy.sh -n default -h 10.10.0.2)",
+            "(cd repos/react-template && bash kube-deploy.sh -n default -h 10.10.0.2)",
+        ]
+    }
     connection {
         host = [
             for h in digitalocean_droplet.main: h.ipv4_address

@@ -88,6 +88,9 @@ RUNNER_TOKEN=""
 KUBE_API_HOST_URL=""
 KUBE_VERSION="latest"
 
+## RM after upgrade
+RUNNER_VERSION="15.5.2"
+
 while getopts "a:b:d:h:i:l:n:t:v:ou" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
@@ -148,7 +151,7 @@ if [[ ! $KUBE_API_HOST_URL =~ $PORT_REG ]]; then KUBE_API_HOST_URL="${KUBE_API_H
 ### TODO: Eventually minio credentials inside helm runners as well
 curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
 apt-cache madison gitlab-runner
-sudo apt-get install gitlab-runner jq -y
+sudo apt-get install gitlab-runner=${RUNNER_VERSION} jq -y
 sudo usermod -aG docker gitlab-runner
 sed -i "s|concurrent = 1|concurrent = 3|" /etc/gitlab-runner/config.toml
 
@@ -434,7 +437,7 @@ for NAMESPACE in ${NAMESPACES[@]}; do
         sudo gitlab-runner unregister --name "${BUILDER_ACCOUNT_NAME}-kube-builder"
 
         if [[ -n $OPEN_RUNNERS ]]; then
-            PAUSED_AND_LOCKED_ARGS="--locked='false'"
+            PAUSED_AND_LOCKED_ARGS="--locked=false"
         else
             PAUSED_AND_LOCKED_ARGS="--paused --locked"
         fi

@@ -122,7 +122,7 @@ resource "null_resource" "kubernetes" {
     ##  azure private iface = eth0
     provisioner "local-exec" {
         command = <<-EOF
-            ansible-playbook ${path.module}/playbooks/kubernetes.yml -i ${var.ansible_hostfile} \
+            ansible-playbook ${path.module}/playbooks/kubernetes.yml -t pull -i ${var.ansible_hostfile} \
                 --extra-vars \
                 'kubernetes_version=${var.kubernetes_version}
                 buildkitd_version=${var.buildkitd_version}
@@ -209,7 +209,7 @@ resource "helm_release" "services" {
     repository       = each.value.chart_url
     version          = each.value.chart_version
     values           = concat(
-        [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
+        [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}") if f != ""],
         [for key, values in local.tf_helm_values: values if key == each.key]
     )
 }
