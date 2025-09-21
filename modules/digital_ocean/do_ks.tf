@@ -103,7 +103,7 @@ resource "digitalocean_kubernetes_cluster" "main" {
     dynamic "node_pool" {
         for_each = {
             for ind, obj in var.config.managed_kubernetes_conf: ind => ind
-            if lookup(obj, "count", 0) > 0
+            if lookup(obj, "count", 0) > 0 && ind == 0
         }
         content {
             name       = "${var.config.server_name_prefix}-${var.config.region}-kubeworker"
@@ -116,7 +116,7 @@ resource "digitalocean_kubernetes_cluster" "main" {
     dynamic "node_pool" {
         for_each = {
             for ind, obj in var.config.managed_kubernetes_conf: ind => ind
-            if lookup(obj, "min_nodes", 0) > 0 && lookup(obj, "max_nodes", 0) > 0
+            if lookup(obj, "min_nodes", 0) > 0 && lookup(obj, "max_nodes", 0) > 0 && ind == 0
         }
         content {
             name       = "${var.config.server_name_prefix}-${var.config.region}-kubeworker"
@@ -128,6 +128,34 @@ resource "digitalocean_kubernetes_cluster" "main" {
         }
 
     }
+}
+
+resource "digitalocean_kubernetes_node_pool" "extra" {
+    for_each = {
+        for ind, obj in var.config.managed_kubernetes_conf: ind => ind
+        if (lookup(obj, "count", 0) > 1 || lookup(obj, "auto_scale", false)) && ind > 0
+    }
+    cluster_id = digitalocean_kubernetes_cluster.main.id
+
+    name       = "${var.config.server_name_prefix}-${var.config.region}-extrakubeworker"
+    size       = var.config.managed_kubernetes_conf[each.key].size
+    tags       = [ "${replace(local.kubernetes, ".", "-")}" ]
+
+    node_count = lookup(var.config.managed_kubernetes_conf[each.key], "count", 0) > 0 ? var.config.managed_kubernetes_conf[each.key].count : null
+
+    auto_scale  = lookup(var.config.managed_kubernetes_conf[each.key], "auto_scale", false) ? var.config.managed_kubernetes_conf[each.key].auto_scale : null
+    min_nodes  = lookup(var.config.managed_kubernetes_conf[each.key], "min_nodes", 0) > 0 ? var.config.managed_kubernetes_conf[each.key].min_nodes : null
+    max_nodes  = lookup(var.config.managed_kubernetes_conf[each.key], "max_nodes", 0) > 0 ? var.config.managed_kubernetes_conf[each.key].max_nodes : null
+
+    #labels = {
+    #    service  = "backend"
+    #    priority = "high"
+    #}
+    #taint {
+    #    key    = "workloadKind"
+    #    value  = "database"
+    #    effect = "NoSchedule"
+    #}
 }
 
 resource "helm_release" "cluster_services" {
