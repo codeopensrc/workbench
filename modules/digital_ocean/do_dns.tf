@@ -83,14 +83,15 @@ resource "digitalocean_record" "default_cname_dev" {
     value  = "${var.config.root_domain_name}."
 }
 
-#resource "digitalocean_record" "default_a_admin" {
-#    count = length(compact(var.config.admin_arecord_aliases))
-#    name   = compact(flatten(var.config.admin_arecord_aliases))[count.index]
-#    domain = digitalocean_domain.default.name
-#    type   = "A"
-#    ttl    = "300"
-#    value  = local.has_admin ? local.dns_admin : local.dns_lead
-#}
+resource "digitalocean_record" "default_a_admin" {
+    count = length(compact(var.config.admin_arecord_aliases))
+    name   = compact(flatten(var.config.admin_arecord_aliases))[count.index]
+    domain = digitalocean_domain.default.name
+    type   = "A"
+    ttl    = "300"
+    #value  = local.has_admin ? local.dns_admin : local.dns_lead
+    value  = data.digitalocean_loadbalancer.main.ip
+}
 
 #resource "digitalocean_record" "default_a_db" {
 #    count  = contains(flatten(local.cfg_servers[*].roles), "db") ? length(compact(var.config.db_arecord_aliases)) : 0

@@ -47,6 +47,15 @@ locals {
             "chart_version"    = "v1.18.2"
             "opt_value_files"  = []
         }
+        gitlab = {
+            "enabled"          = true
+            "chart"            = "gitlab"
+            "namespace"        = "gitlab"
+            "create_namespace" = true
+            "chart_url"        = "https://charts.gitlab.io"
+            "chart_version"    = "9.4.0"
+            "opt_value_files"  = []
+        }
     }
     certmanager_files = {
         for ind, issuer in 
@@ -63,12 +72,54 @@ locals {
         ["namespace", "statefulset"][ind] => trimspace(file)
     }
     tf_helm_values = {
+        gitlab = <<-EOF
+        global:
+          edition: ce
+          hosts:
+            domain: ${var.config.root_domain_name}
+          ingress:
+            class: "nginx"
+            configureCertmanager: false
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+        gitlab:
+          webservice:
+            ingress:
+              tls:
+                secretName: gitlab-gitlab-tls
+          kas:
+            ingress:
+              tls:
+                secretName: gitlab-kas-tls
+        registry:
+          ingress:
+            tls:
+              secretName: gitlab-registry-tls
+        minio:
+          ingress:
+            tls:
+              secretName: gitlab-minio-tls
+        installCertmanager: false
+        nginx-ingress:
+          enabled: false
+        EOF
+
+        #kubernetes.io/tls-acme: true
+        #--set global.ingress.annotations."kubernetes\.io/tls-acme"=true \
+        #--set gitlab.webservice.ingress.tls.secretName=RELEASE-gitlab-tls \
+        #--set gitlab.kas.ingress.tls.secretName=RELEASE-kas-tls
+        #--set registry.ingress.tls.secretName=RELEASE-registry-tls \
+        #--set minio.ingress.tls.secretName=RELEASE-minio-tls \
+        #certmanager-issuer:
+        #  email: ${var.config.contact_email}
         nginx = <<-EOF
         controller:
           service:
             annotations:
               service.beta.kubernetes.io/do-loadbalancer-name: "${var.config.server_name_prefix}-${var.config.region}-cluster"
               service.beta.kubernetes.io/do-loadbalancer-protocol: "*"
+        tcp:
+          22: "gitlab/gitlab-gitlab-shell:22"
         EOF
               #service.beta.kubernetes.io/do-loadbalancer-protocol: "http"
               #service.beta.kubernetes.io/do-loadbalancer-http-ports: "80"
@@ -133,11 +184,11 @@ resource "digitalocean_kubernetes_cluster" "main" {
 resource "digitalocean_kubernetes_node_pool" "extra" {
     for_each = {
         for ind, obj in var.config.managed_kubernetes_conf: ind => ind
-        if (lookup(obj, "count", 0) > 1 || lookup(obj, "auto_scale", false)) && ind > 0
+        if (lookup(obj, "count", 0) > 0 || lookup(obj, "auto_scale", false)) && ind > 0
     }
     cluster_id = digitalocean_kubernetes_cluster.main.id
 
-    name       = "${var.config.server_name_prefix}-${var.config.region}-extrakubeworker"
+    name       = "${var.config.server_name_prefix}-${var.config.region}-${var.config.managed_kubernetes_conf[each.key].size}-extrakubeworker"
     size       = var.config.managed_kubernetes_conf[each.key].size
     tags       = [ "${replace(local.kubernetes, ".", "-")}" ]
 
@@ -169,7 +220,8 @@ resource "helm_release" "cluster_services" {
     namespace        = each.value.namespace != "" ? each.value.namespace : "default"
     create_namespace = each.value.create_namespace
     repository       = each.value.chart_url
-    version          = each.value.chart_version != "" ? each.value.chart_version : ""
+    version          = each.value.chart_version != "" ? each.value.chart_version : null
+    timeout          = 300
     dependency_update = true
     values           = concat(
         [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
@@ -180,10 +232,9 @@ resource "helm_release" "cluster_services" {
 ## Comes from nginx helm_release cluster_service
 data "digitalocean_loadbalancer" "main" {
     depends_on = [
-        digitalocean_kubernetes_cluster.main,
         helm_release.cluster_services["nginx"]
     ]
-    name = digitalocean_kubernetes_cluster.main.name
+    name = "${var.config.server_name_prefix}-${var.config.region}-cluster"
 }
 
 resource "kubectl_manifest" "buildkitd" {
