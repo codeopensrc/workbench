@@ -4,396 +4,407 @@
 #### Only apps.tf, credentials.tf, and vars.tf should be modified
 ###################################
 
+output "cluster" {
+    sensitive = true
+    value = module.cloud.cluster_info
+}
+
+## NOTE: Think token has a 7 day expiry
+resource "local_file" "kube_config" {
+    content  = module.cloud.cluster_info.kube_config.raw_config
+    filename = "${path.module}/${terraform.workspace}-kube_config"
+}
+
 # `terraform output` for name and ip address of instances in state for env
-output "instances" {
-    value = module.cloud.instances
-}
+#output "instances" {
+#    value = module.cloud.instances
+#}
 
-output "hosts" {
-    value = module.cloud.ansible_hosts
-    ## Marked as sensitive to squelch verbose output
-    sensitive   = true
-}
+#output "hosts" {
+#    value = module.cloud.ansible_hosts
+#    ## Marked as sensitive to squelch verbose output
+#    sensitive   = true
+#}
 
-module "ansible" {
-    source = "../../modules/ansible"
-    depends_on = [ module.cloud ]
-
-    ansible_hostfile = local.ansible_hostfile
-    predestroy_hostfile = local.predestroy_hostfile
-    ansible_hosts = local.ansible_hosts
-
-    server_count = local.server_count
-}
-
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "init" {
-    source = "../../modules/init"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-    ]
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-    remote_state_hosts = local.remote_state_hosts
-
-    server_count = local.server_count
-
-    region = local.region
-    server_name_prefix = local.server_name_prefix
-    root_domain_name = local.root_domain_name
-    hostname = "${var.gitlab_subdomain}.${local.root_domain_name}"
-
-    do_spaces_region = var.do_spaces_region
-    do_spaces_access_key = var.do_spaces_access_key
-    do_spaces_secret_key = var.do_spaces_secret_key
-
-    aws_bot_access_key = var.aws_bot_access_key
-    aws_bot_secret_key = var.aws_bot_secret_key
-
-    az_storageaccount = var.az_storageaccount
-    az_storagekey = var.az_storagekey
-    az_minio_gateway = var.az_minio_gateway
-    az_minio_gateway_port = var.az_minio_gateway_port
-
-    known_hosts = var.known_hosts
-    deploy_key_location = var.deploy_key_location
-
-    nodeexporter_version = var.nodeexporter_version
-    promtail_version = var.promtail_version
-    consulexporter_version = var.consulexporter_version
-    loki_version = var.loki_version
-
-    pg_read_only_pw = var.pg_read_only_pw
-    postgres_version = var.postgres_version
-    postgres_port = var.postgres_port
-    mongo_version = var.mongo_version
-    mongo_port = var.mongo_port
-    redis_version = var.redis_version
-    redis_port = var.redis_port
-}
+#module "ansible" {
+#    source = "../../modules/ansible"
+#    depends_on = [ module.cloud ]
+#
+#    ansible_hostfile = local.ansible_hostfile
+#    predestroy_hostfile = local.predestroy_hostfile
+#    ansible_hosts = local.ansible_hosts
+#
+#    server_count = local.server_count
+#}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "consul" {
-    source = "../../modules/consul"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-    ]
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-    predestroy_hostfile = local.predestroy_hostfile
-    remote_state_hosts = local.remote_state_hosts
-
-    region = local.region
-    server_count = local.server_count
-
-    app_definitions = var.app_definitions
-    additional_ssl = var.additional_ssl
-    root_domain_name = local.root_domain_name
-    pg_password = var.pg_password
-    dev_pg_password = var.dev_pg_password
-
-    ## Deletes /etc/consul.d/data datadir
-    ## Only use for testing/recovering from severely broken consul cluster config
-    force_consul_rebootstrap = false
-}
-
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "cron" {
-    source = "../../modules/cron"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-    ]
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-    remote_state_hosts = local.remote_state_hosts
-
-    admin_servers = local.admin_servers
-    lead_servers = local.lead_servers
-    db_servers = local.db_servers
-
-    s3alias = local.s3alias
-    s3bucket = local.s3bucket
-    use_gpg = var.use_gpg
-    # Admin specific
-    gitlab_backups_enabled = var.gitlab_backups_enabled
-    # Leader specific
-    app_definitions = var.app_definitions
-    # DB specific
-    redis_dbs = local.redis_dbs
-    mongo_dbs = local.mongo_dbs
-    pg_dbs = local.pg_dbs
-}
+#module "init" {
+#    source = "../../modules/init"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#    ]
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#    remote_state_hosts = local.remote_state_hosts
+#
+#    server_count = local.server_count
+#
+#    region = local.region
+#    server_name_prefix = local.server_name_prefix
+#    root_domain_name = local.root_domain_name
+#    hostname = "${var.gitlab_subdomain}.${local.root_domain_name}"
+#
+#    do_spaces_region = var.do_spaces_region
+#    do_spaces_access_key = var.do_spaces_access_key
+#    do_spaces_secret_key = var.do_spaces_secret_key
+#
+#    aws_bot_access_key = var.aws_bot_access_key
+#    aws_bot_secret_key = var.aws_bot_secret_key
+#
+#    az_storageaccount = var.az_storageaccount
+#    az_storagekey = var.az_storagekey
+#    az_minio_gateway = var.az_minio_gateway
+#    az_minio_gateway_port = var.az_minio_gateway_port
+#
+#    known_hosts = var.known_hosts
+#    deploy_key_location = var.deploy_key_location
+#
+#    nodeexporter_version = var.nodeexporter_version
+#    promtail_version = var.promtail_version
+#    consulexporter_version = var.consulexporter_version
+#    loki_version = var.loki_version
+#
+#    pg_read_only_pw = var.pg_read_only_pw
+#    postgres_version = var.postgres_version
+#    postgres_port = var.postgres_port
+#    mongo_version = var.mongo_version
+#    mongo_port = var.mongo_port
+#    redis_version = var.redis_version
+#    redis_port = var.redis_port
+#}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "gpg" {
-    source = "../../modules/gpg"
-    count = var.use_gpg ? 1 : 0
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-    ]
-
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-
-    admin_servers = local.admin_servers
-    db_servers = local.db_servers
-
-    s3alias = local.s3alias
-    s3bucket = local.s3bucket
-
-    bot_gpg_name = var.bot_gpg_name
-    bot_gpg_passphrase = var.bot_gpg_passphrase
-}
-
-module "gitlab" {
-    source = "../../modules/gitlab"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-    ]
-
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-
-    admin_servers = local.admin_servers
-    server_count = local.server_count
-
-    root_domain_name = local.root_domain_name
-    contact_email = var.contact_email
-
-    import_gitlab = var.import_gitlab
-    import_gitlab_version = var.import_gitlab_version
-
-    use_gpg = var.use_gpg
-    bot_gpg_name = var.bot_gpg_name
-
-    s3alias = local.s3alias
-    s3bucket = local.s3bucket
-
-    mattermost_subdomain = var.mattermost_subdomain
-    wekan_subdomain = var.wekan_subdomain
-}
+#module "consul" {
+#    source = "../../modules/consul"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#    ]
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#    predestroy_hostfile = local.predestroy_hostfile
+#    remote_state_hosts = local.remote_state_hosts
+#
+#    region = local.region
+#    server_count = local.server_count
+#
+#    app_definitions = var.app_definitions
+#    additional_ssl = var.additional_ssl
+#    root_domain_name = local.root_domain_name
+#    pg_password = var.pg_password
+#    dev_pg_password = var.dev_pg_password
+#
+#    ## Deletes /etc/consul.d/data datadir
+#    ## Only use for testing/recovering from severely broken consul cluster config
+#    force_consul_rebootstrap = false
+#}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "nginx" {
-    source = "../../modules/nginx"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-    ]
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-
-    lead_servers = local.lead_servers
-
-    root_domain_name = local.root_domain_name
-    app_definitions = var.app_definitions
-    additional_domains = local.additional_domains
-    additional_ssl = var.additional_ssl
-
-    cert_port = local.config.cert_port
-    kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
-}
-
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "clusterdb" {
-    source = "../../modules/clusterdb"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-    ]
-
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-    predestroy_hostfile = local.predestroy_hostfile
-    remote_state_hosts = local.remote_state_hosts
-
-    db_servers = local.db_servers
-
-    redis_dbs = local.redis_dbs
-    mongo_dbs = local.mongo_dbs
-    pg_dbs = local.pg_dbs
-
-    import_dbs = var.import_dbs
-    dbs_to_import = local.dbs_to_import
-
-    use_gpg = var.use_gpg
-    bot_gpg_name = var.bot_gpg_name
-
-    root_domain_name = local.root_domain_name
-}
+#module "cron" {
+#    source = "../../modules/cron"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#    ]
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#    remote_state_hosts = local.remote_state_hosts
+#
+#    admin_servers = local.admin_servers
+#    lead_servers = local.lead_servers
+#    db_servers = local.db_servers
+#
+#    s3alias = local.s3alias
+#    s3bucket = local.s3bucket
+#    use_gpg = var.use_gpg
+#    # Admin specific
+#    gitlab_backups_enabled = var.gitlab_backups_enabled
+#    # Leader specific
+#    app_definitions = var.app_definitions
+#    # DB specific
+#    redis_dbs = local.redis_dbs
+#    mongo_dbs = local.mongo_dbs
+#    pg_dbs = local.pg_dbs
+#}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "docker" {
-    source = "../../modules/docker"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-        module.clusterdb,
-    ]
+#module "gpg" {
+#    source = "../../modules/gpg"
+#    count = var.use_gpg ? 1 : 0
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#    ]
+#
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#
+#    admin_servers = local.admin_servers
+#    db_servers = local.db_servers
+#
+#    s3alias = local.s3alias
+#    s3bucket = local.s3bucket
+#
+#    bot_gpg_name = var.bot_gpg_name
+#    bot_gpg_passphrase = var.bot_gpg_passphrase
+#}
 
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-    predestroy_hostfile = local.predestroy_hostfile
-    remote_state_hosts = local.remote_state_hosts
-
-    lead_servers = local.lead_servers
-
-    region = local.region
-    app_definitions = var.app_definitions
-    aws_ecr_region   = var.aws_ecr_region
-
-    container_orchestrators = var.container_orchestrators
-}
-
-resource "null_resource" "gpg_remove_key" {
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-        module.clusterdb,
-        module.docker,
-    ]
-    triggers = {
-        admin_servers = local.admin_servers
-        db_servers = local.db_servers
-    }
-    provisioner "local-exec" {
-        command = <<-EOF
-            ansible-playbook ../../modules/gpg/playbooks/gpg_rmkey.yml -i ${local.ansible_hostfile} \
-                --extra-vars "use_gpg=${var.use_gpg} bot_gpg_name=${var.bot_gpg_name}"
-        EOF
-    }
-}
-
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "letsencrypt" {
-    source = "../../modules/letsencrypt"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-        module.clusterdb,
-        module.docker,
-    ]
-
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-
-    lead_servers = local.lead_servers
-
-    app_definitions = var.app_definitions
-    additional_ssl = var.additional_ssl
-    cert_port = local.config.cert_port
-
-    root_domain_name = local.root_domain_name
-    contact_email = var.contact_email
-}
+#module "gitlab" {
+#    source = "../../modules/gitlab"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#    ]
+#
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#
+#    admin_servers = local.admin_servers
+#    server_count = local.server_count
+#
+#    root_domain_name = local.root_domain_name
+#    contact_email = var.contact_email
+#
+#    import_gitlab = var.import_gitlab
+#    import_gitlab_version = var.import_gitlab_version
+#
+#    use_gpg = var.use_gpg
+#    bot_gpg_name = var.bot_gpg_name
+#
+#    s3alias = local.s3alias
+#    s3bucket = local.s3bucket
+#
+#    mattermost_subdomain = var.mattermost_subdomain
+#    wekan_subdomain = var.wekan_subdomain
+#}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
-module "cirunners" {
-    source = "../../modules/cirunners"
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-        module.clusterdb,
-        module.docker,
-        module.letsencrypt,
-    ]
+#module "nginx" {
+#    source = "../../modules/nginx"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#        module.gitlab,
+#    ]
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#
+#    lead_servers = local.lead_servers
+#
+#    root_domain_name = local.root_domain_name
+#    app_definitions = var.app_definitions
+#    additional_domains = local.additional_domains
+#    additional_ssl = var.additional_ssl
+#
+#    cert_port = local.config.cert_port
+#    kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
+#}
 
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-    predestroy_hostfile = local.predestroy_hostfile
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
+#module "clusterdb" {
+#    source = "../../modules/clusterdb"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#        module.gitlab,
+#        module.nginx,
+#    ]
+#
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#    predestroy_hostfile = local.predestroy_hostfile
+#    remote_state_hosts = local.remote_state_hosts
+#
+#    db_servers = local.db_servers
+#
+#    redis_dbs = local.redis_dbs
+#    mongo_dbs = local.mongo_dbs
+#    pg_dbs = local.pg_dbs
+#
+#    import_dbs = var.import_dbs
+#    dbs_to_import = local.dbs_to_import
+#
+#    use_gpg = var.use_gpg
+#    bot_gpg_name = var.bot_gpg_name
+#
+#    root_domain_name = local.root_domain_name
+#}
 
-    gitlab_runner_tokens = local.gitlab_runner_tokens
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
+#module "docker" {
+#    source = "../../modules/docker"
+#    depends_on = [
+#        module.cloud,
+#        #module.ansible,
+#        #module.init,
+#        #module.consul,
+#        #module.cron,
+#        #module.gpg,
+#        #module.gitlab,
+#        #module.nginx,
+#        #module.clusterdb,
+#    ]
+#
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#    predestroy_hostfile = local.predestroy_hostfile
+#    remote_state_hosts = local.remote_state_hosts
+#
+#    lead_servers = local.lead_servers
+#
+#    region = local.region
+#    app_definitions = var.app_definitions
+#    aws_ecr_region   = var.aws_ecr_region
+#
+#    container_orchestrators = var.container_orchestrators
+#}
 
-    build_servers = local.build_servers
+#resource "null_resource" "gpg_remove_key" {
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#        module.gitlab,
+#        module.nginx,
+#        module.clusterdb,
+#        module.docker,
+#    ]
+#    triggers = {
+#        admin_servers = local.admin_servers
+#        db_servers = local.db_servers
+#    }
+#    provisioner "local-exec" {
+#        command = <<-EOF
+#            ansible-playbook ../../modules/gpg/playbooks/gpg_rmkey.yml -i ${local.ansible_hostfile} \
+#                --extra-vars "use_gpg=${var.use_gpg} bot_gpg_name=${var.bot_gpg_name}"
+#        EOF
+#    }
+#}
 
-    runners_per_machine = local.num_runners_per_machine
-    root_domain_name = local.root_domain_name
-}
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
+#module "letsencrypt" {
+#    source = "../../modules/letsencrypt"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#        module.gitlab,
+#        module.nginx,
+#        module.clusterdb,
+#        module.docker,
+#    ]
+#
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#
+#    lead_servers = local.lead_servers
+#
+#    app_definitions = var.app_definitions
+#    additional_ssl = var.additional_ssl
+#    cert_port = local.config.cert_port
+#
+#    root_domain_name = local.root_domain_name
+#    contact_email = var.contact_email
+#}
 
-resource "null_resource" "install_unity" {
-    count = var.install_unity3d ? local.build_servers : 0
-    depends_on = [ module.cirunners ]
+##NOTE: Uses ansible
+##TODO: Figure out how best to organize modules/playbooks/hostfile
+#module "cirunners" {
+#    source = "../../modules/cirunners"
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#        module.gitlab,
+#        module.nginx,
+#        module.clusterdb,
+#        module.docker,
+#        module.letsencrypt,
+#    ]
+#
+#    ansible_hosts = local.ansible_hosts
+#    ansible_hostfile = local.ansible_hostfile
+#    predestroy_hostfile = local.predestroy_hostfile
+#
+#    gitlab_runner_tokens = local.gitlab_runner_tokens
+#
+#    build_servers = local.build_servers
+#
+#    runners_per_machine = local.num_runners_per_machine
+#    root_domain_name = local.root_domain_name
+#}
 
-    provisioner "file" {
-        ## TODO: Unity version root level. Get year from version
-        source = "../../modules/packer/ignore/Unity_v2020.x.ulf"
-        destination = "/root/code/scripts/misc/Unity_v2020.x.ulf"
-    }
-
-    provisioner "remote-exec" {
-        ## TODO: Unity version root level.
-        inline = [
-            "cd /root/code/scripts/misc",
-            "chmod +x installUnity3d.sh",
-            "bash installUnity3d.sh -c c53830e277f1 -v 2020.2.7f1 -y" #TODO: Auto input "yes" if license exists
-        ]
-        #Cleanup anything no longer needed
-    }
-
-    connection {
-        host = element(local.build_public_ips, count.index)
-        type = "ssh"
-    }
-}
+#resource "null_resource" "install_unity" {
+#    count = var.install_unity3d ? local.build_servers : 0
+#    depends_on = [ module.cirunners ]
+#
+#    provisioner "file" {
+#        ## TODO: Unity version root level. Get year from version
+#        source = "../../modules/packer/ignore/Unity_v2020.x.ulf"
+#        destination = "/root/code/scripts/misc/Unity_v2020.x.ulf"
+#    }
+#
+#    provisioner "remote-exec" {
+#        ## TODO: Unity version root level.
+#        inline = [
+#            "cd /root/code/scripts/misc",
+#            "chmod +x installUnity3d.sh",
+#            "bash installUnity3d.sh -c c53830e277f1 -v 2020.2.7f1 -y" #TODO: Auto input "yes" if license exists
+#        ]
+#        #Cleanup anything no longer needed
+#    }
+#
+#    connection {
+#        host = element(local.build_public_ips, count.index)
+#        type = "ssh"
+#    }
+#}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
@@ -402,24 +413,25 @@ module "kubernetes" {
     source = "../../modules/kubernetes"
     depends_on = [
         module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-        module.clusterdb,
-        module.docker,
-        module.letsencrypt,
-        module.cirunners,
-        null_resource.install_unity
+        #module.ansible,
+        #module.init,
+        #module.consul,
+        #module.cron,
+        #module.gpg,
+        #module.gitlab,
+        #module.nginx,
+        #module.clusterdb,
+        #module.docker,
+        #module.letsencrypt,
+        #module.cirunners,
+        #null_resource.install_unity
     ]
 
-    ansible_hosts = local.ansible_hosts
-    ansible_hostfile = local.ansible_hostfile
-    predestroy_hostfile = local.predestroy_hostfile
-    remote_state_hosts = local.remote_state_hosts
+    #ansible_hosts = local.ansible_hosts
+    #ansible_hostfile = local.ansible_hostfile
+    #predestroy_hostfile = local.predestroy_hostfile
+    #remote_state_hosts = local.remote_state_hosts
+
 
     admin_servers = local.admin_servers
     server_count = local.server_count
@@ -444,97 +456,96 @@ module "kubernetes" {
 
     additional_ssl = var.additional_ssl
 
-    local_kubeconfig_path = var.local_kubeconfig_path
     kube_apps = var.kube_apps
     kube_services = var.kube_services
     kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
 }
 
-resource "null_resource" "configure_smtp" {
-    count = local.admin_servers
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-        module.clusterdb,
-        module.docker,
-        module.letsencrypt,
-        module.cirunners,
-        null_resource.install_unity,
-        module.kubernetes,
-    ]
+#resource "null_resource" "configure_smtp" {
+#    count = local.admin_servers
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#        module.gitlab,
+#        module.nginx,
+#        module.clusterdb,
+#        module.docker,
+#        module.letsencrypt,
+#        module.cirunners,
+#        null_resource.install_unity,
+#        module.kubernetes,
+#    ]
+#
+#    provisioner "file" {
+#        content = <<-EOF
+#            SENDGRID_KEY=${local.sendgrid_apikey}
+#
+#            if [ -n "$SENDGRID_KEY" ]; then
+#                bash $HOME/code/scripts/misc/configureSMTP.sh -k ${local.sendgrid_apikey} -d ${local.sendgrid_domain};
+#            else
+#                bash $HOME/code/scripts/misc/configureSMTP.sh -d ${local.root_domain_name};
+#            fi
+#        EOF
+#        destination = "/tmp/configSMTP.sh"
+#    }
+#    provisioner "remote-exec" {
+#        inline = [
+#            "chmod +x /tmp/configSMTP.sh",
+#            "bash /tmp/configSMTP.sh",
+#            "rm /tmp/configSMTP.sh"
+#        ]
+#    }
+#
+#    connection {
+#        host = element(local.admin_public_ips, 0)
+#        type = "ssh"
+#    }
+#}
 
-    provisioner "file" {
-        content = <<-EOF
-            SENDGRID_KEY=${local.sendgrid_apikey}
-
-            if [ -n "$SENDGRID_KEY" ]; then
-                bash $HOME/code/scripts/misc/configureSMTP.sh -k ${local.sendgrid_apikey} -d ${local.sendgrid_domain};
-            else
-                bash $HOME/code/scripts/misc/configureSMTP.sh -d ${local.root_domain_name};
-            fi
-        EOF
-        destination = "/tmp/configSMTP.sh"
-    }
-    provisioner "remote-exec" {
-        inline = [
-            "chmod +x /tmp/configSMTP.sh",
-            "bash /tmp/configSMTP.sh",
-            "rm /tmp/configSMTP.sh"
-        ]
-    }
-
-    connection {
-        host = element(local.admin_public_ips, 0)
-        type = "ssh"
-    }
-}
-
-resource "null_resource" "enable_autoupgrade" {
-    depends_on = [
-        module.cloud,
-        module.ansible,
-        module.init,
-        module.consul,
-        module.cron,
-        module.gpg,
-        module.gitlab,
-        module.nginx,
-        module.clusterdb,
-        module.docker,
-        module.letsencrypt,
-        module.cirunners,
-        null_resource.install_unity,
-        module.kubernetes,
-        null_resource.configure_smtp,
-    ]
-
-    triggers = {
-        num_hosts = local.server_count
-        hostfile = local.ansible_hostfile
-        predestroy_hostfile = local.predestroy_hostfile
-    }
-
-    provisioner "local-exec" {
-        command = "ansible-playbook ../../modules/init/playbooks/end.yml -i ${local.ansible_hostfile}"
-    }
-
-    ## Copy old ansible file to preserve hosts before their destruction
-    ## As this is destroyed first, best location to create the temp old hosts file
-    provisioner "local-exec" {
-        when = destroy
-        command = "cp ${self.triggers.hostfile} ${self.triggers.predestroy_hostfile}"
-    }
-    ## Remove any pre-destroy hostfiles since this created last
-    provisioner "local-exec" {
-        command = "rm ${local.predestroy_hostfile} || echo"
-    }
-}
+#resource "null_resource" "enable_autoupgrade" {
+#    depends_on = [
+#        module.cloud,
+#        module.ansible,
+#        module.init,
+#        module.consul,
+#        module.cron,
+#        module.gpg,
+#        module.gitlab,
+#        module.nginx,
+#        module.clusterdb,
+#        module.docker,
+#        module.letsencrypt,
+#        module.cirunners,
+#        null_resource.install_unity,
+#        module.kubernetes,
+#        null_resource.configure_smtp,
+#    ]
+#
+#    triggers = {
+#        num_hosts = local.server_count
+#        hostfile = local.ansible_hostfile
+#        predestroy_hostfile = local.predestroy_hostfile
+#    }
+#
+#    provisioner "local-exec" {
+#        command = "ansible-playbook ../../modules/init/playbooks/end.yml -i ${local.ansible_hostfile}"
+#    }
+#
+#    ## Copy old ansible file to preserve hosts before their destruction
+#    ## As this is destroyed first, best location to create the temp old hosts file
+#    provisioner "local-exec" {
+#        when = destroy
+#        command = "cp ${self.triggers.hostfile} ${self.triggers.predestroy_hostfile}"
+#    }
+#    ## Remove any pre-destroy hostfiles since this created last
+#    provisioner "local-exec" {
+#        command = "rm ${local.predestroy_hostfile} || echo"
+#    }
+#}
 
 
 locals {
@@ -607,7 +618,7 @@ locals {
     predestroy_hostfile = "${local.ansible_hostfile}-predestroy"
     additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
 
-    ansible_hosts = module.cloud.ansible_hosts
+    #ansible_hosts = module.cloud.ansible_hosts
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
 
     gitlab_kube_matrix = {
@@ -698,24 +709,25 @@ locals {
     ]
 
 
-    admin_public_ips = flatten([
-        for role, hosts in module.cloud.ansible_hosts: [
-            for HOST in hosts: HOST.ip
-            if contains(HOST.roles, "admin")
-        ]
-    ])
-    build_public_ips = flatten([
-        for role, hosts in module.cloud.ansible_hosts: [
-            for HOST in hosts: HOST.ip
-            if contains(HOST.roles, "build")
-        ]
-    ])
+    #admin_public_ips = flatten([
+    #    for role, hosts in module.cloud.ansible_hosts: [
+    #        for HOST in hosts: HOST.ip
+    #        if contains(HOST.roles, "admin")
+    #    ]
+    #])
+    #build_public_ips = flatten([
+    #    for role, hosts in module.cloud.ansible_hosts: [
+    #        for HOST in hosts: HOST.ip
+    #        if contains(HOST.roles, "build")
+    #    ]
+    #])
 }
 
 locals {
     ##! local.config is a wrapper to pass into module.cloud in vars.tf
     config = {
         ## Machine/Misc
+        helm_experiments = var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
         servers = local.servers
         region = local.region
         server_name_prefix = local.server_name_prefix
@@ -725,6 +737,9 @@ locals {
         packer_config = local.packer_config
         container_orchestrators = var.container_orchestrators
         managed_kubernetes_conf = contains(var.container_orchestrators, "managed_kubernetes") ? local.managed_kubernetes_conf : []
+
+        buildkitd_version = var.buildkitd_version
+        buildkitd_namespace = var.buildkitd_namespace
 
         ## DNS
         root_domain_name = local.root_domain_name
@@ -748,6 +763,8 @@ locals {
         create_kube_records = local.create_kube_records
 
         ## Credentials/Cloud
+        contact_email = var.contact_email
+
         do_token = var.do_token
         do_region = var.do_region
         do_ssh_fingerprint = var.do_ssh_fingerprint
@@ -766,8 +783,8 @@ locals {
         az_region = var.az_region
         az_resource_group = var.az_resource_group
 
-        remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
-            ? data.terraform_remote_state.cloud.outputs.hosts : {})
+        #remote_state_hosts = (lookup(data.terraform_remote_state.cloud.outputs, "hosts", null) != null
+        #    ? data.terraform_remote_state.cloud.outputs.hosts : {})
     }
 }
 

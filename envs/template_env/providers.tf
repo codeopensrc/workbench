@@ -1,44 +1,20 @@
 terraform {
-  required_providers {
-    helm = {
-      source = "hashicorp/helm"
-      version = "2.9.0"
+    required_providers {
+        helm = {
+            source = "hashicorp/helm"
+        }
     }
-  }
 }
 
 provider "helm" {
-    kubernetes {
-        config_path = var.local_kubeconfig_path
-        config_context = local.root_domain_name
+    kubernetes = {
+        host  = module.cloud.cluster_info.endpoint
+        token = module.cloud.cluster_info.kube_config.token
+        cluster_ca_certificate = base64decode(
+            module.cloud.cluster_info.kube_config.cluster_ca_certificate
+        )
     }
-    experiments {
-        manifest = true
+    experiments = {
+        manifest = var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
     }
 }
-#provider "helm" {
-#  kubernetes {
-#    host     = "https://cluster_endpoint:port"
-#
-#    client_certificate     = file("~/.kube/client-cert.pem")
-#    client_key             = file("~/.kube/client-key.pem")
-#    cluster_ca_certificate = file("~/.kube/cluster-ca-cert.pem")
-#  }
-#  experiments {
-#    manifest = true
-#  }
-#}
-#provider "helm" {
-#  kubernetes {
-#    host                   = var.cluster_endpoint
-#    cluster_ca_certificate = base64decode(var.cluster_ca_cert)
-#    exec {
-#      api_version = "client.authentication.k8s.io/v1beta1"
-#      args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
-#      command     = "aws"
-#    }
-#  }
-#  experiments {
-#    manifest = true
-#  }
-#}

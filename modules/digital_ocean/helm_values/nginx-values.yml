@@ -1,0 +1,7 @@
+controller:
+  config:
+    use-proxy-protocol: "false"
+    enable-real-ip: "true"
+    use-forwarded-headers: "true"
+  service:
+    externalTrafficPolicy: "Cluster"

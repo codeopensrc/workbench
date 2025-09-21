@@ -1,50 +1,50 @@
-resource "digitalocean_domain" "additional" {
-    for_each = var.config.additional_domains
-    name = each.key
-    ip_address  = local.dns_admin
-}
+#resource "digitalocean_domain" "additional" {
+#    for_each = var.config.additional_domains
+#    name = each.key
+#    ip_address  = local.dns_admin
+#}
 
-resource "digitalocean_record" "additional_cname" {
-    depends_on = [ digitalocean_domain.additional ]
-    for_each = {
-        for ind, domain in local.cname_additional_aliases :
-        "${domain.domainname}.${domain.subdomainname}" => domain
-    }
-    name   = each.value.subdomainname
-    domain = each.value.domainname
-    type   = "CNAME"
-    ttl    = "300"
-    value  = "${each.value.domainname}."
-}
+#resource "digitalocean_record" "additional_cname" {
+#    depends_on = [ digitalocean_domain.additional ]
+#    for_each = {
+#        for ind, domain in local.cname_additional_aliases :
+#        "${domain.domainname}.${domain.subdomainname}" => domain
+#    }
+#    name   = each.value.subdomainname
+#    domain = each.value.domainname
+#    type   = "CNAME"
+#    ttl    = "300"
+#    value  = "${each.value.domainname}."
+#}
 
 resource "digitalocean_domain" "default" {
     name = var.config.root_domain_name
 }
 
 
-resource "digitalocean_record" "default_stun_srv_udp" {
-    count = var.config.stun_port != "" ? 1 : 0
-    name   = "_stun._udp"
-    domain = digitalocean_domain.default.name
-    type   = "SRV"
-    ttl    = "300"
-    priority = "0"
-    weight = "0"
-    port = var.config.stun_port
-    value  = "stun.${var.config.root_domain_name}."
-}
+#resource "digitalocean_record" "default_stun_srv_udp" {
+#    count = var.config.stun_port != "" ? 1 : 0
+#    name   = "_stun._udp"
+#    domain = digitalocean_domain.default.name
+#    type   = "SRV"
+#    ttl    = "300"
+#    priority = "0"
+#    weight = "0"
+#    port = var.config.stun_port
+#    value  = "stun.${var.config.root_domain_name}."
+#}
 
-resource "digitalocean_record" "default_stun_srv_tcp" {
-    count = var.config.stun_port != "" ? 1 : 0
-    name   = "_stun._tcp"
-    domain = digitalocean_domain.default.name
-    type   = "SRV"
-    ttl    = "300"
-    priority = "0"
-    weight = "0"
-    port = var.config.stun_port
-    value  = "stun.${var.config.root_domain_name}."
-}
+#resource "digitalocean_record" "default_stun_srv_tcp" {
+#    count = var.config.stun_port != "" ? 1 : 0
+#    name   = "_stun._tcp"
+#    domain = digitalocean_domain.default.name
+#    type   = "SRV"
+#    ttl    = "300"
+#    priority = "0"
+#    weight = "0"
+#    port = var.config.stun_port
+#    value  = "stun.${var.config.root_domain_name}."
+#}
 
 resource "digitalocean_record" "default_a_offsite" {
     count = length(var.config.offsite_arecord_aliases)
@@ -55,14 +55,15 @@ resource "digitalocean_record" "default_a_offsite" {
     value  = var.config.offsite_arecord_aliases[count.index].ip
 }
 
-resource "digitalocean_record" "default_stun_a" {
-    count = var.config.stun_port != "" ? 1 : 0
-    name   = "stun"
-    domain = digitalocean_domain.default.name
-    type   = "A"
-    ttl    = "300"
-    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
-}
+#resource "digitalocean_record" "default_stun_a" {
+#    count = var.config.stun_port != "" ? 1 : 0
+#    name   = "stun"
+#    domain = digitalocean_domain.default.name
+#    type   = "A"
+#    ttl    = "300"
+#    #value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+#    value  = digitalocean_loadbalancer.main[0].ip
+#}
 
 resource "digitalocean_record" "default_cname" {
     count = length(compact(flatten(local.cname_aliases)))
@@ -82,55 +83,50 @@ resource "digitalocean_record" "default_cname_dev" {
     value  = "${var.config.root_domain_name}."
 }
 
-resource "digitalocean_record" "default_a_admin" {
-    count = length(compact(var.config.admin_arecord_aliases))
-    name   = compact(flatten(var.config.admin_arecord_aliases))[count.index]
-    domain = digitalocean_domain.default.name
-    type   = "A"
-    ttl    = "300"
-    value  = local.has_admin ? local.dns_admin : local.dns_lead
-}
+#resource "digitalocean_record" "default_a_admin" {
+#    count = length(compact(var.config.admin_arecord_aliases))
+#    name   = compact(flatten(var.config.admin_arecord_aliases))[count.index]
+#    domain = digitalocean_domain.default.name
+#    type   = "A"
+#    ttl    = "300"
+#    value  = local.has_admin ? local.dns_admin : local.dns_lead
+#}
 
-resource "digitalocean_record" "default_a_db" {
-    count  = contains(flatten(local.cfg_servers[*].roles), "db") ? length(compact(var.config.db_arecord_aliases)) : 0
-    name   = compact(flatten(var.config.db_arecord_aliases))[count.index]
-    domain = digitalocean_domain.default.name
-    type   = "A"
-    ttl    = "300"
-    value  = local.dns_db
-}
+#resource "digitalocean_record" "default_a_db" {
+#    count  = contains(flatten(local.cfg_servers[*].roles), "db") ? length(compact(var.config.db_arecord_aliases)) : 0
+#    name   = compact(flatten(var.config.db_arecord_aliases))[count.index]
+#    domain = digitalocean_domain.default.name
+#    type   = "A"
+#    ttl    = "300"
+#    value  = local.dns_db
+#}
 
 resource "digitalocean_record" "default_a_leader" {
-    count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? length(compact(var.config.leader_arecord_aliases)) : 0
+    count  = length(compact(var.config.leader_arecord_aliases))
     name   = compact(flatten(var.config.leader_arecord_aliases))[count.index]
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.use_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
-    ##TODO: Once all apps migrated over to kubernetes/ingress
-    #value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    value  = data.digitalocean_loadbalancer.main.ip
 }
 
 resource "digitalocean_record" "default_a_wildcard_leader" {
-    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name   = "*"
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    value  = data.digitalocean_loadbalancer.main.ip
 }
 
 resource "digitalocean_record" "default_a_k8s_leader" {
-    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name   = "*.k8s"
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    value  = data.digitalocean_loadbalancer.main.ip
 }
 
 resource "digitalocean_record" "default_a_k8s_internal_leader" {
-    count  = local.create_kube_records && contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name   = "*.k8s-internal"
     domain = digitalocean_domain.default.name
     type   = "A"
@@ -142,24 +138,26 @@ resource "digitalocean_record" "default_a_k8s_internal_leader" {
 }
 
 resource "digitalocean_record" "default_a_leader_root" {
-    count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? 1 : 0
     name   = "@"
     domain = digitalocean_domain.default.name
     type   = "A"
     ttl    = "300"
-    value  = local.use_lb || local.use_kube_managed_lb ? digitalocean_loadbalancer.main[0].ip : local.dns_lead
+    value  = data.digitalocean_loadbalancer.main.ip
 }
+
 
 resource "digitalocean_record" "additional_ssl" {
     count  = contains(flatten(local.cfg_servers[*].roles), "lead") ? length(var.config.additional_ssl) : 0
     name   = lookup( element(var.config.additional_ssl, count.index), "subdomain_name")
     domain = digitalocean_domain.default.name
     ttl    = "300"
-    type   = local.use_lb || local.use_kube_managed_lb ? "A" : "CNAME"
-    value  = (local.use_lb || local.use_kube_managed_lb
-        ? (local.has_admin ? local.dns_admin : local.dns_lead)
-        : "${var.config.root_domain_name}."
-    )
+    #type   = local.use_lb || local.use_kube_managed_lb ? "A" : "CNAME"
+    type   = "A"
+    #value  = (local.use_lb || local.use_kube_managed_lb
+    #    ? (local.has_admin ? local.dns_admin : local.dns_lead)
+    #    : "${var.config.root_domain_name}."
+    #)
+    value  = "${var.config.root_domain_name}."
 }
 
 resource "digitalocean_record" "misc_cname" {

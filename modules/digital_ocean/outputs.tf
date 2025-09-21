@@ -1,10 +1,6 @@
-output "instances" {
+output "cluster_info" {
     value = {
-        for k, h in digitalocean_droplet.main:
-        (h.name) => "${k} - ssh root@${h.ipv4_address}"
+        endpoint  = digitalocean_kubernetes_cluster.main.endpoint
+        kube_config = digitalocean_kubernetes_cluster.main.kube_config[0]
     }
-}
-
-output "ansible_hosts" {
-    value = local.sorted_hosts
 }

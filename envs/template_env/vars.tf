@@ -64,13 +64,14 @@ variable "install_unity3d" { default = false }
 ## NOTE: Kubernetes admin requires 2 cores and 2 GB of ram
 variable "container_orchestrators" {
     default = [
-        "kubernetes",
-        "docker_swarm",
-        #"managed_kubernetes",  ## in alpha
+        #"kubernetes",
+        #"docker_swarm",
+        "managed_kubernetes",
     ]
 }
 
-variable "local_kubeconfig_path" { default = "~/.kube/config" }
+variable "buildkitd_namespace" { default = "buildkitd" }
+variable "helm_experiments" { default = false }
 variable "cleanup_kube_volumes" { default = true } #auto false if  "default" workspace
 ########## SOFTWARE VERSIONS ##########
 #######################################
@@ -88,7 +89,8 @@ variable "buildkitd_version" { default = "0.10.5" }
 ##! NOTE: Packer config variables - Software baked into image
 ##! kubernetes_version options: Valid version or recent version gitlab supports
 ##!   ex "1.24.7-00" | "gitlab"
-variable "kubernetes_version" { default = "gitlab" }
+#variable "kubernetes_version" { default = "gitlab" }
+variable "kubernetes_version" { default = "1.33.1-00" }
 variable "gitlab_version" { default = "15.5.3-ce.0" }
 variable "docker_version" { default = "20.10.21" }
 variable "buildctl_version" { default = "0.10.5" }
@@ -166,7 +168,7 @@ locals {
     ### When intending to replace machines instead of scaling up/down
     ###  - Add a fleet, `terraform apply`, remove the old fleet, `terraform apply`
     ###  - Supports replacing 'lead', 'build', 'db' type fleets
-    servers = lookup(local.workspace_servers, terraform.workspace)
+    servers = lookup(local.workspace_servers, terraform.workspace, local.workspace_servers["default"])
     ## NOTE: 'disk_size' applies to aws & azure only
     workspace_servers = {
         "default" = [
@@ -191,7 +193,7 @@ locals {
 
     ##! Used with `managed_kubernetes`
     ##! Only for digital ocean during alpha
-    managed_kubernetes_conf = lookup(local.workspace_managed_kubernetes_conf, terraform.workspace)
+    managed_kubernetes_conf = lookup(local.workspace_managed_kubernetes_conf, terraform.workspace, local.workspace_managed_kubernetes_conf["default"])
     workspace_managed_kubernetes_conf = {
         "default" = [{
             size       = "s-2vcpu-2gb"

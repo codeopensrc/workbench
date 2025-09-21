@@ -14,6 +14,7 @@ locals {
     kube_do_matrix = {
         "1.20.11-00" = "1.20.11-do.0"
         "1.24.4-00" = "1.24.4-do.0"
+        "1.33.1-00" = "1.33.1-do.3"
     }
     last_kube_do_version = reverse(values(local.kube_do_matrix))[0]
     kube_major_minor = regex("^[0-9]+.[0-9]+", var.config.packer_config.kubernetes_version)
@@ -26,16 +27,73 @@ locals {
         : (length(local.kube_versions_found) > 0
             ? reverse(local.kube_versions_found)[0]
             : local.last_kube_do_version) )
+
+    cluster_services = {
+        nginx = {
+            "enabled"          = true
+            "chart"            = "ingress-nginx"
+            "namespace"        = "ingress-nginx"
+            "create_namespace" = true
+            "chart_url"        = "https://kubernetes.github.io/ingress-nginx"
+            "chart_version"    = "4.13.2"
+            "opt_value_files"  = ["nginx-values.yml"]
+        }
+        certmanager = {
+            "enabled"          = true
+            "chart"            = "cert-manager"
+            "namespace"        = "cert-manager"
+            "create_namespace" = true
+            "chart_url"        = "https://charts.jetstack.io"
+            "chart_version"    = "v1.18.2"
+            "opt_value_files"  = []
+        }
+    }
+    certmanager_files = {
+        for ind, issuer in 
+        split("---", templatefile("${path.module}/helm_values/certissuers.yml", { contact_email = var.config.contact_email })) :
+        ["staging", "prod"][ind] => trimspace(issuer)
+    }
+
+    buildkit_files = {
+        for ind, file in 
+        split("---", templatefile("${path.module}/manifests/buildkitd.yaml", 
+            { buildkitd_version = var.config.buildkitd_version
+            buildkitd_namespace = var.config.buildkitd_namespace }
+        )) :
+        ["namespace", "statefulset"][ind] => trimspace(file)
+    }
+    tf_helm_values = {
+        nginx = <<-EOF
+        controller:
+          service:
+            annotations:
+              service.beta.kubernetes.io/do-loadbalancer-name: "${var.config.server_name_prefix}-${var.config.region}-cluster"
+              service.beta.kubernetes.io/do-loadbalancer-protocol: "*"
+        EOF
+              #service.beta.kubernetes.io/do-loadbalancer-protocol: "http"
+              #service.beta.kubernetes.io/do-loadbalancer-http-ports: "80"
+              #service.beta.kubernetes.io/do-loadbalancer-tls-ports: "443"
+              #service.beta.kubernetes.io/do-loadbalancer-redirect-http-to-https: "true"
+              #service.beta.kubernetes.io/do-loadbalancer-protocol: "https"
+        certmanager = <<-EOF
+        crds:
+          enabled: true
+        extraObjects:
+        - |
+          ${indent(2, local.certmanager_files["staging"])}
+        - |
+          ${indent(2, local.certmanager_files["prod"])}
+        EOF
+    }
 }
 
 
 
-##! To save a copy of the kubeconfig locally
+##! Another way to save a copy of the kubeconfig locally
 ##! Must be authenticated to use `doctl kubernetes` command
 #`doctl auth init`
 #`doctl kubernetes cluster list`; `doctl kubernetes cluster kubeconfig save <cluster name>`
 resource "digitalocean_kubernetes_cluster" "main" {
-    count = contains(var.config.container_orchestrators, "managed_kubernetes") ? 1 : 0
     name     = "${var.config.server_name_prefix}-${var.config.region}-cluster"
     region  = var.config.region
     version = local.do_kubernetes_version
@@ -72,146 +130,38 @@ resource "digitalocean_kubernetes_cluster" "main" {
     }
 }
 
-resource "null_resource" "provision_kubeconfig" {
+resource "helm_release" "cluster_services" {
     for_each = {
-        for key, cfg in digitalocean_droplet.main: key => cfg
-        if contains(var.config.container_orchestrators, "managed_kubernetes")
-            && (contains(cfg.tags, "admin") || contains(cfg.tags, "lead"))
+        for servicename, service in local.cluster_services:
+        servicename => service
+        if service.enabled
     }
-    provisioner "remote-exec" {
-        inline = [ "mkdir -p /root/.kube" ]
-    }
-    provisioner "file" {
-        content = nonsensitive(digitalocean_kubernetes_cluster.main[0].kube_config[0].raw_config)
-        destination = "/root/.kube/config"
-    }
-    ## We were patching the deployment, but converting to a daemonset suits us better currently
-    provisioner "file" {
-        #"kubectl patch deployment -n ingress-nginx ingress-nginx-controller --type merge --patch \"$(cat /root/.kube/ingress-controller-deploy-patch.yml)\"",
-        content = <<-EOF
-        spec:
-          template:
-            spec:
-              affinity:
-                podAntiAffinity:                                  
-                  preferredDuringSchedulingIgnoredDuringExecution:
-                  - podAffinityTerm:                              
-                      labelSelector:
-                        matchExpressions:                         
-                        - key: app.kubernetes.io/name
-                          operator: In                            
-                          values:
-                          - ingress-nginx                         
-                      topologyKey: kubernetes.io/hostname         
-                    weight: 100                                   
-        EOF
-        destination = "/root/.kube/ingress-controller-deploy-patch.yml"
-    }
-
-    ### External LB http ports -> Kubernetes LB nodeport service ports
-    ### This ensures the terraform load balancer and nginx controller nodeports match
-    ### We do this with sed initially but upload the patch for backup
-    provisioner "file" {
-        #"kubectl patch service -n ingress-nginx ingress-nginx-controller --type merge --patch \"$(cat /root/.kube/ingress-controller-svc-patch.yml)\"",
-        content = <<-EOF
-        spec:
-          ports:
-            - name: http
-              port: 80
-              protocol: TCP
-              targetPort: http
-              nodePort: ${local.lb_http_nodeport}
-              appProtocol: http            
-            - name: https
-              port: 443
-              protocol: TCP
-              targetPort: https
-              nodePort: ${local.lb_https_nodeport}
-              appProtocol: https
-        EOF
-        destination = "/root/.kube/ingress-controller-svc-patch.yml"
-    }
-
-    ### Cert redirection service and ingress
-    ### Other ingresses should have a path from "/.well-known" to cert-redirect service
-    ### app.domain/.well-known -> cert-redirect:80 -> cert.domain:cert_port
-    provisioner "file" {
-        content = <<-EOF
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: cert-redirect
-          namespace: default
-        spec:
-          type: ExternalName
-          externalName: cert.${var.config.root_domain_name}
-          ports:
-          - port: ${var.config.cert_port}
-        ---
-        apiVersion: networking.k8s.io/v1
-        kind: Ingress
-        metadata:
-          name: ingress-cert-redirect
-        spec:
-          ingressClassName: nginx
-          rules:
-          - http:
-              paths:
-              - path: "/.well-known"                                   
-                pathType: Prefix
-                backend:
-                  service:
-                    name: cert-redirect
-                    port:
-                      number: 80
-        EOF
-        destination = "/root/.kube/ingress-letsencrypt.yml"
-    }
-
-    ## Example patch: Apply after we obtain and add a tls secret
-    #provisioner "file" {
-    #    content = <<-EOF
-    #    metadata:
-    #      annotations:
-    #        service.beta.kubernetes.io/do-loadbalancer-redirect-http-to-https: "true"
-    #        service.beta.kubernetes.io/do-loadbalancer-protocol: "https"
-    #    EOF
-    #    destination = "/root/.kube/lb-svc-patch.yml"
-    #}
-
-    connection {
-        host = each.value.ipv4_address
-        type = "ssh"
-    }
+    name             = each.key
+    chart            = each.value.chart
+    namespace        = each.value.namespace != "" ? each.value.namespace : "default"
+    create_namespace = each.value.create_namespace
+    repository       = each.value.chart_url
+    version          = each.value.chart_version != "" ? each.value.chart_version : ""
+    dependency_update = true
+    values           = concat(
+        [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
+        [for key, values in local.tf_helm_values: values if key == each.key]
+    )
 }
 
+## Comes from nginx helm_release cluster_service
+data "digitalocean_loadbalancer" "main" {
+    depends_on = [
+        digitalocean_kubernetes_cluster.main,
+        helm_release.cluster_services["nginx"]
+    ]
+    name = digitalocean_kubernetes_cluster.main.name
+}
 
-resource "null_resource" "configure_ingress_controller" {
-    count = contains(var.config.container_orchestrators, "managed_kubernetes") ? 1 : 0
-    depends_on = [ null_resource.provision_kubeconfig ]
-
-    ###! NOTE: Attaches/configures the cloud load balancer to kubernetes LoadBalancer service with its id
-    ## https://docs.digitalocean.com/products/kubernetes/how-to/add-load-balancers/
-    provisioner "remote-exec" {
-        inline = [
-            "wget -O /root/.kube/ingress-nginx-controller.yml https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.0/deploy/static/provider/do/deploy.yaml",
-            "sed -i '/.*do-loadbalancer.*/a\\    kubernetes.digitalocean.com/load-balancer-id: \"${digitalocean_loadbalancer.main[0].id}\"' /root/.kube/ingress-nginx-controller.yml",
-            "sed -i '/.*do-loadbalancer.*/a\\    service.beta.kubernetes.io/do-loadbalancer-name: \"${local.lb_name}\"' /root/.kube/ingress-nginx-controller.yml",
-            "sed -i '/.*targetPort: http$/a\\      nodePort: ${local.lb_http_nodeport}' /root/.kube/ingress-nginx-controller.yml",
-            "sed -i '/.*targetPort: https$/a\\      nodePort: ${local.lb_https_nodeport}' /root/.kube/ingress-nginx-controller.yml",
-            "sed -i 's/kind: Deployment/kind: DaemonSet/' /root/.kube/ingress-nginx-controller.yml",
-            "kubectl apply -f /root/.kube/ingress-nginx-controller.yml",
-            "echo 'Wait 60 for Nginx ingress controller'",
-            "sleep 60", ## ingress-letsencrypt.yml uses `ingressClassName: nginx` - controller needs to be up to accept ingress webhook validation
-            "kubectl apply -f /root/.kube/ingress-letsencrypt.yml",
-            "kubectl delete pod -n ingress-nginx -l 'app.kubernetes.io/component=admission-webhook'"
-        ]
-    }
-    connection {
-        host = [
-            for h in digitalocean_droplet.main: h.ipv4_address
-            if (contains(h.tags, "admin") || contains(h.tags, "lead"))
-        ][0]
-        type = "ssh"
-    }
+resource "kubectl_manifest" "buildkitd" {
+    for_each = local.buildkit_files
+    depends_on = [
+        digitalocean_kubernetes_cluster.main,
+    ]
+    yaml_body = each.value
 }

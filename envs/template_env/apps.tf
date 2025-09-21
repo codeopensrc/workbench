@@ -124,14 +124,14 @@ variable "kube_services" {
     }))
 
     default = {
-        certmanager = {
-            "enabled"          = false
-            "chart"            = "cert-manager"
-            "namespace"        = "cert-manager"
+        react = {
+            "enabled"          = true
+            "chart"            = "react"
+            "namespace"        = "react"
             "create_namespace" = true
-            "chart_url"        = "https://charts.jetstack.io"
-            "chart_version"    = "v1.11.0"
-            "opt_value_files"  = ["certmanager-values.yaml"]
+            "chart_url"        = "https://gitlab.codeopensrc.com/api/v4/projects/36/packages/helm/stable"
+            "chart_version"    = "0.10.0"
+            "opt_value_files"  = []
         }
         prometheus = {
             "enabled"          = false
@@ -141,15 +141,6 @@ variable "kube_services" {
             "chart_url"        = "https://prometheus-community.github.io/helm-charts"
             "chart_version"    = "19.6.1"
             "opt_value_files"  = ["prometheus-values.yaml"]
-        }
-        nginx = {
-            "enabled"          = false
-            "chart"            = "ingress-nginx"
-            "namespace"        = "ingress-nginx"
-            "create_namespace" = true
-            "chart_url"        = "https://kubernetes.github.io/ingress-nginx"
-            "chart_version"    = "4.5.2"
-            "opt_value_files"  = ["nginx-values.yaml"]
         }
     }
 }

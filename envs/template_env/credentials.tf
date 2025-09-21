@@ -125,9 +125,14 @@ locals {
 #        secret_key = "" ##! S3 secret access key.
 #
 #        ###! Uncomment below to enable backend using digital ocean Spaces
-#        # endpoint = "https://SPACES_REGION.digitaloceanspaces.com"
-#        # skip_credentials_validation = true
-#        # skip_metadata_api_check = true
+#        #endpoints = {
+#        #    s3 = "https://SPACES_REGION.digitaloceanspaces.com"
+#        #}
+#        #skip_credentials_validation = true
+#        #skip_metadata_api_check = true
+#        #skip_requesting_account_id  = true
+#        #skip_region_validation      = true
+#        #skip_s3_checksum            = true
 #    }
 #    ###! Use Azure Blob Storage for remote backend instead of s3
 #    #backend "azurerm" {
@@ -156,9 +161,14 @@ data "terraform_remote_state" "cloud" {
     #    secret_key = local.data_state_s3_secret_key[local.active_s3_provider]
 
     #    ###! Uncomment below to enable backend using digital ocean Spaces
-    #    #endpoint = local.data_state_remote_endpoint[local.active_s3_provider]
+    #    #endpoints = {
+    #    #    s3 = local.data_state_remote_endpoint[local.active_s3_provider]
+    #    #}
     #    #skip_credentials_validation = true
     #    #skip_metadata_api_check = true
+    #    #skip_requesting_account_id  = true
+    #    #skip_region_validation      = true
+    #    #skip_s3_checksum            = true
     #}
 
     ##! NOTE: If using azure backend for terraform state
