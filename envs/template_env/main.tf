@@ -736,7 +736,7 @@ locals {
         app_definitions = var.app_definitions
         packer_config = local.packer_config
         container_orchestrators = var.container_orchestrators
-        managed_kubernetes_conf = contains(var.container_orchestrators, "managed_kubernetes") ? local.managed_kubernetes_conf : []
+        managed_kubernetes_conf = local.managed_kubernetes_conf
 
         buildkitd_version = var.buildkitd_version
         buildkitd_namespace = var.buildkitd_namespace

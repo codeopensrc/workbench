@@ -196,7 +196,10 @@ locals {
     managed_kubernetes_conf = lookup(local.workspace_managed_kubernetes_conf, terraform.workspace, local.workspace_managed_kubernetes_conf["default"])
     workspace_managed_kubernetes_conf = {
         "default" = [{
+            #key        = "" ## Opt key if multiple node groups same size
             size       = "s-2vcpu-2gb"
+            label      = ""
+            taints     = []
             count = 0
             ##! (count) or (min_node + max_node + auto_scale)
             #min_nodes  = 0

@@ -28,7 +28,11 @@ locals {
             ? reverse(local.kube_versions_found)[0]
             : local.last_kube_do_version) )
 
+    ## TODO: togglable outside module
     cluster_services = {
+        buildkitd = {
+            "enabled"         = true
+        }
         nginx = {
             "enabled"          = true
             "chart"            = "ingress-nginx"
@@ -47,8 +51,9 @@ locals {
             "chart_version"    = "v1.18.2"
             "opt_value_files"  = []
         }
+        ## TODO: Not a cluster service, move to gitlab module
         gitlab = {
-            "enabled"          = true
+            "enabled"          = false
             "chart"            = "gitlab"
             "namespace"        = "gitlab"
             "create_namespace" = true
@@ -70,6 +75,7 @@ locals {
             buildkitd_namespace = var.config.buildkitd_namespace }
         )) :
         ["namespace", "statefulset"][ind] => trimspace(file)
+        if local.cluster_services.buildkitd.enabled
     }
     tf_helm_values = {
         gitlab = <<-EOF
@@ -80,6 +86,8 @@ locals {
           ingress:
             class: "nginx"
             configureCertmanager: false
+            tls:
+              enabled: true
             annotations:
               cert-manager.io/cluster-issuer: letsencrypt-prod
         gitlab:
@@ -87,6 +95,11 @@ locals {
             ingress:
               tls:
                 secretName: gitlab-gitlab-tls
+            tolerations:
+              - key: "type"
+                operator: "Equal"
+                value: "gitlab-web"
+                effect: "NoSchedule"
           kas:
             ingress:
               tls:
@@ -104,16 +117,13 @@ locals {
           enabled: false
         EOF
 
-        #kubernetes.io/tls-acme: true
-        #--set global.ingress.annotations."kubernetes\.io/tls-acme"=true \
-        #--set gitlab.webservice.ingress.tls.secretName=RELEASE-gitlab-tls \
-        #--set gitlab.kas.ingress.tls.secretName=RELEASE-kas-tls
-        #--set registry.ingress.tls.secretName=RELEASE-registry-tls \
-        #--set minio.ingress.tls.secretName=RELEASE-minio-tls \
-        #certmanager-issuer:
-        #  email: ${var.config.contact_email}
         nginx = <<-EOF
         controller:
+          tolerations:
+            - key: "type"
+              operator: "Equal"
+              value: "main"
+              effect: "NoSchedule"
           service:
             annotations:
               service.beta.kubernetes.io/do-loadbalancer-name: "${var.config.server_name_prefix}-${var.config.region}-cluster"
@@ -127,6 +137,23 @@ locals {
               #service.beta.kubernetes.io/do-loadbalancer-redirect-http-to-https: "true"
               #service.beta.kubernetes.io/do-loadbalancer-protocol: "https"
         certmanager = <<-EOF
+        tolerations:
+          - key: "type"
+            operator: "Equal"
+            value: "main"
+            effect: "NoSchedule"
+        cainjector:
+          tolerations:
+            - key: "type"
+              operator: "Equal"
+              value: "main"
+              effect: "NoSchedule"
+        webhook:
+          tolerations:
+            - key: "type"
+              operator: "Equal"
+              value: "main"
+              effect: "NoSchedule"
         crds:
           enabled: true
         extraObjects:
@@ -153,29 +180,51 @@ resource "digitalocean_kubernetes_cluster" "main" {
     ##TODO: Test support for count AND/OR autoscale
     dynamic "node_pool" {
         for_each = {
-            for ind, obj in var.config.managed_kubernetes_conf: ind => ind
-            if lookup(obj, "count", 0) > 0 && ind == 0
+            for ind, obj in var.config.managed_kubernetes_conf: ind => obj
+            if ind == 0 && lookup(obj, "count", 0) > 0
         }
         content {
-            name       = "${var.config.server_name_prefix}-${var.config.region}-kubeworker"
-            size       = var.config.managed_kubernetes_conf[node_pool.key].size
-            node_count = var.config.managed_kubernetes_conf[node_pool.key].count
+            name       = "${var.config.server_name_prefix}-main-${replace(lookup(node_pool.value, "key", substr(node_pool.value.size, -3, -1)), "main-", "")}"
+            size       = node_pool.value.size
+            node_count = node_pool.value.count
             tags = [ "${replace(local.kubernetes, ".", "-")}" ]
+
+            dynamic "taint" {
+                for_each = {
+                    for val in lookup(node_pool.value, "taints", []): val => val
+                }
+                content {
+                    key = "type"
+                    value = taint.value
+                    effect = "NoSchedule"
+                }
+            }
         }
     }
 
     dynamic "node_pool" {
         for_each = {
-            for ind, obj in var.config.managed_kubernetes_conf: ind => ind
-            if lookup(obj, "min_nodes", 0) > 0 && lookup(obj, "max_nodes", 0) > 0 && ind == 0
+            for ind, obj in var.config.managed_kubernetes_conf: ind => obj
+            if ind == 0 && lookup(obj, "auto_scale", false) && lookup(obj, "min_nodes", 0) > 0
         }
         content {
-            name       = "${var.config.server_name_prefix}-${var.config.region}-kubeworker"
-            size       = var.config.managed_kubernetes_conf[node_pool.key].size
-            min_nodes  = var.config.managed_kubernetes_conf[node_pool.key].min_nodes
-            max_nodes  = var.config.managed_kubernetes_conf[node_pool.key].max_nodes
-            auto_scale  = var.config.managed_kubernetes_conf[node_pool.key].auto_scale
+            name       = "${var.config.server_name_prefix}-main-${replace(lookup(node_pool.value, "key", substr(node_pool.value.size, -3, -1)), "main-", "")}"
+            size       = node_pool.value.size
+            min_nodes  = node_pool.value.min_nodes
+            max_nodes  = node_pool.value.max_nodes
+            auto_scale  = node_pool.value.auto_scale
             tags = [ "${replace(local.kubernetes, ".", "-")}" ]
+
+            dynamic "taint" {
+                for_each = {
+                    for val in lookup(node_pool.value, "taints", []): val => val
+                }
+                content {
+                    key = "type"
+                    value = taint.value
+                    effect = "NoSchedule"
+                }
+            }
         }
 
     }
@@ -183,37 +232,42 @@ resource "digitalocean_kubernetes_cluster" "main" {
 
 resource "digitalocean_kubernetes_node_pool" "extra" {
     for_each = {
-        for ind, obj in var.config.managed_kubernetes_conf: ind => ind
-        if (lookup(obj, "count", 0) > 0 || lookup(obj, "auto_scale", false)) && ind > 0
+        for ind, obj in var.config.managed_kubernetes_conf: "${lookup(obj, "key", substr(obj.size, -3, -1))}" => obj
+        if ind > 0 && (lookup(obj, "count", 0) > 0 || lookup(obj, "auto_scale", false))
     }
     cluster_id = digitalocean_kubernetes_cluster.main.id
 
-    name       = "${var.config.server_name_prefix}-${var.config.region}-${var.config.managed_kubernetes_conf[each.key].size}-extrakubeworker"
-    size       = var.config.managed_kubernetes_conf[each.key].size
+    name       = "${var.config.server_name_prefix}-${each.key}"
+    size       = each.value.size
     tags       = [ "${replace(local.kubernetes, ".", "-")}" ]
 
-    node_count = lookup(var.config.managed_kubernetes_conf[each.key], "count", 0) > 0 ? var.config.managed_kubernetes_conf[each.key].count : null
+    node_count = lookup(each.value, "count", 0) > 0 ? each.value.count : null
+    ## node_count OR auto_scale
+    auto_scale  = lookup(each.value, "auto_scale", false) ? each.value.auto_scale : null
+    min_nodes  = lookup(each.value, "min_nodes", 0) > 0 ? each.value.min_nodes : null
+    max_nodes  = lookup(each.value, "max_nodes", 0) > 0 ? each.value.max_nodes : null
 
-    auto_scale  = lookup(var.config.managed_kubernetes_conf[each.key], "auto_scale", false) ? var.config.managed_kubernetes_conf[each.key].auto_scale : null
-    min_nodes  = lookup(var.config.managed_kubernetes_conf[each.key], "min_nodes", 0) > 0 ? var.config.managed_kubernetes_conf[each.key].min_nodes : null
-    max_nodes  = lookup(var.config.managed_kubernetes_conf[each.key], "max_nodes", 0) > 0 ? var.config.managed_kubernetes_conf[each.key].max_nodes : null
+    labels = {
+        type  = lookup(each.value, "label", "") != "" ? each.value.label : null
+    }
 
-    #labels = {
-    #    service  = "backend"
-    #    priority = "high"
-    #}
-    #taint {
-    #    key    = "workloadKind"
-    #    value  = "database"
-    #    effect = "NoSchedule"
-    #}
+    dynamic "taint" {
+        for_each = {
+            for val in lookup(each.value, "taints", []): val => val
+        }
+        content {
+            key = "type"
+            value = taint.value
+            effect = "NoSchedule"
+        }
+    }
 }
 
 resource "helm_release" "cluster_services" {
     for_each = {
         for servicename, service in local.cluster_services:
         servicename => service
-        if service.enabled
+        if service.enabled && lookup(service, "chart", "") != ""
     }
     name             = each.key
     chart            = each.value.chart

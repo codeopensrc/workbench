@@ -24,24 +24,29 @@ spec:
       labels:
         app: buildkitd
     spec:
+      tolerations:
+        - key: "type"
+          operator: "Equal"
+          value: "main"
+          effect: "NoSchedule"
       containers:
-        - name: buildkitd
-          image: moby/buildkit:v${buildkitd_version}
-          readinessProbe:
-            exec:
-              command:
-                - buildctl
-                - debug
-                - workers
-            initialDelaySeconds: 5
-            periodSeconds: 30
-          livenessProbe:
-            exec:
-              command:
-                - buildctl
-                - debug
-                - workers
-            initialDelaySeconds: 5
-            periodSeconds: 30
-          securityContext:
-            privileged: true
+      - name: buildkitd
+        image: moby/buildkit:v${buildkitd_version}
+        readinessProbe:
+          exec:
+            command:
+              - buildctl
+              - debug
+              - workers
+          initialDelaySeconds: 5
+          periodSeconds: 30
+        livenessProbe:
+          exec:
+            command:
+              - buildctl
+              - debug
+              - workers
+          initialDelaySeconds: 5
+          periodSeconds: 30
+        securityContext:
+          privileged: true
