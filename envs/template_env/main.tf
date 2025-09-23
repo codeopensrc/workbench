@@ -727,7 +727,6 @@ locals {
     ##! local.config is a wrapper to pass into module.cloud in vars.tf
     config = {
         ## Machine/Misc
-        helm_experiments = var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
         servers = local.servers
         region = local.region
         server_name_prefix = local.server_name_prefix

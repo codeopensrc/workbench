@@ -36,6 +36,6 @@ provider "helm" {
         )
     }
     experiments = {
-        manifest = var.config.helm_experiments
+        manifest = var.helm_experiments
     }
 }

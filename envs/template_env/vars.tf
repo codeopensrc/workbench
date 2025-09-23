@@ -71,7 +71,10 @@ variable "container_orchestrators" {
 }
 
 variable "buildkitd_namespace" { default = "buildkitd" }
-variable "helm_experiments" { default = false }
+variable "helm_experiments" {
+    default = false
+    ephemeral = true
+}
 variable "cleanup_kube_volumes" { default = true } #auto false if  "default" workspace
 ########## SOFTWARE VERSIONS ##########
 #######################################
@@ -154,6 +157,7 @@ module "cloud" {
     #source             = "../../modules/azure"          ###! Uncomment for azure
 
     config = local.config
+    helm_experiments = var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
 }
 
 locals {

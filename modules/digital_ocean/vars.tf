@@ -1,5 +1,6 @@
 ### See envs/env/main.tf locals.config
 variable "config" {}
+variable "helm_experiments" { ephemeral = true }
 
 variable "stun_protos" { default = ["tcp", "udp"] }
 
