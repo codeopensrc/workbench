@@ -24,6 +24,8 @@ spec:
       labels:
         app: buildkitd
     spec:
+      nodeSelector:
+        type: main
       tolerations:
         - key: "type"
           operator: "Equal"

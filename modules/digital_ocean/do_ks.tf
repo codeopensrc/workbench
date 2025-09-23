@@ -51,6 +51,8 @@ locals {
             "chart_version"    = "v1.18.2"
             "opt_value_files"  = []
         }
+    }
+    additional_services = {
         ## TODO: Not a cluster service, move to gitlab module
         gitlab = {
             "enabled"          = false
@@ -59,6 +61,8 @@ locals {
             "create_namespace" = true
             "chart_url"        = "https://charts.gitlab.io"
             "chart_version"    = "9.4.0"
+            "wait"             = false
+            "replace"          = false
             "opt_value_files"  = []
         }
     }
@@ -77,6 +81,26 @@ locals {
         ["namespace", "statefulset"][ind] => trimspace(file)
         if local.cluster_services.buildkitd.enabled
     }
+    gitlab_nodeselector = <<-EOF
+    nodeSelector:
+      type: gitlab
+    tolerations:
+      - key: "type"
+        operator: "Equal"
+        value: "gitlab"
+        effect: "NoSchedule"
+    EOF
+    gitlab_affinity = <<-EOF
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: type
+              operator: NotIn
+              values:
+              - main
+    EOF
     tf_helm_values = {
         gitlab = <<-EOF
         global:
@@ -90,7 +114,18 @@ locals {
               enabled: true
             annotations:
               cert-manager.io/cluster-issuer: letsencrypt-prod
+        installCertmanager: false
+        nginx-ingress:
+          enabled: false
         gitlab:
+          gitaly:
+            ${indent(4, local.gitlab_nodeselector)}
+          toolbox:
+            ${indent(4, local.gitlab_nodeselector)}
+          gitlab-shell:
+            ${indent(4, local.gitlab_nodeselector)}
+          gitlab-exporter:
+            ${indent(4, local.gitlab_nodeselector)}
           webservice:
             ingress:
               tls:
@@ -101,24 +136,36 @@ locals {
                 value: "gitlab-web"
                 effect: "NoSchedule"
           kas:
+            ${indent(4, local.gitlab_nodeselector)}
             ingress:
               tls:
                 secretName: gitlab-kas-tls
         registry:
+          ${indent(2, local.gitlab_nodeselector)}
           ingress:
             tls:
               secretName: gitlab-registry-tls
         minio:
+          ${indent(2, local.gitlab_nodeselector)}
           ingress:
             tls:
               secretName: gitlab-minio-tls
-        installCertmanager: false
-        nginx-ingress:
-          enabled: false
+        gitlab-runner:
+          ${indent(2, local.gitlab_affinity)}
+        prometheus:
+          server:
+            ${indent(4, local.gitlab_affinity)}
+        redis:
+          master:
+            ${indent(4, local.gitlab_affinity)}
+        postgresql:
+          ${indent(2, local.gitlab_affinity)}
         EOF
 
         nginx = <<-EOF
         controller:
+          nodeSelector:
+            type: main
           tolerations:
             - key: "type"
               operator: "Equal"
@@ -137,18 +184,24 @@ locals {
               #service.beta.kubernetes.io/do-loadbalancer-redirect-http-to-https: "true"
               #service.beta.kubernetes.io/do-loadbalancer-protocol: "https"
         certmanager = <<-EOF
+        nodeSelector:
+          type: main
         tolerations:
           - key: "type"
             operator: "Equal"
             value: "main"
             effect: "NoSchedule"
         cainjector:
+          nodeSelector:
+            type: main
           tolerations:
             - key: "type"
               operator: "Equal"
               value: "main"
               effect: "NoSchedule"
         webhook:
+          nodeSelector:
+            type: main
           tolerations:
             - key: "type"
               operator: "Equal"
@@ -177,6 +230,10 @@ resource "digitalocean_kubernetes_cluster" "main" {
     version = local.do_kubernetes_version
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
 
+    cluster_autoscaler_configuration {
+        scale_down_unneeded_time = "5m"
+    }
+
     ##TODO: Test support for count AND/OR autoscale
     dynamic "node_pool" {
         for_each = {
@@ -188,6 +245,9 @@ resource "digitalocean_kubernetes_cluster" "main" {
             size       = node_pool.value.size
             node_count = node_pool.value.count
             tags = [ "${replace(local.kubernetes, ".", "-")}" ]
+            labels = {
+                type  = lookup(node_pool.value, "label", null)
+            }
 
             dynamic "taint" {
                 for_each = {
@@ -214,6 +274,9 @@ resource "digitalocean_kubernetes_cluster" "main" {
             max_nodes  = node_pool.value.max_nodes
             auto_scale  = node_pool.value.auto_scale
             tags = [ "${replace(local.kubernetes, ".", "-")}" ]
+            labels = {
+                type  = lookup(node_pool.value, "label", null)
+            }
 
             dynamic "taint" {
                 for_each = {
@@ -243,12 +306,12 @@ resource "digitalocean_kubernetes_node_pool" "extra" {
 
     node_count = lookup(each.value, "count", 0) > 0 ? each.value.count : null
     ## node_count OR auto_scale
-    auto_scale  = lookup(each.value, "auto_scale", false) ? each.value.auto_scale : null
-    min_nodes  = lookup(each.value, "min_nodes", 0) > 0 ? each.value.min_nodes : null
+    auto_scale  = lookup(each.value, "auto_scale", null)
+    min_nodes  = lookup(each.value, "min_nodes", -1) > -1 ? each.value.min_nodes : null
     max_nodes  = lookup(each.value, "max_nodes", 0) > 0 ? each.value.max_nodes : null
 
     labels = {
-        type  = lookup(each.value, "label", "") != "" ? each.value.label : null
+        type  = lookup(each.value, "label", null)
     }
 
     dynamic "taint" {
@@ -269,15 +332,46 @@ resource "helm_release" "cluster_services" {
         servicename => service
         if service.enabled && lookup(service, "chart", "") != ""
     }
-    name             = each.key
-    chart            = each.value.chart
-    namespace        = each.value.namespace != "" ? each.value.namespace : "default"
-    create_namespace = each.value.create_namespace
-    repository       = each.value.chart_url
-    version          = each.value.chart_version != "" ? each.value.chart_version : null
-    timeout          = 300
+    name              = each.key
+    chart             = each.value.chart
+    namespace         = lookup(each.value, "namespace", "default")
+    create_namespace  = each.value.create_namespace
+    repository        = each.value.chart_url
+    version           = lookup(each.value, "chart_version", null)
+    timeout           = 300
+    force_update      = true
+    recreate_pods     = false
     dependency_update = true
-    values           = concat(
+    wait              = lookup(each.value, "wait", true)
+    replace           = lookup(each.value, "replace", false)
+    values            = concat(
+        [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
+        [for key, values in local.tf_helm_values: values if key == each.key]
+    )
+}
+
+resource "helm_release" "additional_services" {
+    for_each = {
+        for servicename, service in local.additional_services:
+        servicename => service
+        if service.enabled && lookup(service, "chart", "") != ""
+    }
+    depends_on = [
+        helm_release.cluster_services
+    ]
+    name              = each.key
+    chart             = each.value.chart
+    namespace         = lookup(each.value, "namespace", "default")
+    create_namespace  = each.value.create_namespace
+    repository        = each.value.chart_url
+    version           = lookup(each.value, "chart_version", null)
+    timeout           = 300
+    force_update      = true
+    recreate_pods     = false
+    dependency_update = true
+    wait              = lookup(each.value, "wait", true)
+    replace           = lookup(each.value, "replace", false)
+    values            = concat(
         [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
         [for key, values in local.tf_helm_values: values if key == each.key]
     )

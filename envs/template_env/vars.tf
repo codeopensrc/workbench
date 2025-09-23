@@ -198,13 +198,19 @@ locals {
         "default" = [{
             #key        = "" ## Opt key if multiple node groups same size
             size       = "s-2vcpu-2gb"
-            label      = ""
+            label      = "main"
             taints     = []
             count = 0
             ##! (count) or (min_node + max_node + auto_scale)
             #min_nodes  = 0
             #max_nodes  = 0
             #auto_scale = true
+        }]
+        "gitlab-enabled-example" = [{
+            { size = "s-1vcpu-2gb", count = 1, auto_scale = false, min_nodes = 1, max_nodes = 2, label = "main" },
+            { size = "s-1vcpu-2gb", auto_scale = true, min_nodes = 0, max_nodes = 4, key = "2gb-xs" },
+            { size = "s-2vcpu-4gb", auto_scale = true, min_nodes = 0, max_nodes = 2, label = "gitlab" },
+            { size = "s-4vcpu-8gb", auto_scale = true, min_nodes = 0, max_nodes = 2, label = "gitlab-web", taints = ["gitlab-web"] },
         }]
     }
 }
