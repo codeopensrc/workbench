@@ -1,11 +1,3 @@
-#variable "ansible_hosts" {}
-#variable "ansible_hostfile" {}
-#variable "predestroy_hostfile" {}
-#variable "remote_state_hosts" {}
-
-variable "admin_servers" {}
-variable "server_count" {}
-
 variable "gitlab_runner_tokens" {}
 variable "root_domain_name" {}
 variable "contact_email" {}
@@ -15,29 +7,18 @@ variable "active_env_provider" {}
 
 variable "kubernetes_version" {}
 variable "buildkitd_version" {}
-variable "container_orchestrators" {}
 variable "cleanup_kube_volumes" {}
 
 variable "cloud_provider" {}
 variable "cloud_provider_token" {}
-variable "cloud_controller_version" {}
 variable "csi_namespace" {}
 variable "csi_version" {}
-
-variable "additional_ssl" {}
 
 variable "kube_apps" {}
 variable "kube_services" {}
 variable "kubernetes_nginx_nodeports" {}
-#variable "lb_name" {}
-#variable "lb_id" {}
 
 locals {
-    kube_app_services = [
-        for app in var.additional_ssl:
-        { subdomain = format("%s.%s", app.subdomain_name, var.root_domain_name), name = app.service_name }
-        if app.create_ssl_cert == true
-    ]
     app_helm_value_files_dir = "${path.module}/playbooks/ansiblefiles/helm_values"
     app_helm_value_files = fileset("${local.app_helm_value_files_dir}/", "*[^.swp]")
     app_helm_value_files_sha = sha1(join("", [for f in local.app_helm_value_files: filesha1("${local.app_helm_value_files_dir}/${f}")]))

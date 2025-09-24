@@ -1,9 +1,3 @@
-#variable "ansible_hosts" {}
-#variable "ansible_hostfile" {}
-#
-#variable "admin_servers" {}
-#variable "server_count" {}
-
 variable "root_domain_name" {}
 variable "contact_email" {}
 
@@ -20,14 +14,6 @@ variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
 
 locals {
-    #admin_public_ips = flatten([
-    #    for role, hosts in var.ansible_hosts: [
-    #        for HOST in hosts: HOST.ip
-    #        if contains(HOST.roles, "admin")
-    #    ]
-    #])
-    #hosts = flatten(values(var.ansible_hosts))
-
     charts = {
         gitlab = {
             "enabled"          = false

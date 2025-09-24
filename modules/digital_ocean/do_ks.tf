@@ -12,18 +12,16 @@ locals {
     #1.19.15-do.0    1.19.15               cluster-autoscaler, docr-integration, token-authentication
     
     kube_do_matrix = {
-        "1.20.11-00" = "1.20.11-do.0"
-        "1.24.4-00" = "1.24.4-do.0"
         "1.33.1-00" = "1.33.1-do.3"
     }
     last_kube_do_version = reverse(values(local.kube_do_matrix))[0]
-    kube_major_minor = regex("^[0-9]+.[0-9]+", var.config.packer_config.kubernetes_version)
+    kube_major_minor = regex("^[0-9]+.[0-9]+", var.config.kubernetes_version)
     kube_versions_found = [
         for KUBE_V, DO_KUBE_V in local.kube_do_matrix: DO_KUBE_V
         if length(regexall("^${local.kube_major_minor}", KUBE_V)) > 0
     ]
-    do_kubernetes_version = (lookup(local.kube_do_matrix, var.config.packer_config.kubernetes_version, null) != null
-        ? local.kube_do_matrix[var.config.packer_config.kubernetes_version]
+    do_kubernetes_version = (lookup(local.kube_do_matrix, var.config.kubernetes_version, null) != null
+        ? local.kube_do_matrix[var.config.kubernetes_version]
         : (length(local.kube_versions_found) > 0
             ? reverse(local.kube_versions_found)[0]
             : local.last_kube_do_version) )
@@ -151,7 +149,7 @@ resource "digitalocean_kubernetes_cluster" "main" {
             name       = "${var.config.server_name_prefix}-main-${replace(lookup(node_pool.value, "key", substr(node_pool.value.size, -3, -1)), "main-", "")}"
             size       = node_pool.value.size
             node_count = node_pool.value.count
-            tags = [ "${replace(local.kubernetes, ".", "-")}" ]
+            tags = [ ]
             labels = {
                 type  = lookup(node_pool.value, "label", null)
             }
@@ -180,7 +178,7 @@ resource "digitalocean_kubernetes_cluster" "main" {
             min_nodes  = node_pool.value.min_nodes
             max_nodes  = node_pool.value.max_nodes
             auto_scale  = node_pool.value.auto_scale
-            tags = [ "${replace(local.kubernetes, ".", "-")}" ]
+            tags = [ ]
             labels = {
                 type  = lookup(node_pool.value, "label", null)
             }
@@ -209,7 +207,7 @@ resource "digitalocean_kubernetes_node_pool" "extra" {
 
     name       = "${var.config.server_name_prefix}-${each.key}"
     size       = each.value.size
-    tags       = [ "${replace(local.kubernetes, ".", "-")}" ]
+    tags       = [ ]
 
     node_count = lookup(each.value, "count", 0) > 0 ? each.value.count : null
     ## node_count OR auto_scale
