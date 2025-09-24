@@ -52,20 +52,7 @@ locals {
             "opt_value_files"  = []
         }
     }
-    additional_services = {
-        ## TODO: Not a cluster service, move to gitlab module
-        gitlab = {
-            "enabled"          = false
-            "chart"            = "gitlab"
-            "namespace"        = "gitlab"
-            "create_namespace" = true
-            "chart_url"        = "https://charts.gitlab.io"
-            "chart_version"    = "9.4.0"
-            "wait"             = false
-            "replace"          = false
-            "opt_value_files"  = []
-        }
-    }
+    additional_services = {}
     certmanager_files = {
         for ind, issuer in 
         split("---", templatefile("${path.module}/helm_values/certissuers.yml", { contact_email = var.config.contact_email })) :
@@ -81,87 +68,7 @@ locals {
         ["namespace", "statefulset"][ind] => trimspace(file)
         if local.cluster_services.buildkitd.enabled
     }
-    gitlab_nodeselector = <<-EOF
-    nodeSelector:
-      type: gitlab
-    tolerations:
-      - key: "type"
-        operator: "Equal"
-        value: "gitlab"
-        effect: "NoSchedule"
-    EOF
-    gitlab_affinity = <<-EOF
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-          - matchExpressions:
-            - key: type
-              operator: NotIn
-              values:
-              - main
-    EOF
     tf_helm_values = {
-        gitlab = <<-EOF
-        global:
-          edition: ce
-          hosts:
-            domain: ${var.config.root_domain_name}
-          ingress:
-            class: "nginx"
-            configureCertmanager: false
-            tls:
-              enabled: true
-            annotations:
-              cert-manager.io/cluster-issuer: letsencrypt-prod
-        installCertmanager: false
-        nginx-ingress:
-          enabled: false
-        gitlab:
-          gitaly:
-            ${indent(4, local.gitlab_nodeselector)}
-          toolbox:
-            ${indent(4, local.gitlab_nodeselector)}
-          gitlab-shell:
-            ${indent(4, local.gitlab_nodeselector)}
-          gitlab-exporter:
-            ${indent(4, local.gitlab_nodeselector)}
-          webservice:
-            ingress:
-              tls:
-                secretName: gitlab-gitlab-tls
-            tolerations:
-              - key: "type"
-                operator: "Equal"
-                value: "gitlab-web"
-                effect: "NoSchedule"
-          kas:
-            ${indent(4, local.gitlab_nodeselector)}
-            ingress:
-              tls:
-                secretName: gitlab-kas-tls
-        registry:
-          ${indent(2, local.gitlab_nodeselector)}
-          ingress:
-            tls:
-              secretName: gitlab-registry-tls
-        minio:
-          ${indent(2, local.gitlab_nodeselector)}
-          ingress:
-            tls:
-              secretName: gitlab-minio-tls
-        gitlab-runner:
-          ${indent(2, local.gitlab_affinity)}
-        prometheus:
-          server:
-            ${indent(4, local.gitlab_affinity)}
-        redis:
-          master:
-            ${indent(4, local.gitlab_affinity)}
-        postgresql:
-          ${indent(2, local.gitlab_affinity)}
-        EOF
-
         nginx = <<-EOF
         controller:
           nodeSelector:

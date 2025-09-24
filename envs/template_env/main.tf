@@ -170,38 +170,38 @@ resource "local_file" "kube_config" {
 #    bot_gpg_passphrase = var.bot_gpg_passphrase
 #}
 
-#module "gitlab" {
-#    source = "../../modules/gitlab"
-#    depends_on = [
-#        module.cloud,
-#        module.ansible,
-#        module.init,
-#        module.consul,
-#        module.cron,
-#        module.gpg,
-#    ]
-#
-#    ansible_hosts = local.ansible_hosts
-#    ansible_hostfile = local.ansible_hostfile
-#
-#    admin_servers = local.admin_servers
-#    server_count = local.server_count
-#
-#    root_domain_name = local.root_domain_name
-#    contact_email = var.contact_email
-#
-#    import_gitlab = var.import_gitlab
-#    import_gitlab_version = var.import_gitlab_version
-#
-#    use_gpg = var.use_gpg
-#    bot_gpg_name = var.bot_gpg_name
-#
-#    s3alias = local.s3alias
-#    s3bucket = local.s3bucket
-#
-#    mattermost_subdomain = var.mattermost_subdomain
-#    wekan_subdomain = var.wekan_subdomain
-#}
+module "gitlab" {
+    source = "../../modules/gitlab"
+    depends_on = [
+        module.cloud,
+        #module.ansible,
+        #module.init,
+        #module.consul,
+        #module.cron,
+        #module.gpg,
+    ]
+
+    #ansible_hosts = local.ansible_hosts
+    #ansible_hostfile = local.ansible_hostfile
+
+    #admin_servers = local.admin_servers
+    #server_count = local.server_count
+
+    root_domain_name = local.root_domain_name
+    contact_email = var.contact_email
+
+    import_gitlab = var.import_gitlab
+    import_gitlab_version = var.import_gitlab_version
+
+    use_gpg = var.use_gpg
+    bot_gpg_name = var.bot_gpg_name
+
+    s3alias = local.s3alias
+    s3bucket = local.s3bucket
+
+    mattermost_subdomain = var.mattermost_subdomain
+    wekan_subdomain = var.wekan_subdomain
+}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
