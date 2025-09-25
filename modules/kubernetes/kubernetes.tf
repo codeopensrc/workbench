@@ -18,6 +18,8 @@ variable "kube_apps" {}
 variable "kube_services" {}
 variable "kubernetes_nginx_nodeports" {}
 
+variable "oauth" {}
+
 locals {
     app_helm_value_files_dir = "${path.module}/playbooks/ansiblefiles/helm_values"
     app_helm_value_files = fileset("${local.app_helm_value_files_dir}/", "*[^.swp]")
@@ -31,6 +33,12 @@ locals {
         for port, dest in lookup(var.kubernetes_nginx_nodeports, "tcp", {}):
         "${port}: ${dest}"
     ])
+    consul_srvdiscovery_enabled = false
+    wekan_oauth = {
+        enabled = lookup(var.oauth, "wekan", null) != null ? true : false
+        client_id = lookup(var.oauth, "wekan", null) != null ? "OAUTH2_CLIENT_ID: ${var.oauth.wekan.client_id}" : ""
+        secret = lookup(var.oauth, "wekan", null) != null ? "OAUTH2_SECRET: ${var.oauth.wekan.secret}" : ""
+    }
     tf_helm_values = {
         prometheus = <<-EOF
         server:
@@ -51,6 +59,34 @@ locals {
               - hosts:
                   - react.k8s.${var.root_domain_name}
                 secretName: react-tls
+        EOF
+        wekan = <<-EOF
+        db:
+          enabled: true
+        app:
+          svcDiscovery:
+            consul:
+              enabled: ${local.consul_srvdiscovery_enabled}
+              env:
+                CONSUL_HOST: consul.${var.root_domain_name}
+          ingress:
+            enabled: true
+            ingressClassName: "nginx"
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+            hosts:
+              - host: wekan.k8s.${var.root_domain_name}
+            tls:
+              - hosts:
+                  - wekan.k8s.${var.root_domain_name}
+                secretName: wekan-tls
+          configMapData:
+            ROOT_URL: "https://wekan.k8s.${var.root_domain_name}"
+            OAUTH2_SERVER_URL: "https://gitlab.${var.root_domain_name}/"
+            OAUTH2_ENABLED: ${local.wekan_oauth.enabled}
+          secretStringData:
+            ${local.wekan_oauth.client_id}
+            ${local.wekan_oauth.secret}
         EOF
     }
 }

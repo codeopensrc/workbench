@@ -3,6 +3,10 @@ terraform {
         helm = {
             source = "hashicorp/helm"
         }
+        gitlab = {
+            source = "gitlabhq/gitlab"
+            version = "18.4.1"
+        }
     }
 }
 
@@ -17,4 +21,9 @@ provider "helm" {
     experiments = {
         manifest = var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
     }
+}
+
+provider "gitlab" {
+    token    = module.gitlab.gitlab_pat
+    base_url = "https://gitlab.${var.root_domain_name}"
 }

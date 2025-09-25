@@ -85,20 +85,20 @@ resource "digitalocean_record" "cname" {
 #    value  = local.dns_db
 #}
 
-resource "digitalocean_record" "cname_wildcard" {
+resource "digitalocean_record" "a_wildcard" {
     name   = "*"
     domain = digitalocean_domain.default.name
-    type   = "CNAME"
+    type   = "A"
     ttl    = "300"
-    value  = "${var.config.root_domain_name}."
+    value  = data.digitalocean_loadbalancer.main.ip
 }
 
-resource "digitalocean_record" "cname_k8s" {
+resource "digitalocean_record" "a_k8s" {
     name   = "*.k8s"
     domain = digitalocean_domain.default.name
-    type   = "CNAME"
+    type   = "A"
     ttl    = "300"
-    value  = "${var.config.root_domain_name}."
+    value  = data.digitalocean_loadbalancer.main.ip
 }
 
 resource "digitalocean_record" "a_k8s_internal" {

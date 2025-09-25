@@ -13,6 +13,13 @@ variable "s3bucket" {}
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
 
+##NOTE: Testing trying to create dependency from gitlab to gitlab provider
+## and feed it through terraform so we can use the gitlab data source
+## and get gitlab oauth app info and feed it into wekan/other helm charts
+output "gitlab_pat" {
+    value = helm_release.services["gitlab"].metadata.notes
+}
+
 locals {
     charts = {
         gitlab = {

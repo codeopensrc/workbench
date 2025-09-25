@@ -201,14 +201,29 @@ module "gitlab" {
 #    }
 #}
 
-##NOTE: Uses ansible
-##TODO: Figure out how best to organize modules/playbooks/hostfile
-## NOTE: Kubernetes admin requires 2 cores and 2 GB of ram
+locals {
+    gitlab_oauth_apps = {
+        wekan = {
+            client_id = ""
+            secret = ""
+        }
+    }
+    #gitlab_oauth_apps = {
+    #    wekan = ""
+    #}
+}
 module "kubernetes" {
     source = "../../modules/kubernetes"
     depends_on = [
         module.cloud,
     ]
+
+    ## gitlab input
+    oauth = local.gitlab_oauth_apps
+    #oauth = = {
+    #    wekan = local.oauth.wekan
+    #}
+    #oauth = data.gitlab_application.oauth_apps
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
     root_domain_name = local.root_domain_name
