@@ -12,7 +12,7 @@ output "cluster" {
 ## NOTE: Think token has a 7 day expiry
 resource "local_file" "kube_config" {
     content  = module.cloud.cluster_info.kube_config.raw_config
-    filename = "${path.module}/${terraform.workspace}-kube_config"
+    filename = local.kubeconfig_path
 }
 
 ##NOTE: Uses ansible
@@ -131,6 +131,7 @@ module "gitlab" {
     root_domain_name = local.root_domain_name
     contact_email = var.contact_email
 
+    gitlab_enabled = var.gitlab_enabled
     import_gitlab = var.import_gitlab
     import_gitlab_version = var.import_gitlab_version
 
@@ -206,6 +207,7 @@ module "gitlab" {
 resource "gitlab_application" "oidc" {
     for_each = {
         for key, app in local.gitlab_oauth_apps: key => app
+        if var.gitlab_enabled
     }
     depends_on = [
         module.cloud,

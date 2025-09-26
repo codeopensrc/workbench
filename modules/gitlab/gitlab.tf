@@ -2,6 +2,7 @@ variable "local_kubeconfig_path" {}
 variable "root_domain_name" {}
 variable "contact_email" {}
 
+variable "gitlab_enabled" {}
 variable "import_gitlab" {}
 variable "import_gitlab_version" {}
 
@@ -18,7 +19,7 @@ variable "wekan_subdomain" {}
 ## and feed it through terraform so we can use the gitlab data source
 ## and get gitlab oauth app info and feed it into wekan/other helm charts
 output "gitlab_pat" {
-    value = null_resource.create_init_gitlab_pat.triggers.output
+    value = local.tmp_gitlab_pat
     depends_on = [ null_resource.create_init_gitlab_pat ]
 }
 
@@ -27,7 +28,7 @@ locals {
     tmp_gitlab_pat = "init-fresh-terra-token"
     charts = {
         gitlab = {
-            "enabled"          = false
+            "enabled"          = var.gitlab_enabled
             "release_name"     = "gitlab"
             "chart"            = "gitlab"
             "namespace"        = "gitlab"
@@ -164,12 +165,13 @@ resource "helm_release" "services" {
 ## TODO: Can we set token to expire in minutes/hours instead of 24 hours
 ## Can also just have a separate flag to expire next apply if gitlab is deployed or something
 resource "null_resource" "create_init_gitlab_pat" {
+    count = var.gitlab_enabled ? 1 : 0
     depends_on = [ helm_release.services["gitlab"] ]
     triggers = {
         output = local.tmp_gitlab_pat
     }
     provisioner "local-exec" {
-        command = "POD=$(kubectl get pods --namespace gitlab -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n gitlab -it -c toolbox $POD -- gitlab-rails runner \"token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT', expires_at: 1.days.from_now); token.set_token('${local.tmp_gitlab_pat}'); token.save!\""
+        command = "POD=$(kubectl get pods -n ${local.charts.gitlab.namespace} -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n ${local.charts.gitlab.namespace} -it -c toolbox $POD -- gitlab-rails runner \"token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT', expires_at: 1.days.from_now); token.set_token('${local.tmp_gitlab_pat}'); token.save!\""
         interpreter = ["/bin/bash", "-c"]
         environment = {
             KUBECONFIG = var.local_kubeconfig_path

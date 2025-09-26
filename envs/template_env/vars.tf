@@ -32,6 +32,7 @@ variable "kubernetes_nginx_nodeports" {
     }
 }
 
+variable "gitlab_enabled" { default = false }
 variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }
 
@@ -91,6 +92,7 @@ module "cloud" {
 }
 
 locals {
+    kubeconfig_path = "${path.module}/${terraform.workspace}-kube_config"
     active_s3_provider = var.active_env_provider
     size_map = {
         ## TODO: Double check correlation with k8s managed node offerings over old static vm model
@@ -101,11 +103,11 @@ locals {
         xl = { aws = "t3a.large", digital_ocean = "s-4vcpu-8gb", azure = "Standard_B2ms" }
     }
     size = {
-        xs = local.size_map[var.active_env_provider]["xs"]
-        s = local.size_map[var.active_env_provider]["s"]
-        m = local.size_map[var.active_env_provider]["m"]
-        l = local.size_map[var.active_env_provider]["l"]
-        xl = local.size_map[var.active_env_provider]["xl"]
+        xs = local.size_map["xs"][var.active_env_provider]
+        s = local.size_map["s"][var.active_env_provider]
+        m = local.size_map["m"][var.active_env_provider]
+        l = local.size_map["l"][var.active_env_provider]
+        xl = local.size_map["xl"][var.active_env_provider]
     }
     ##! Used with `managed_kubernetes`
     ##! Only for digital ocean during alpha

@@ -18,11 +18,14 @@ provider "helm" {
         )
     }
     experiments = {
-        manifest = var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
+        manifest = var.helm_experiments && fileexists(local.kubeconfig_path)
     }
 }
 
+## TODO: How do we not use the gitlab provider if deploying gitlab helm chart disabled
 provider "gitlab" {
+    #https://gitlab.com/gitlab-org/api/client-go#use-the-config-package-experimental
+    #config_file = ""
     early_auth_check = false
     token    = module.gitlab.gitlab_pat
     base_url = "https://gitlab.${local.root_domain_name}/api/v4"
