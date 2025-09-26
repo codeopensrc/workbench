@@ -1,3 +1,4 @@
+variable "local_kubeconfig_path" {}
 variable "root_domain_name" {}
 variable "contact_email" {}
 
@@ -17,10 +18,13 @@ variable "wekan_subdomain" {}
 ## and feed it through terraform so we can use the gitlab data source
 ## and get gitlab oauth app info and feed it into wekan/other helm charts
 output "gitlab_pat" {
-    value = helm_release.services["gitlab"].metadata.notes
+    value = null_resource.create_init_gitlab_pat.triggers.output
+    depends_on = [ null_resource.create_init_gitlab_pat ]
 }
 
 locals {
+    ##TODO: Have this be a random secret resource
+    tmp_gitlab_pat = "init-fresh-terra-token"
     charts = {
         gitlab = {
             "enabled"          = false
@@ -30,8 +34,9 @@ locals {
             "create_namespace" = true
             "chart_url"        = "https://charts.gitlab.io"
             "chart_version"    = "9.4.0"
-            "wait"             = false
+            "wait"             = true
             "replace"          = false
+            "timeout"          = 900
             "opt_value_files"  = []
         }
     }
@@ -134,7 +139,7 @@ resource "helm_release" "services" {
     create_namespace  = each.value.create_namespace
     repository        = each.value.chart_url
     version           = lookup(each.value, "chart_version", null)
-    timeout           = 300
+    timeout           = lookup(each.value, "timeout", 300)
     force_update      = true
     recreate_pods     = false
     dependency_update = true
@@ -144,6 +149,32 @@ resource "helm_release" "services" {
         [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
         [for key, values in local.tf_helm_values: values if key == each.key]
     )
+}
+
+## TODO: Determine order of operations for fresh install first then a restore
+## Deploy gitlab helm chart
+##   - Import if we decide to
+## Create random id gitlab access token
+## Get gitlab PAT and pass to provider
+##   - Delete oauth apps if we imported
+## Create new oauth apps in terraform
+
+## Not the most ideal way but simplest way to get it working
+## Creating a new job/pod with all the configs of the running toolbox is a little extra
+## TODO: Can we set token to expire in minutes/hours instead of 24 hours
+## Can also just have a separate flag to expire next apply if gitlab is deployed or something
+resource "null_resource" "create_init_gitlab_pat" {
+    depends_on = [ helm_release.services["gitlab"] ]
+    triggers = {
+        output = local.tmp_gitlab_pat
+    }
+    provisioner "local-exec" {
+        command = "POD=$(kubectl get pods --namespace gitlab -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n gitlab -it -c toolbox $POD -- gitlab-rails runner \"token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'Temp PAT', expires_at: 1.days.from_now); token.set_token('${local.tmp_gitlab_pat}'); token.save!\""
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
 }
 
 #resource "null_resource" "prometheus_targets" {

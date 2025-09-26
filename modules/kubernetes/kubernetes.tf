@@ -19,26 +19,17 @@ variable "kube_services" {}
 variable "kubernetes_nginx_nodeports" {}
 
 variable "oauth" {}
+variable "subdomains" {}
 
 locals {
-    app_helm_value_files_dir = "${path.module}/playbooks/ansiblefiles/helm_values"
-    app_helm_value_files = fileset("${local.app_helm_value_files_dir}/", "*[^.swp]")
-    app_helm_value_files_sha = sha1(join("", [for f in local.app_helm_value_files: filesha1("${local.app_helm_value_files_dir}/${f}")]))
-
-    kube_formatted_udp_ports = join("\n  ", [
-        for port, dest in lookup(var.kubernetes_nginx_nodeports, "udp", {}):
-        "${port}: ${dest}"
-    ])
-    kube_formatted_tcp_ports = join("\n  ", [
-        for port, dest in lookup(var.kubernetes_nginx_nodeports, "tcp", {}):
-        "${port}: ${dest}"
-    ])
     consul_srvdiscovery_enabled = false
     wekan_oauth = {
         enabled = lookup(var.oauth, "wekan", null) != null ? true : false
-        client_id = lookup(var.oauth, "wekan", null) != null ? "OAUTH2_CLIENT_ID: ${var.oauth.wekan.client_id}" : ""
+        client_id = lookup(var.oauth, "wekan", null) != null ? "OAUTH2_CLIENT_ID: ${var.oauth.wekan.application_id}" : ""
         secret = lookup(var.oauth, "wekan", null) != null ? "OAUTH2_SECRET: ${var.oauth.wekan.secret}" : ""
     }
+    ## TODO: Have helm values come from apps.tf file ideally
+    ## Tricky cause they wont be in vcs but meh
     tf_helm_values = {
         prometheus = <<-EOF
         server:
@@ -75,13 +66,13 @@ locals {
             annotations:
               cert-manager.io/cluster-issuer: letsencrypt-prod
             hosts:
-              - host: wekan.k8s.${var.root_domain_name}
+              - host: ${lookup(var.subdomains, "wekan", "wekan")}.${var.root_domain_name}
             tls:
               - hosts:
-                  - wekan.k8s.${var.root_domain_name}
+                  - ${lookup(var.subdomains, "wekan", "wekan")}.${var.root_domain_name}
                 secretName: wekan-tls
           configMapData:
-            ROOT_URL: "https://wekan.k8s.${var.root_domain_name}"
+            ROOT_URL: "https://${lookup(var.subdomains, "wekan", "wekan")}.${var.root_domain_name}"
             OAUTH2_SERVER_URL: "https://gitlab.${var.root_domain_name}/"
             OAUTH2_ENABLED: ${local.wekan_oauth.enabled}
           secretStringData:

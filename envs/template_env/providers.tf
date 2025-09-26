@@ -5,7 +5,6 @@ terraform {
         }
         gitlab = {
             source = "gitlabhq/gitlab"
-            version = "18.4.1"
         }
     }
 }
@@ -24,6 +23,7 @@ provider "helm" {
 }
 
 provider "gitlab" {
+    early_auth_check = false
     token    = module.gitlab.gitlab_pat
-    base_url = "https://gitlab.${var.root_domain_name}"
+    base_url = "https://gitlab.${local.root_domain_name}/api/v4"
 }

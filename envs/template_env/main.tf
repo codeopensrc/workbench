@@ -127,7 +127,7 @@ module "gitlab" {
     depends_on = [
         module.cloud,
     ]
-
+    local_kubeconfig_path = local.kubeconfig_path
     root_domain_name = local.root_domain_name
     contact_email = var.contact_email
 
@@ -201,29 +201,31 @@ module "gitlab" {
 #    }
 #}
 
-locals {
-    gitlab_oauth_apps = {
-        wekan = {
-            client_id = ""
-            secret = ""
-        }
+## Create the wekan and mattermost apps in a fresh install
+## Think we'll have to delete all gitlab oauth apps when restoring
+resource "gitlab_application" "oidc" {
+    for_each = {
+        for key, app in local.gitlab_oauth_apps: key => app
     }
-    #gitlab_oauth_apps = {
-    #    wekan = ""
-    #}
+    depends_on = [
+        module.cloud,
+        module.gitlab,
+    ]
+    confidential = true
+    scopes       = each.value.scopes
+    name         = "${each.key}_plugin"
+    redirect_url = each.value.redirect_url
 }
+
 module "kubernetes" {
     source = "../../modules/kubernetes"
     depends_on = [
         module.cloud,
+        module.gitlab,
+        gitlab_application.oidc,
     ]
-
-    ## gitlab input
-    oauth = local.gitlab_oauth_apps
-    #oauth = = {
-    #    wekan = local.oauth.wekan
-    #}
-    #oauth = data.gitlab_application.oauth_apps
+    oauth = gitlab_application.oidc
+    subdomains = local.subdomains
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
     root_domain_name = local.root_domain_name
@@ -356,6 +358,15 @@ locals {
 
     gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
 
+    gitlab_oauth_apps = { 
+        wekan = {
+            redirect_url = "https://${var.wekan_subdomain}.${local.root_domain_name}/_oauth/oidc"
+            scopes = ["openid", "profile", "email"]
+        }
+    }
+    subdomains = {
+        wekan = var.wekan_subdomain
+    }
     gitlab_kube_matrix = {
         "14.4.2-ce.0" = "1.20.11-00"
         "15.5.3-ce.0" = "1.24.7-00"
