@@ -67,6 +67,7 @@ locals {
         if local.cluster_services.buildkitd.enabled
     }
     tf_helm_values = {
+        #--set controller.wildcardTLS.cert=ingress-nginx/example-com-certificate
         nginx = <<-EOF
         controller:
           nodeSelector:

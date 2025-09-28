@@ -133,6 +133,33 @@ variable "kube_services" {
             "chart_version"    = "0.10.0"
             "opt_value_files"  = []
         }
+        wekan = {
+            "enabled"          = false
+            "chart"            = "wekan"
+            "namespace"        = "wekan"
+            "create_namespace" = true
+            "chart_url"        = "https://gitlab.codeopensrc.com/api/v4/projects/4/packages/helm/stable"
+            "chart_version"    = "0.3.0"
+            "opt_value_files"  = []
+        },
+        postgresql = {
+            "enabled"          = true
+            "chart"            = "postgresql"
+            "namespace"        = "mattermost"
+            "create_namespace" = true
+            "chart_url"        = "https://charts.bitnami.com/bitnami"
+            "chart_version"    = "16.7.27"
+            "opt_value_files"  = []
+        },
+        mattermost = {
+            "enabled"          = true
+            "chart"            = "mattermost-operator"
+            "namespace"        = "mattermost-operator"
+            "create_namespace" = true
+            "chart_url"        = "https://helm.mattermost.com"
+            "chart_version"    = "1.0.4"
+            "opt_value_files"  = []
+        },
         prometheus = {
             "enabled"          = false
             "chart"            = "prometheus"

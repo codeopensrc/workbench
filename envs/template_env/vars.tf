@@ -88,7 +88,7 @@ module "cloud" {
     #source             = "../../modules/azure"          ###! Uncomment for azure
 
     config = local.config
-    helm_experiments = var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
+    helm_experiments = terraform.applying ? false : var.helm_experiments && fileexists("${path.module}/${terraform.workspace}-kube_config")
 }
 
 locals {

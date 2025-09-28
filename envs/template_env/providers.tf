@@ -3,10 +3,30 @@ terraform {
         helm = {
             source = "hashicorp/helm"
         }
+        kubectl = {
+            source = "gavinbunney/kubectl"
+        }
         gitlab = {
             source = "gitlabhq/gitlab"
         }
     }
+}
+
+provider "kubernetes" {
+    host  = module.cloud.cluster_info.endpoint
+    token = module.cloud.cluster_info.kube_config.token
+    cluster_ca_certificate = base64decode(
+        module.cloud.cluster_info.kube_config.cluster_ca_certificate
+    )
+}
+
+provider "kubectl" {
+    host  = module.cloud.cluster_info.endpoint
+    token = module.cloud.cluster_info.kube_config.token
+    cluster_ca_certificate = base64decode(
+        module.cloud.cluster_info.kube_config.cluster_ca_certificate
+    )
+    load_config_file = false
 }
 
 provider "helm" {
@@ -18,7 +38,7 @@ provider "helm" {
         )
     }
     experiments = {
-        manifest = var.helm_experiments && fileexists(local.kubeconfig_path)
+        manifest = terraform.applying ? false : var.helm_experiments && fileexists(local.kubeconfig_path)
     }
 }
 

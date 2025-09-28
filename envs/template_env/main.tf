@@ -228,6 +228,7 @@ module "kubernetes" {
     ]
     oauth = gitlab_application.oidc
     subdomains = local.subdomains
+    local_kubeconfig_path = local.kubeconfig_path
 
     gitlab_runner_tokens = local.gitlab_runner_tokens
     root_domain_name = local.root_domain_name
@@ -365,9 +366,15 @@ locals {
             redirect_url = "https://${var.wekan_subdomain}.${local.root_domain_name}/_oauth/oidc"
             scopes = ["openid", "profile", "email"]
         }
+        mattermost = {
+            redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/login/gitlab/complete,https://${var.mattermost_subdomain}.${local.root_domain_name}/signup/gitlab/complete"
+            scopes = ["openid", "profile", "email"]
+            #scopes = ["read_user"]
+        }
     }
     subdomains = {
         wekan = var.wekan_subdomain
+        mattermost = var.mattermost_subdomain
     }
     gitlab_kube_matrix = {
         "14.4.2-ce.0" = "1.20.11-00"

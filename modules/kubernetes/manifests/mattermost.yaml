@@ -1,0 +1,46 @@
+apiVersion: installation.mattermost.com/v1beta1
+kind: Mattermost
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+spec:
+  replicas: 1
+  size: ${users}
+  ingress:
+    enabled: true
+    host: ${host}
+    tlsSecret: "mattermost-tls"
+    annotations:
+      kubernetes.io/ingress.class: ${ingressclass}
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+  fileStore:
+    external:
+      url: ${filestore.url}
+      bucket: ${filestore.bucket}
+      secret: ${filestore.secretname}
+  database:
+    external:
+      secret: ${db.secretname}
+  #useServiceLoadBalancer: true   # Set to true to use AWS or Azure load balancers instead of an NGINX controller.
+version: ${version}
+---
+#fileStore
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${filestore.secretname}
+  namespace: ${namespace}
+type: Opaque
+data:
+  accesskey: ${filestore.accesskey}
+  secretkey: ${filestore.secretkey}
+---
+#database
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${db.secretname}
+  namespace: ${namespace}
+type: Opaque
+data:
+  DB_CONNECTION_STRING: ${db.conn_string}
