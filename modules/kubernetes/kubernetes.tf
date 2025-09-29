@@ -44,7 +44,7 @@ locals {
         key = "tls.key"
         cert = "tls.crt"
     }
-    mattermost_auth = {
+    mattermost_db_auth = {
         username = "mattermost"
         database = "mattermost"
         password = local.mattermost_enabled ? random_password.mattermost_db["user"].result : ""
@@ -61,8 +61,8 @@ locals {
     ## TODO: Incorrect - not sure how to configure oauth unattended just yet
     mattermost_oauth = {
         enabled = lookup(var.oauth, "mattermost", null) != null ? true : false
-        client_id = lookup(var.oauth, "mattermost", null) != null ? "OAUTH2_CLIENT_ID: ${var.oauth.mattermost.application_id}" : ""
-        secret = lookup(var.oauth, "mattermost", null) != null ? "OAUTH2_SECRET: ${var.oauth.mattermost.secret}" : ""
+        client_id = lookup(var.oauth, "mattermost", null) != null ? var.oauth.mattermost.application_id : ""
+        secret = lookup(var.oauth, "mattermost", null) != null ? var.oauth.mattermost.secret : ""
     }
     ## TODO: Have helm values come from apps.tf file ideally
     ## Tricky cause they wont be in vcs but meh
@@ -73,10 +73,10 @@ locals {
           #previousPasswords:
           #  existingSecret: postgresql
         auth:
-          username: ${local.mattermost_auth.username}
-          database: ${local.mattermost_auth.database}
-          password: ${local.mattermost_auth.password}
-          postgresPassword: ${local.mattermost_auth.postgresPassword}
+          username: ${local.mattermost_db_auth.username}
+          database: ${local.mattermost_db_auth.database}
+          password: ${local.mattermost_db_auth.password}
+          postgresPassword: ${local.mattermost_db_auth.postgresPassword}
         tls:
           enabled: true
           certificatesSecret: ${local.postgres_tls.name}
@@ -259,6 +259,10 @@ resource "tls_self_signed_cert" "postgres" {
 }
 resource "kubernetes_secret_v1" "postgres_tls" {
     count = local.mattermost_enabled ? 1 : 0
+    depends_on = [
+        tls_private_key.postgres,
+        tls_self_signed_cert.postgres
+    ]
     metadata {
         name = local.postgres_tls.name
         namespace = local.mm_namespace
@@ -277,13 +281,20 @@ resource "helm_release" "services" {
         servicename => service
         if service.enabled
     }
-    name             = each.key
-    chart            = each.value.chart
-    namespace        = each.value.namespace != "" ? each.value.namespace : "default"
-    create_namespace = each.value.create_namespace
-    repository       = each.value.chart_url
-    version          = each.value.chart_version
-    values           = concat(
+    depends_on = [ kubernetes_secret_v1.postgres_tls ]
+    name              = each.key
+    chart             = each.value.chart
+    namespace         = lookup(each.value, "namespace", "default")
+    create_namespace  = each.value.create_namespace
+    repository        = each.value.chart_url
+    version           = each.value.chart_version
+    timeout           = lookup(each.value, "timeout", 300)
+    force_update      = false
+    recreate_pods     = false
+    dependency_update = true
+    wait              = lookup(each.value, "wait", true)
+    replace           = lookup(each.value, "replace", false)
+    values            = concat(
         [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
         [for key, values in local.tf_helm_values: values if key == each.key]
     )
@@ -299,12 +310,23 @@ data "kubernetes_secret_v1" "gitlab_minio" {
 
 locals {
     mm_namespace = "mattermost"
+    mm_env_vars = {
+        MM_GITLABSETTINGS_ENABLE = true
+        MM_GITLABSETTINGS_ID = local.mattermost_oauth.client_id
+        MM_GITLABSETTINGS_SECRET = local.mattermost_oauth.secret
+        MM_GITLABSETTINGS_USERAPIENDPOINT = "https://gitlab.${var.root_domain_name}/api/v4/user"
+        MM_GITLABSETTINGS_AUTHENDPOINT = "https://gitlab.${var.root_domain_name}/oauth/authorize"
+        MM_GITLABSETTINGS_TOKENENDPOINT = "https://gitlab.${var.root_domain_name}/oauth/token"
+        MM_EMAILSETTINGS_ENABLESIGNUPWITHEMAIL = false
+        MM_EMAILSETTINGS_ENABLESIGNINWITHEMAIL = false
+    }
     mattermost_file = {
         namespace = local.mm_namespace
         name = "mattermost"
         users = "100users" # Example: 5000users
         host = "${lookup(var.subdomains, "mattermost", "mattermost")}.${var.root_domain_name}"
         version = local.mattermost_version
+        mm_env_vars = local.mm_env_vars
         ingressclass = "nginx"
         filestore = {
             secretname = local.mattermost_enabled ? data.kubernetes_secret_v1.gitlab_minio[0].metadata[0].name : ""
@@ -315,7 +337,7 @@ locals {
         }
         db = {
             secretname = "mattermost-postgres"
-            conn_string = base64encode("postgres://${local.mattermost_auth.username}:${local.mattermost_auth.password}@postgresql:5432/${local.mattermost_auth.database}")
+            conn_string = base64encode("postgres://${local.mattermost_db_auth.username}:${local.mattermost_db_auth.password}@postgresql:5432/${local.mattermost_db_auth.database}")
         }
     }
 
@@ -334,9 +356,9 @@ resource "kubectl_manifest" "mattermost" {
         key => file
         if local.mattermost_enabled
     }
-    depends_on = [
-        helm_release.services
-    ]
+    #depends_on = [
+    #    helm_release.services["mattermost"]
+    #]
     yaml_body = each.value
 }
 #resource "null_resource" "managed_kubernetes" {

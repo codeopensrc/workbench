@@ -19,8 +19,16 @@ variable "wekan_subdomain" {}
 ## and feed it through terraform so we can use the gitlab data source
 ## and get gitlab oauth app info and feed it into wekan/other helm charts
 output "gitlab_pat" {
-    value = random_password.gitlab_tf_api_pat.result
-    depends_on = [ null_resource.create_tf_gitlab_pat ]
+    ## Gitlab provider does not work on first apply with a non-static token
+    ##   so we provide a static init token that expires in a day (TODO: Test under 24 hours exp time)
+    value = (helm_release.services["gitlab"].status != "deployed"
+        ? "init-fresh-terra-token"
+        : random_password.gitlab_tf_api_pat[0].result)
+    depends_on = [
+        helm_release.services,
+        random_password.gitlab_tf_api_pat,
+        null_resource.create_tf_gitlab_pat,
+    ]
 }
 
 locals {
@@ -163,19 +171,18 @@ resource "helm_release" "services" {
 
 ## TODO: If gitlab pat from import dont create or something - figure out later
 resource "random_password" "gitlab_tf_api_pat" {
+    count = var.gitlab_enabled ? 1 : 0
     length           = 20
-    special          = true
-    override_special = "!#$%&*()-_=+[]{}<>:?"
+    special          = false
 }
 resource "null_resource" "create_tf_gitlab_pat" {
     count = var.gitlab_enabled ? 1 : 0
     depends_on = [ helm_release.services["gitlab"] ]
     triggers = {
-        output = random_password.gitlab_tf_api_pat.result
         forced_update_trigger_var = ""
     }
     provisioner "local-exec" {
-        command = "POD=$(kubectl get pods -n ${local.charts.gitlab.namespace} -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n ${local.charts.gitlab.namespace} -it -c toolbox $POD -- gitlab-rails runner \"token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'TF API PAT', expires_at: 363.days.from_now); token.set_token('${random_password.gitlab_tf_api_pat.result}'); token.save!\""
+        command = "POD=$(kubectl get pods -n ${local.charts.gitlab.namespace} -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n ${local.charts.gitlab.namespace} -it -c toolbox $POD -- gitlab-rails runner \"inittoken = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'INIT TF API PAT', expires_at: 1.days.from_now); inittoken.set_token('init-fresh-terra-token'); inittoken.save; token = User.find(1).personal_access_tokens.create(scopes: [:api], name: 'TF API PAT', expires_at: 363.days.from_now); token.set_token('${random_password.gitlab_tf_api_pat[0].result}'); token.save!\""
         interpreter = ["/bin/bash", "-c"]
         environment = {
             KUBECONFIG = var.local_kubeconfig_path

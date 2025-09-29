@@ -118,11 +118,6 @@ variable "kube_apps" {
 
 ## Services running in the cluster to be consumed by other services
 variable "kube_services" {
-    type = map(object({
-        enabled=bool, chart=string, namespace=string, create_namespace=bool,
-        chart_url=string, chart_version=string, opt_value_files=list(string)
-    }))
-
     default = {
         react = {
             "enabled"          = true
@@ -158,6 +153,7 @@ variable "kube_services" {
             "create_namespace" = true
             "chart_url"        = "https://helm.mattermost.com"
             "chart_version"    = "1.0.4"
+            "timeout"          = 120
             "opt_value_files"  = []
         },
         prometheus = {

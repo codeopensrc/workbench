@@ -21,6 +21,12 @@ spec:
   database:
     external:
       secret: ${db.secretname}
+  ## https://github.com/mattermost/mattermost-operator/blob/master/docs/examples/mattermost_full.yaml#L21-L25
+  mattermostEnv:
+    %{ for k, v in mm_env_vars }
+    - name: ${k}
+      value: "${v}"
+    %{ endfor ~}
   #useServiceLoadBalancer: true   # Set to true to use AWS or Azure load balancers instead of an NGINX controller.
 version: ${version}
 ---

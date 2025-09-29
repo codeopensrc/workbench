@@ -224,7 +224,6 @@ module "kubernetes" {
     depends_on = [
         module.cloud,
         module.gitlab,
-        gitlab_application.oidc,
     ]
     oauth = gitlab_application.oidc
     subdomains = local.subdomains
@@ -366,11 +365,16 @@ locals {
             redirect_url = "https://${var.wekan_subdomain}.${local.root_domain_name}/_oauth/oidc"
             scopes = ["openid", "profile", "email"]
         }
+        ## Gitlab SSO https://docs.mattermost.com/administration-guide/configure/authentication-configuration-settings.html#enable-oauth-2-0-authentication-with-gitlab
         mattermost = {
-            redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/login/gitlab/complete,https://${var.mattermost_subdomain}.${local.root_domain_name}/signup/gitlab/complete"
-            scopes = ["openid", "profile", "email"]
-            #scopes = ["read_user"]
+            redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/login/gitlab/complete\r\nhttps://${var.mattermost_subdomain}.${local.root_domain_name}/signup/gitlab/complete"
+            scopes = ["api"]
         }
+        ## Gitlab integration in mattermost https://docs.mattermost.com/integrations-guide/gitlab.html
+        #matermmost_integration = {
+        #    redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/plugins/com.github.manland.mattermost-plugin-gitlab/oauth/complete"
+        #    scopes = ["api", "read_user"]
+        #}
     }
     subdomains = {
         wekan = var.wekan_subdomain
