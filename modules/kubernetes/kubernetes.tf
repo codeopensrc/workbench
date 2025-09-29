@@ -58,11 +58,15 @@ locals {
         client_id = lookup(var.oauth, "wekan", null) != null ? "OAUTH2_CLIENT_ID: ${var.oauth.wekan.application_id}" : ""
         secret = lookup(var.oauth, "wekan", null) != null ? "OAUTH2_SECRET: ${var.oauth.wekan.secret}" : ""
     }
-    ## TODO: Incorrect - not sure how to configure oauth unattended just yet
     mattermost_oauth = {
         enabled = lookup(var.oauth, "mattermost", null) != null ? true : false
         client_id = lookup(var.oauth, "mattermost", null) != null ? var.oauth.mattermost.application_id : ""
         secret = lookup(var.oauth, "mattermost", null) != null ? var.oauth.mattermost.secret : ""
+    }
+    mattermost_integration_oauth = {
+        enabled = lookup(var.oauth, "mattermost_integration", null) != null ? true : false
+        client_id = lookup(var.oauth, "mattermost_integration", null) != null ? var.oauth.mattermost_integration.application_id : ""
+        secret = lookup(var.oauth, "mattermost_integration", null) != null ? var.oauth.mattermost_integration.secret : ""
     }
     ## TODO: Have helm values come from apps.tf file ideally
     ## Tricky cause they wont be in vcs but meh
@@ -320,6 +324,18 @@ locals {
         MM_EMAILSETTINGS_ENABLESIGNUPWITHEMAIL = false
         MM_EMAILSETTINGS_ENABLESIGNINWITHEMAIL = false
     }
+    ## https://docs.mattermost.com/administration-guide/configure/plugins-configuration-settings.html#installed-plugin-state
+    mm_plugin_vars = {
+        MM_PLUGINSETTINGS_PLUGINSTATES = jsonencode({"com.github.manland.mattermost-plugin-gitlab": {"Enable": true}})
+        MM_PLUGINSETTINGS_PLUGINS = jsonencode({"com.github.manland.mattermost-plugin-gitlab": {
+            "enablechildpipelinenotifications": true,
+            "enablecodepreview": "public",
+            "enableprivaterepo": true,
+            "gitlaboauthclientid": local.mattermost_integration_oauth.client_id,
+            "gitlaboauthclientsecret": local.mattermost_integration_oauth.secret,
+            "gitlaburl": "https://gitlab.${var.root_domain_name}",
+        }})
+    }
     mattermost_file = {
         namespace = local.mm_namespace
         name = "mattermost"
@@ -327,6 +343,7 @@ locals {
         host = "${lookup(var.subdomains, "mattermost", "mattermost")}.${var.root_domain_name}"
         version = local.mattermost_version
         mm_env_vars = local.mm_env_vars
+        mm_plugin_vars = local.mm_plugin_vars
         ingressclass = "nginx"
         filestore = {
             secretname = local.mattermost_enabled ? data.kubernetes_secret_v1.gitlab_minio[0].metadata[0].name : ""

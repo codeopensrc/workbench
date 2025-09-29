@@ -371,10 +371,10 @@ locals {
             scopes = ["api"]
         }
         ## Gitlab integration in mattermost https://docs.mattermost.com/integrations-guide/gitlab.html
-        #matermmost_integration = {
-        #    redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/plugins/com.github.manland.mattermost-plugin-gitlab/oauth/complete"
-        #    scopes = ["api", "read_user"]
-        #}
+        mattermost_integration = {
+            redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/plugins/com.github.manland.mattermost-plugin-gitlab/oauth/complete"
+            scopes = ["api", "read_user"]
+        }
     }
     subdomains = {
         wekan = var.wekan_subdomain
