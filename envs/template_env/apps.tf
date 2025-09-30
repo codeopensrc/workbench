@@ -141,7 +141,7 @@ variable "kube_services" {
             "enabled"          = true
             "chart"            = "postgresql"
             "namespace"        = "mattermost"
-            "create_namespace" = true
+            "create_namespace" = false
             "chart_url"        = "https://charts.bitnami.com/bitnami"
             "chart_version"    = "16.7.27"
             "opt_value_files"  = []

@@ -151,6 +151,7 @@ resource "digitalocean_kubernetes_cluster" "main" {
             size       = node_pool.value.size
             node_count = node_pool.value.count
             tags = [ ]
+            ## TODO: Support multiple labels
             labels = {
                 type  = lookup(node_pool.value, "label", null)
             }
@@ -180,6 +181,7 @@ resource "digitalocean_kubernetes_cluster" "main" {
             max_nodes  = node_pool.value.max_nodes
             auto_scale  = node_pool.value.auto_scale
             tags = [ ]
+            ## TODO: Support multiple labels
             labels = {
                 type  = lookup(node_pool.value, "label", null)
             }
@@ -217,15 +219,17 @@ resource "digitalocean_kubernetes_node_pool" "extra" {
     max_nodes  = lookup(each.value, "max_nodes", 0) > 0 ? each.value.max_nodes : null
 
     labels = {
-        type  = lookup(each.value, "label", null)
+        for key, value in lookup(each.value, "labels", {}):
+        key => value
     }
 
     dynamic "taint" {
         for_each = {
-            for val in lookup(each.value, "taints", []): val => val
+            for key, value in lookup(each.value, "taints", {}): 
+            key => value
         }
         content {
-            key = "type"
+            key = taint.key
             value = taint.value
             effect = "NoSchedule"
         }

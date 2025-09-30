@@ -72,6 +72,11 @@ locals {
     ## Tricky cause they wont be in vcs but meh
     tf_helm_values = {
         postgresql = <<-EOF
+        image:
+          repository: bitnamilegacy/postgresql
+        volumePermissions:
+          image:
+            repository: bitnamilegacy/os-shell
         passwordUpdateJob:
           enabled: true
           #previousPasswords:
@@ -82,7 +87,7 @@ locals {
           password: ${local.mattermost_db_auth.password}
           postgresPassword: ${local.mattermost_db_auth.postgresPassword}
         tls:
-          enabled: true
+          enabled: ${local.mattermost_enabled}
           certificatesSecret: ${local.postgres_tls.name}
           certFilename: ${local.postgres_tls.cert}
           certKeyFilename: ${local.postgres_tls.key}
@@ -241,7 +246,7 @@ locals {
 resource "random_password" "mattermost_db" {
     for_each = {
         for ind, key in ["user", "postgres"]: key => key
-        if local.mattermost_enabled
+        if local.mattermost_enabled || var.kube_services["postgresql"].enabled
     }
     length           = 20
     special          = false
@@ -261,11 +266,18 @@ resource "tls_self_signed_cert" "postgres" {
         "server_auth",
     ]
 }
+resource "kubernetes_namespace" "mattermost" {
+    count = local.mattermost_enabled || var.kube_services["postgresql"].enabled ? 1 : 0
+    metadata {
+        name = local.mm_namespace
+    }
+}
 resource "kubernetes_secret_v1" "postgres_tls" {
     count = local.mattermost_enabled ? 1 : 0
     depends_on = [
         tls_private_key.postgres,
-        tls_self_signed_cert.postgres
+        tls_self_signed_cert.postgres,
+        kubernetes_namespace.mattermost
     ]
     metadata {
         name = local.postgres_tls.name
@@ -306,6 +318,8 @@ resource "helm_release" "services" {
 
 data "kubernetes_secret_v1" "gitlab_minio" {
     count = local.mattermost_enabled ? 1 : 0
+    ## Create dependency to wait for gitlab to be launched before trying to read secret
+    depends_on = [ helm_release.services["mattermost"] ]
     metadata {
         name = "gitlab-minio-secret"
         namespace = "gitlab"
@@ -373,9 +387,7 @@ resource "kubectl_manifest" "mattermost" {
         key => file
         if local.mattermost_enabled
     }
-    #depends_on = [
-    #    helm_release.services["mattermost"]
-    #]
+    depends_on = [ helm_release.services["mattermost"] ]
     yaml_body = each.value
 }
 #resource "null_resource" "managed_kubernetes" {

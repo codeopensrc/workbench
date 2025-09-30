@@ -1,3 +1,4 @@
+variable "local_init_filepath" {}
 variable "local_kubeconfig_path" {}
 variable "root_domain_name" {}
 variable "contact_email" {}
@@ -21,9 +22,9 @@ variable "wekan_subdomain" {}
 output "gitlab_pat" {
     ## Gitlab provider does not work on first apply with a non-static token
     ##   so we provide a static init token that expires in a day (TODO: Test under 24 hours exp time)
-    value = (helm_release.services["gitlab"].status != "deployed"
-        ? "init-fresh-terra-token"
-        : random_password.gitlab_tf_api_pat[0].result)
+    value = (fileexists(var.local_init_filepath)
+        ? random_password.gitlab_tf_api_pat[0].result
+        : "init-fresh-terra-token")
     depends_on = [
         helm_release.services,
         random_password.gitlab_tf_api_pat,
@@ -101,7 +102,7 @@ locals {
             tolerations:
               - key: "type"
                 operator: "Equal"
-                value: "gitlab-web"
+                value: "gitlab"
                 effect: "NoSchedule"
           kas:
             ${indent(4, local.gitlab_nodeselector)}

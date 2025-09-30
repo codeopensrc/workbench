@@ -127,8 +127,8 @@ locals {
         "gitlab-enabled-example" = [{
             { size = local.size["s"], count = 1, label = "main" },
             { size = local.size["s"], auto_scale = true, min_nodes = 0, max_nodes = 4, key = "2gb-s" },
-            { size = local.size["l"], auto_scale = true, min_nodes = 0, max_nodes = 2, label = "gitlab" },
-            { size = local.size["xl"], auto_scale = true, min_nodes = 0, max_nodes = 2, label = "gitlab-web", taints = ["gitlab-web"] },
+            { size = local.size["l"], auto_scale = true, min_nodes = 0, max_nodes = 2, labels = {type = "gitlab"} },
+            { size = local.size["xl"], auto_scale = true, min_nodes = 0, max_nodes = 2, labels = {type = "gitlab"}, taints = {type = "gitlab"} },
         }]
     }
 }

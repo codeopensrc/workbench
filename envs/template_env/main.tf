@@ -122,11 +122,50 @@ resource "local_file" "kube_config" {
 #    pg_dbs = local.pg_dbs
 #}
 
+resource "null_resource" "cleanup_gitlab_cluster_volumes" {
+    count = terraform.workspace == "default" ? 0 : (var.gitlab_enabled ? 1 : 0)
+    depends_on = [ local_file.kube_config, ]
+    triggers = { kubeconfig_path = local.kubeconfig_path }
+
+    ## Delete gitlab pvcs
+    provisioner "local-exec" {
+        when = destroy
+        command = <<-EOF
+        PVCS=$(kubectl get pvc -A -o custom-columns=NAME:.metadata.name,NS:.metadata.namespace --no-headers -l app.kubernetes.io/instance=gitlab | sed -r "s/\s+/ /g")
+        if [ -n "$PVCS" ]; then
+            echo "$PVCS" | while IFS= read -r PVC; do
+                PVCNAME=$(echo "$PVC" | cut -d " " -f1)
+                NS=$(echo "$PVC" | cut -d " " -f2)
+                echo "Patching $PVCNAME in $NS"
+                kubectl patch pvc $PVCNAME -n $NS -p '{"metadata":{"finalizers":null}}'
+            done
+        fi
+        PVCS2=$(kubectl get pvc -A -o custom-columns=NAME:.metadata.name,NS:.metadata.namespace --no-headers -l release=gitlab | sed -r "s/\s+/ /g")
+        if [ -n "$PVCS2" ]; then
+            echo "$PVCS2" | while IFS= read -r PVC; do
+                PVCNAME=$(echo "$PVC" | cut -d " " -f1)
+                NS=$(echo "$PVC" | cut -d " " -f2)
+                echo "Patching $PVCNAME in $NS"
+                kubectl patch pvc $PVCNAME -n $NS -p '{"metadata":{"finalizers":null}}'
+            done
+        fi
+        kubectl delete pvc --all -n gitlab
+        EOF
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = self.triggers.kubeconfig_path
+        }
+    }
+}
+
 module "gitlab" {
     source = "../../modules/gitlab"
     depends_on = [
+        local_file.kube_config,
+        null_resource.cleanup_gitlab_cluster_volumes,
         module.cloud,
     ]
+    local_init_filepath = local.init_filepath
     local_kubeconfig_path = local.kubeconfig_path
     root_domain_name = local.root_domain_name
     contact_email = var.contact_email
@@ -145,6 +184,10 @@ module "gitlab" {
     wekan_subdomain = var.wekan_subdomain
 }
 
+## TODO: Try this later
+#resource "gitlab_application_settings" "this" {
+#    signup_enabled = false
+#}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
@@ -207,7 +250,7 @@ module "gitlab" {
 resource "gitlab_application" "oidc" {
     for_each = {
         for key, app in local.gitlab_oauth_apps: key => app
-        if var.gitlab_enabled
+        if var.gitlab_enabled && app.enabled
     }
     depends_on = [
         module.cloud,
@@ -219,11 +262,39 @@ resource "gitlab_application" "oidc" {
     redirect_url = each.value.redirect_url
 }
 
+resource "null_resource" "cleanup_app_cluster_volumes" {
+    count = terraform.workspace == "default" ? 0 : 1
+    depends_on = [ local_file.kube_config, ]
+    triggers = { kubeconfig_path = local.kubeconfig_path }
+
+    ## Delete non-gitlab pvcs
+    provisioner "local-exec" {
+        when = destroy
+        command = <<-EOF
+        PVCS=$(kubectl get pvc -A -o custom-columns=NAME:.metadata.name,NS:.metadata.namespace --no-headers -l app.kubernetes.io/instance!=gitlab,release!=gitlab | sed -r "s/\s+/ /g")
+        if [ -n "$PVCS" ]; then
+            echo "$PVCS" | while IFS= read -r PVC; do
+                PVCNAME=$(echo "$PVC" | cut -d " " -f1)
+                NS=$(echo "$PVC" | cut -d " " -f2)
+                echo "Patching $PVCNAME in $NS"
+                kubectl patch pvc $PVCNAME -n $NS -p '{"metadata":{"finalizers":null}}'
+            done
+        fi
+        kubectl delete pvc --all-namespaces --field-selector metadata.namespace!=gitlab
+        EOF
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = self.triggers.kubeconfig_path
+        }
+    }
+}
+
 module "kubernetes" {
     source = "../../modules/kubernetes"
     depends_on = [
+        local_file.kube_config,
+        null_resource.cleanup_app_cluster_volumes,
         module.cloud,
-        module.gitlab,
     ]
     oauth = gitlab_application.oidc
     subdomains = local.subdomains
@@ -248,6 +319,12 @@ module "kubernetes" {
     kube_apps = var.kube_apps
     kube_services = var.kube_services
     kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
+}
+
+resource "local_file" "init" {
+    depends_on = [ module.gitlab, ]
+    content  = "true"
+    filename = local.init_filepath
 }
 
 #resource "null_resource" "configure_smtp" {
@@ -307,6 +384,7 @@ locals {
     csi_namespace = local.csi_namespaces[var.active_env_provider]
     csi_version = local.csi_versions[var.active_env_provider]
     lb_name = local.lb_names[var.active_env_provider]
+    init_filepath = "${path.module}/${terraform.workspace}-infra-init"
 
     vpc_private_ifaces = {
         "digital_ocean" = "eth1"
@@ -362,16 +440,19 @@ locals {
 
     gitlab_oauth_apps = { 
         wekan = {
+            enabled = var.kube_services["wekan"].enabled
             redirect_url = "https://${var.wekan_subdomain}.${local.root_domain_name}/_oauth/oidc"
             scopes = ["openid", "profile", "email"]
         }
         ## Gitlab SSO https://docs.mattermost.com/administration-guide/configure/authentication-configuration-settings.html#enable-oauth-2-0-authentication-with-gitlab
         mattermost = {
+            enabled = var.kube_services["mattermost"].enabled
             redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/login/gitlab/complete\r\nhttps://${var.mattermost_subdomain}.${local.root_domain_name}/signup/gitlab/complete"
             scopes = ["api"]
         }
         ## Gitlab integration in mattermost https://docs.mattermost.com/integrations-guide/gitlab.html
         mattermost_integration = {
+            enabled = var.kube_services["mattermost"].enabled
             redirect_url = "https://${var.mattermost_subdomain}.${local.root_domain_name}/plugins/com.github.manland.mattermost-plugin-gitlab/oauth/complete"
             scopes = ["api", "read_user"]
         }
