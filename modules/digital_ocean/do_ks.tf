@@ -151,9 +151,9 @@ resource "digitalocean_kubernetes_cluster" "main" {
             size       = node_pool.value.size
             node_count = node_pool.value.count
             tags = [ ]
-            ## TODO: Support multiple labels
             labels = {
-                type  = lookup(node_pool.value, "label", null)
+                for key, value in lookup(node_pool.value, "labels", {}):
+                key => value
             }
 
             dynamic "taint" {
@@ -181,9 +181,9 @@ resource "digitalocean_kubernetes_cluster" "main" {
             max_nodes  = node_pool.value.max_nodes
             auto_scale  = node_pool.value.auto_scale
             tags = [ ]
-            ## TODO: Support multiple labels
             labels = {
-                type  = lookup(node_pool.value, "label", null)
+                for key, value in lookup(node_pool.value, "labels", {}):
+                key => value
             }
 
             dynamic "taint" {

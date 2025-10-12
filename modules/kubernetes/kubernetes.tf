@@ -33,6 +33,11 @@ variable "kubernetes_nginx_nodeports" {}
 variable "oauth" {}
 variable "subdomains" {}
 
+variable "gitlab_bucket_prefix" {}
+variable "s3_access_key_id" {}
+variable "s3_secret_access_key" {}
+variable "s3_endpoint" {}
+
 locals {
     consul_srvdiscovery_enabled = false
     mattermost_version_matrix = {
@@ -68,6 +73,67 @@ locals {
         client_id = lookup(var.oauth, "mattermost_integration", null) != null ? var.oauth.mattermost_integration.application_id : ""
         secret = lookup(var.oauth, "mattermost_integration", null) != null ? var.oauth.mattermost_integration.secret : ""
     }
+
+    gitlab_filestore_secret = "gitlab-minio-secret"
+    external_storage_enabled = (var.import_gitlab && var.gitlab_bucket_prefix != ""
+        && var.s3_access_key_id != "" && var.s3_secret_access_key != "" && var.s3_endpoint != "")
+
+    mattermost_filestore = {
+        secretname = "mattermost-filestore"
+        url = local.external_storage_enabled ? replace(var.s3_endpoint, "https://", "") : "minio.${var.root_domain_name}"
+        bucket = local.external_storage_enabled ? "${var.gitlab_bucket_prefix}-mattermost" : "mattermost"
+        accesskey = local.mattermost_enabled ? (local.external_storage_enabled ? base64encode(var.s3_access_key_id) : base64encode(data.kubernetes_secret_v1.gitlab_filestore[0].data.accesskey)) : ""
+        secretkey = local.mattermost_enabled ? (local.external_storage_enabled ? base64encode(var.s3_secret_access_key) : base64encode(data.kubernetes_secret_v1.gitlab_filestore[0].data.secretkey)) : ""
+    }
+
+    mm_namespace = "mattermost"
+    mm_env_vars = {
+        MM_GITLABSETTINGS_ENABLE = true
+        MM_GITLABSETTINGS_ID = local.mattermost_oauth.client_id
+        MM_GITLABSETTINGS_SECRET = local.mattermost_oauth.secret
+        MM_GITLABSETTINGS_USERAPIENDPOINT = "https://gitlab.${var.root_domain_name}/api/v4/user"
+        MM_GITLABSETTINGS_AUTHENDPOINT = "https://gitlab.${var.root_domain_name}/oauth/authorize"
+        MM_GITLABSETTINGS_TOKENENDPOINT = "https://gitlab.${var.root_domain_name}/oauth/token"
+        MM_EMAILSETTINGS_ENABLESIGNUPWITHEMAIL = false
+        MM_EMAILSETTINGS_ENABLESIGNINWITHEMAIL = false
+    }
+    ## https://docs.mattermost.com/administration-guide/configure/plugins-configuration-settings.html#installed-plugin-state
+    mm_plugin_vars = {
+        MM_PLUGINSETTINGS_PLUGINSTATES = jsonencode({"com.github.manland.mattermost-plugin-gitlab": {"Enable": true}})
+        MM_PLUGINSETTINGS_PLUGINS = jsonencode({"com.github.manland.mattermost-plugin-gitlab": {
+            "enablechildpipelinenotifications": true,
+            "enablecodepreview": "public",
+            "enableprivaterepo": true,
+            "gitlaboauthclientid": local.mattermost_integration_oauth.client_id,
+            "gitlaboauthclientsecret": local.mattermost_integration_oauth.secret,
+            "gitlaburl": "https://gitlab.${var.root_domain_name}",
+        }})
+    }
+    mattermost_file = {
+        namespace = local.mm_namespace
+        name = "mattermost"
+        users = "100users" # Example: 5000users
+        host = "${lookup(var.subdomains, "mattermost", "mattermost")}.${var.root_domain_name}"
+        version = local.mattermost_version
+        mm_env_vars = local.mm_env_vars
+        mm_plugin_vars = local.mm_plugin_vars
+        ingressclass = "nginx"
+        filestore = local.mattermost_filestore
+        db = {
+            secretname = "mattermost-postgres"
+            conn_string = base64encode("postgres://${local.mattermost_db_auth.username}:${local.mattermost_db_auth.password}@postgresql:5432/${local.mattermost_db_auth.database}")
+        }
+    }
+
+    mattermost_filelist = ["install", "filestore", "database"]
+    mattermost_files = {
+        for ind, keyName in local.mattermost_filelist:
+        keyName => 
+            trimspace(split("---", templatefile("${path.module}/manifests/mattermost.yaml", local.mattermost_file))[ind])
+        if local.mattermost_enabled
+    }
+
+
     ## TODO: Have helm values come from apps.tf file ideally
     ## Tricky cause they wont be in vcs but meh
     tf_helm_values = {
@@ -316,68 +382,13 @@ resource "helm_release" "services" {
     )
 }
 
-data "kubernetes_secret_v1" "gitlab_minio" {
-    count = local.mattermost_enabled ? 1 : 0
+data "kubernetes_secret_v1" "gitlab_filestore" {
+    count = local.mattermost_enabled && !local.external_storage_enabled ? 1 : 0
     ## Create dependency to wait for gitlab to be launched before trying to read secret
     depends_on = [ helm_release.services["mattermost"] ]
     metadata {
-        name = "gitlab-minio-secret"
+        name = local.gitlab_filestore_secret
         namespace = "gitlab"
-    }
-}
-
-locals {
-    mm_namespace = "mattermost"
-    mm_env_vars = {
-        MM_GITLABSETTINGS_ENABLE = true
-        MM_GITLABSETTINGS_ID = local.mattermost_oauth.client_id
-        MM_GITLABSETTINGS_SECRET = local.mattermost_oauth.secret
-        MM_GITLABSETTINGS_USERAPIENDPOINT = "https://gitlab.${var.root_domain_name}/api/v4/user"
-        MM_GITLABSETTINGS_AUTHENDPOINT = "https://gitlab.${var.root_domain_name}/oauth/authorize"
-        MM_GITLABSETTINGS_TOKENENDPOINT = "https://gitlab.${var.root_domain_name}/oauth/token"
-        MM_EMAILSETTINGS_ENABLESIGNUPWITHEMAIL = false
-        MM_EMAILSETTINGS_ENABLESIGNINWITHEMAIL = false
-    }
-    ## https://docs.mattermost.com/administration-guide/configure/plugins-configuration-settings.html#installed-plugin-state
-    mm_plugin_vars = {
-        MM_PLUGINSETTINGS_PLUGINSTATES = jsonencode({"com.github.manland.mattermost-plugin-gitlab": {"Enable": true}})
-        MM_PLUGINSETTINGS_PLUGINS = jsonencode({"com.github.manland.mattermost-plugin-gitlab": {
-            "enablechildpipelinenotifications": true,
-            "enablecodepreview": "public",
-            "enableprivaterepo": true,
-            "gitlaboauthclientid": local.mattermost_integration_oauth.client_id,
-            "gitlaboauthclientsecret": local.mattermost_integration_oauth.secret,
-            "gitlaburl": "https://gitlab.${var.root_domain_name}",
-        }})
-    }
-    mattermost_file = {
-        namespace = local.mm_namespace
-        name = "mattermost"
-        users = "100users" # Example: 5000users
-        host = "${lookup(var.subdomains, "mattermost", "mattermost")}.${var.root_domain_name}"
-        version = local.mattermost_version
-        mm_env_vars = local.mm_env_vars
-        mm_plugin_vars = local.mm_plugin_vars
-        ingressclass = "nginx"
-        filestore = {
-            secretname = local.mattermost_enabled ? data.kubernetes_secret_v1.gitlab_minio[0].metadata[0].name : ""
-            url = "minio.${var.root_domain_name}"
-            bucket = "mattermost"
-            accesskey = local.mattermost_enabled ? base64encode(data.kubernetes_secret_v1.gitlab_minio[0].data.accesskey) : ""
-            secretkey = local.mattermost_enabled ? base64encode(data.kubernetes_secret_v1.gitlab_minio[0].data.secretkey) : ""
-        }
-        db = {
-            secretname = "mattermost-postgres"
-            conn_string = base64encode("postgres://${local.mattermost_db_auth.username}:${local.mattermost_db_auth.password}@postgresql:5432/${local.mattermost_db_auth.database}")
-        }
-    }
-
-    mattermost_filelist = ["install", "filestore", "database"]
-    mattermost_files = {
-        for ind, keyName in local.mattermost_filelist:
-        keyName => 
-            trimspace(split("---", templatefile("${path.module}/manifests/mattermost.yaml", local.mattermost_file))[ind])
-        if local.mattermost_enabled
     }
 }
 

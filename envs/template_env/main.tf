@@ -173,21 +173,36 @@ module "gitlab" {
     gitlab_enabled = var.gitlab_enabled
     import_gitlab = var.import_gitlab
     import_gitlab_version = var.import_gitlab_version
+    imported_runner_token = local.gitlab_runner_tokens
 
     use_gpg = var.use_gpg
     bot_gpg_name = var.bot_gpg_name
 
-    s3alias = local.s3alias
-    s3bucket = local.s3bucket
+    #s3alias = local.s3alias
+    #s3bucket = local.s3bucket
 
     mattermost_subdomain = var.mattermost_subdomain
     wekan_subdomain = var.wekan_subdomain
+
+    gitlab_dump_name = var.gitlab_dump_name
+    gitlab_secrets_body = module.cloud.gitlab_secrets_body
+    gitlab_bucket_prefix = local.gitlab_bucket_prefix
+    s3_region = local.region
+    s3_access_key_id = local.s3accesskey
+    s3_secret_access_key = local.s3secretkey
+    s3_endpoint = local.s3endpoint
 }
 
-## TODO: Try this later
-#resource "gitlab_application_settings" "this" {
-#    signup_enabled = false
-#}
+resource "gitlab_application_settings" "this" {
+    depends_on = [
+        local_file.kube_config,
+        null_resource.cleanup_gitlab_cluster_volumes,
+        module.cloud,
+        module.gitlab,
+    ]
+    signup_enabled = false
+    allow_runner_registration_token = true
+}
 
 ##NOTE: Uses ansible
 ##TODO: Figure out how best to organize modules/playbooks/hostfile
@@ -247,6 +262,7 @@ module "gitlab" {
 
 ## Create the wekan and mattermost apps in a fresh install
 ## Think we'll have to delete all gitlab oauth apps when restoring
+##TODO: Yes delete on restore - has to be done via api, names dont have to be unique
 resource "gitlab_application" "oidc" {
     for_each = {
         for key, app in local.gitlab_oauth_apps: key => app
@@ -319,10 +335,17 @@ module "kubernetes" {
     kube_apps = var.kube_apps
     kube_services = var.kube_services
     kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
+
+    gitlab_bucket_prefix = local.gitlab_bucket_prefix
+    s3_region = local.region
+    s3_access_key_id = local.s3accesskey
+    s3_secret_access_key = local.s3secretkey
+    s3_endpoint = local.s3endpoint
 }
 
 resource "local_file" "init" {
-    depends_on = [ module.gitlab, ]
+    count = var.gitlab_enabled ? 1 : 0
+    depends_on = [ module.gitlab ]
     content  = "true"
     filename = local.init_filepath
 }
@@ -378,6 +401,9 @@ locals {
     vpc_private_iface = local.vpc_private_ifaces[var.active_env_provider]
     s3alias = local.s3aliases[local.active_s3_provider]
     s3bucket = local.s3buckets[local.active_s3_provider]
+    s3accesskey = local.s3accesskeys[local.active_s3_provider]
+    s3secretkey = local.s3secretkeys[local.active_s3_provider]
+    s3endpoint = local.s3endpoints[local.active_s3_provider]
     region = local.regions[var.active_env_provider]
     cloud_provider = local.cloud_providers[var.active_env_provider]
     cloud_provider_token = local.cloud_provider_tokens[var.active_env_provider]
@@ -391,6 +417,16 @@ locals {
         "aws" = "ens5"
         "azure" = "eth0"
     }
+    s3accesskeys = {
+        "digital_ocean" = var.do_spaces_access_key
+        "aws" = var.aws_bot_access_key
+        "azure" = var.az_storageaccount
+    }
+    s3secretkeys = {
+        "digital_ocean" = var.do_spaces_secret_key
+        "aws" = var.aws_bot_secret_key
+        "azure" = var.az_storagekey
+    }
     s3aliases = {
         "digital_ocean" = "spaces"
         "aws" = "s3"
@@ -400,6 +436,11 @@ locals {
         "digital_ocean" = var.do_spaces_name
         "aws" = var.aws_bucket_name
         "azure" = var.az_bucket_name
+    }
+    s3endpoints = {
+        "digital_ocean" = "https://${local.region}.digitaloceanspaces.com"
+        "aws" = ""
+        "azure" = ""
     }
     regions = {
         "digital_ocean" = var.do_region
@@ -436,7 +477,7 @@ locals {
     ###! workspace based
     additional_domains = terraform.workspace == "default" ? var.additional_domains : {}
 
-    gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens : {service = ""}
+    gitlab_runner_tokens = var.import_gitlab ? local.gitlab_runner_registration_tokens.service : ""
 
     gitlab_oauth_apps = { 
         wekan = {
@@ -559,6 +600,8 @@ locals {
         contact_email = var.contact_email
 
         do_token = var.do_token
+        do_spaces_access_key = var.do_spaces_access_key
+        do_spaces_secret_key = var.do_spaces_secret_key
         do_region = var.do_region
         do_ssh_fingerprint = var.do_ssh_fingerprint
         do_lb_name = local.lb_name
@@ -577,6 +620,12 @@ locals {
         az_resource_group = var.az_resource_group
 
         kubernetes_version = var.kubernetes_version
+
+        ## gitlab secrets
+        gitlab_enabled = var.gitlab_enabled
+        import_gitlab = var.import_gitlab
+        gitlab_secrets_json = var.gitlab_secrets_json
+        gitlab_bucket_prefix = local.gitlab_bucket_prefix
     }
 }
 

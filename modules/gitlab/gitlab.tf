@@ -10,8 +10,17 @@ variable "import_gitlab_version" {}
 variable "use_gpg" {}
 variable "bot_gpg_name" {}
 
-variable "s3alias" {}
-variable "s3bucket" {}
+#variable "s3alias" {}
+#variable "s3bucket" {}
+
+variable "gitlab_dump_name" {}
+variable "imported_runner_token" {}
+variable "gitlab_secrets_body" {}
+variable "gitlab_bucket_prefix" {}
+variable "s3_region" {}
+variable "s3_access_key_id" {}
+variable "s3_secret_access_key" {}
+variable "s3_endpoint" {}
 
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
@@ -22,7 +31,7 @@ variable "wekan_subdomain" {}
 output "gitlab_pat" {
     ## Gitlab provider does not work on first apply with a non-static token
     ##   so we provide a static init token that expires in a day (TODO: Test under 24 hours exp time)
-    value = (fileexists(var.local_init_filepath)
+    value = (fileexists(var.local_init_filepath) && var.gitlab_enabled
         ? random_password.gitlab_tf_api_pat[0].result
         : "init-fresh-terra-token")
     depends_on = [
@@ -33,21 +42,119 @@ output "gitlab_pat" {
 }
 
 locals {
+
+    gitlab_rails_secret = "gitlab-rails-secret"
+    gitlab_objectstore_secret = "gitlab-objectstore-secret"
+    gitlab_toolbox_objectstore_secret = "gitlab-toolbox-objectstore-secret"
+    gitlab_registry_objectstore_secret = "gitlab-registry-objectstore-secret"
+    gitlab_runner_secret = "${local.charts["gitlab"].release_name}-gitlab-runner-secret"
+
+    external_storage_enabled = (var.gitlab_enabled && var.gitlab_bucket_prefix != ""
+        && var.s3_region != "" && var.s3_access_key_id != "" && var.s3_secret_access_key != ""
+        && var.s3_endpoint != "")
+
+    restore_gitlab = var.gitlab_enabled && var.import_gitlab && local.external_storage_enabled && var.gitlab_secrets_body != ""
+
+    gitlab_secrets_json = jsondecode(local.restore_gitlab ? var.gitlab_secrets_body : "{}")
+
+    num_gitlab_sidekiq_pods = 1
+    num_gitlab_webservice_pods = 2
+    gitlab_dump_name = var.gitlab_dump_name != "" ? var.gitlab_dump_name : "dump_gitlab_backup"
+
+    global_object_store = chomp(local.global_object_store_heredoc)
+    global_object_store_heredoc = <<-EOF
+    enabled: ${local.external_storage_enabled}
+    proxy_download: true
+    connection:
+      secret: ${local.gitlab_objectstore_secret}
+      key: connection
+    EOF
+
+    toolbox_objectstore_configs = chomp(local.toolbox_objectstore_configs_heredoc)
+    toolbox_objectstore_configs_heredoc = <<-EOF
+    backups:
+      objectStorage:
+        config:
+          secret: ${local.gitlab_toolbox_objectstore_secret}
+          key: config
+    EOF
+
+    registry_objectstore_bucket = "${var.gitlab_bucket_prefix}-registry"
+    registry_objectstore_config = chomp(local.registry_objectstore_config_heredoc)
+    registry_objectstore_config_heredoc = <<-EOF
+    storage:
+      secret: ${local.gitlab_registry_objectstore_secret}
+      key: config
+    EOF
+
+    pages_cfg = <<-EOF
+    global:
+      pages:  #pages bucket to be added with connection
+        enabled: false
+        host: <hostname>
+        artifactsServer: true
+        objectStore:
+          ${local.global_object_store}
+          bucket: ${var.gitlab_bucket_prefix}-pages
+    EOF
+
+    global_objectstore_appConfig = chomp(local.global_objectstore_appConfig_heredoc)
+    global_objectstore_appConfig_heredoc = <<-EOF
+    appConfig:
+      object_store:
+        ${indent(4, local.global_object_store)}
+      lfs:
+        enabled: ${local.external_storage_enabled}
+        proxy_download: false
+        bucket: ${var.gitlab_bucket_prefix}-lfs
+      artifacts:
+        enabled: ${local.external_storage_enabled}
+        proxy_download: true
+        bucket: ${var.gitlab_bucket_prefix}-artifacts
+      uploads:
+        enabled: ${local.external_storage_enabled}
+        proxy_download: true
+        bucket: ${var.gitlab_bucket_prefix}-uploads
+      packages:
+        enabled: ${local.external_storage_enabled}
+        proxy_download: true
+        bucket: ${var.gitlab_bucket_prefix}-packages
+      externalDiffs:
+        enabled: ${local.external_storage_enabled}
+        proxy_download: true
+        bucket: ${var.gitlab_bucket_prefix}-mr-diffs
+      terraformState:
+        enabled: ${local.external_storage_enabled}
+        bucket: ${var.gitlab_bucket_prefix}-terraform-state
+      ciSecureFiles:
+        enabled: ${local.external_storage_enabled}
+        bucket: ${var.gitlab_bucket_prefix}-ci-secure-files
+      dependencyProxy:
+        enabled: ${local.external_storage_enabled}
+        proxy_download: true
+        bucket: ${var.gitlab_bucket_prefix}-dep-proxy
+      backups:
+        bucket: ${var.gitlab_bucket_prefix}-backups
+        tmpBucket: ${var.gitlab_bucket_prefix}-tmp-backups
+    EOF
+
     charts = {
+        #TODO: Need external postgres, redis, and possibly gitaly
         gitlab = {
             "enabled"          = var.gitlab_enabled
             "release_name"     = "gitlab"
             "chart"            = "gitlab"
             "namespace"        = "gitlab"
-            "create_namespace" = true
+            "create_namespace" = false
             "chart_url"        = "https://charts.gitlab.io"
-            "chart_version"    = "9.4.0"
+            "chart_version"    = "9.4.1"
             "wait"             = true
             "replace"          = false
-            "timeout"          = 900
+            "timeout"          = 1200
             "opt_value_files"  = []
         }
     }
+    gitlab_nodeselector = chomp(local.gitlab_nodeselector_heredoc)
     gitlab_nodeselector_heredoc= <<-EOF
     nodeSelector:
       type: gitlab
@@ -57,7 +164,8 @@ locals {
         value: "gitlab"
         effect: "NoSchedule"
     EOF
-    gitlab_nodeselector = chomp(local.gitlab_nodeselector_heredoc)
+
+    gitlab_affinity = chomp(local.gitlab_affinity_heredoc)
     gitlab_affinity_heredoc = <<-EOF
     affinity:
       nodeAffinity:
@@ -69,10 +177,15 @@ locals {
               values:
               - main
     EOF
-    gitlab_affinity = chomp(local.gitlab_affinity_heredoc)
+
     tf_helm_values = {
         gitlab = <<-EOF
         global:
+          minio:
+            enabled: ${!local.external_storage_enabled}
+          ${indent(2, local.global_objectstore_appConfig)}
+          registry:
+            bucket: ${local.registry_objectstore_bucket}
           edition: ce
           hosts:
             domain: ${var.root_domain_name}
@@ -91,6 +204,7 @@ locals {
             ${indent(4, local.gitlab_nodeselector)}
           toolbox:
             ${indent(4, local.gitlab_nodeselector)}
+            ${local.external_storage_enabled ? indent(4, local.toolbox_objectstore_configs) : ""}
           gitlab-shell:
             ${indent(4, local.gitlab_nodeselector)}
           gitlab-exporter:
@@ -99,10 +213,12 @@ locals {
             ingress:
               tls:
                 secretName: ${local.charts["gitlab"].release_name}-gitlab-tls
+            nodeSelector:
+              type: gitlab-web
             tolerations:
               - key: "type"
                 operator: "Equal"
-                value: "gitlab"
+                value: "gitlab-web"
                 effect: "NoSchedule"
           kas:
             ${indent(4, local.gitlab_nodeselector)}
@@ -110,6 +226,7 @@ locals {
               tls:
                 secretName: ${local.charts["gitlab"].release_name}-kas-tls
         registry:
+          ${local.external_storage_enabled ? indent(2, local.registry_objectstore_config) : ""}
           ${indent(2, local.gitlab_nodeselector)}
           ingress:
             tls:
@@ -134,6 +251,66 @@ locals {
 }
 
 
+resource "kubernetes_namespace" "gitlab" {
+    count = var.gitlab_enabled ? 1 : 0
+    metadata {
+        name = "gitlab"
+    }
+}
+resource "kubernetes_secret_v1" "gitlab_objectstore_secret" {
+    count = var.gitlab_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [ kubernetes_namespace.gitlab ]
+    metadata {
+        name = local.gitlab_objectstore_secret
+        namespace = "gitlab"
+    }
+    data = {
+        connection = yamlencode({
+            provider = "AWS"
+            region = var.s3_region
+            aws_access_key_id = var.s3_access_key_id
+            aws_secret_access_key = var.s3_secret_access_key
+            endpoint = var.s3_endpoint
+        })
+    }
+}
+resource "kubernetes_secret_v1" "gitlab_registry_objectstore_secret" {
+    count = var.gitlab_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [ kubernetes_namespace.gitlab ]
+    metadata {
+        name = local.gitlab_registry_objectstore_secret
+        namespace = "gitlab"
+    }
+    data = {
+        config = yamlencode({
+            s3 = {
+                bucket = local.registry_objectstore_bucket
+                accesskey = var.s3_access_key_id
+                secretkey = var.s3_secret_access_key
+                region = var.s3_region
+                regionendpoint = var.s3_endpoint
+            }
+        })
+    }
+}
+resource "kubernetes_secret_v1" "gitlab_toolbox_objectstore_secret" {
+    count = var.gitlab_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [ kubernetes_namespace.gitlab ]
+    metadata {
+        name = local.gitlab_toolbox_objectstore_secret
+        namespace = "gitlab"
+    }
+    data = {
+        config = <<-EOF
+        [default]
+        access_key = ${var.s3_access_key_id}
+        secret_key = ${var.s3_secret_access_key}
+        host_base = ${replace(var.s3_endpoint, "https://", "")}
+        host_bucket = ${replace(var.s3_endpoint, "https://", "")}
+        use_https = True
+        EOF
+    }
+}
 
 resource "helm_release" "services" {
     for_each = {
@@ -141,6 +318,7 @@ resource "helm_release" "services" {
         servicename => service
         if service.enabled && lookup(service, "chart", "") != ""
     }
+    depends_on        = [ kubernetes_namespace.gitlab ]
     name              = each.value.release_name
     chart             = each.value.chart
     namespace         = lookup(each.value, "namespace", "default")
@@ -159,18 +337,111 @@ resource "helm_release" "services" {
     )
 }
 
-## TODO: Determine order of operations for fresh install first then a restore
-## Deploy gitlab helm chart
-##   - Import if we decide to
-## Create random id gitlab access token
-## Get gitlab PAT and pass to provider
-##   - Delete oauth apps if we imported
-## Create new oauth apps in terraform
+resource "kubernetes_secret_v1_data" "gitlab_rails_secret" {
+    count = local.restore_gitlab ? 1 : 0
+    depends_on = [ helm_release.services["gitlab"] ]
+    metadata {
+        name = local.gitlab_rails_secret
+        namespace = "gitlab"
+    }
+    force = true
+    data = {
+        "secrets.yml" = yamlencode({
+            "production": lookup(local.gitlab_secrets_json, "gitlab_rails", "")
+        })
+    }
+}
 
 ## Not the most ideal way but simplest way to get it working using local kubectl command
 ## Creating a new job/pod with all the configs of the running toolbox is a little extra for now
 
-## TODO: If gitlab pat from import dont create or something - figure out later
+###TODO: Turn these local-exec provisioners into remote kubernetes jobs
+resource "null_resource" "restore_gitlab_restart_pods" {
+    count = local.restore_gitlab ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret
+    ]
+    provisioner "local-exec" {
+        command = "kubectl delete pods -n gitlab -lapp=sidekiq,release=gitlab; kubectl delete pods -n gitlab -lapp=webservice,release=gitlab; kubectl delete pods -n gitlab -lapp=toolbox,release=gitlab"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+resource "null_resource" "restore_gitlab_scale_down" {
+    count = local.restore_gitlab ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+    ]
+    provisioner "local-exec" {
+        command = "kubectl scale deploy -lapp=sidekiq,release=gitlab -n gitlab --replicas=0; kubectl scale deploy -lapp=webservice,release=gitlab -n gitlab --replicas=0"
+        ##kubectl scale deploy -lapp=prometheus,release=gitlab -n gitlab --replicas=0
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+resource "null_resource" "restore_gitlab_toolbox_restore" {
+    count = local.restore_gitlab ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+    ]
+    provisioner "local-exec" {
+        command = "POD=$(kubectl get pods -n ${local.charts.gitlab.namespace} -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n gitlab $POD -it -- backup-utility --restore -t ${local.gitlab_dump_name} --skip-restore-prompt"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+resource "null_resource" "restore_gitlab_scale_up" {
+    count = local.restore_gitlab ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+        null_resource.restore_gitlab_toolbox_restore,
+    ]
+    provisioner "local-exec" {
+        command = "kubectl scale deploy -lapp=sidekiq,release=gitlab -n gitlab --replicas=${local.num_gitlab_sidekiq_pods}; kubectl scale deploy -lapp=webservice,release=gitlab -n gitlab --replicas=${local.num_gitlab_webservice_pods}"
+        #kubectl scale deploy -lapp=prometheus,release=<helm release name> -n <namespace> --replicas=<value>
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+### TODO: Still need enabling runner in admin/settings/cicd to allow runner reg tokens until update
+resource "kubernetes_secret_v1_data" "gitlab_runner_secret" {
+    count = local.restore_gitlab ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+        null_resource.restore_gitlab_toolbox_restore,
+        null_resource.restore_gitlab_scale_up,
+    ]
+    metadata {
+        name = local.gitlab_runner_secret
+        namespace = "gitlab"
+    }
+    force = true
+    data = {
+        "runner-registration-token" = var.imported_runner_token
+        "runner-token" = ""
+    }
+}
+
 resource "random_password" "gitlab_tf_api_pat" {
     count = var.gitlab_enabled ? 1 : 0
     length           = 20
@@ -178,7 +449,14 @@ resource "random_password" "gitlab_tf_api_pat" {
 }
 resource "null_resource" "create_tf_gitlab_pat" {
     count = var.gitlab_enabled ? 1 : 0
-    depends_on = [ helm_release.services["gitlab"] ]
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+        null_resource.restore_gitlab_toolbox_restore,
+        null_resource.restore_gitlab_scale_up,
+    ]
     triggers = {
         forced_update_trigger_var = ""
     }

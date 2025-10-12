@@ -63,6 +63,9 @@ locals {
     cidr_blocks = {
         "default" = "10.1.0.0/16"
     }
+    gitlab_bucket_prefixes = {
+        "default" = "UNIQUE-PREFIX-gitlab"
+    }
     ## TODO: Unity builder inside pods
     ## This is for shell runners on build machines only
     default_runners_per_machine = {
@@ -85,6 +88,8 @@ locals {
     sendgrid_domains = {
         "default" = ""
     }
+
+    gitlab_bucket_prefix = lookup(local.gitlab_bucket_prefixes, local.env, local.gitlab_bucket_prefixes["default"])
 
     # Additional configurable cname aliases: subdomainname -> alias
     misc_cnames = lookup(local.misc_cname_aliases, local.env)

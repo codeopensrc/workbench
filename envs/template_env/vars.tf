@@ -32,7 +32,18 @@ variable "kubernetes_nginx_nodeports" {
     }
 }
 
+## Name of gitlab dump file/tar minus "_gitlab_backup.tar"
+## Default bucket location is ${local.gitlab_bucket_prefix}-backups in global.appConfig.backups in gitlab module
+## Previously used a bash script to loop through most recent - something like that again once helm backups working and stable
+variable "gitlab_dump_name" { default = "" }
+variable "gitlab_secrets_json" {
+    default = {
+        bucket = ""
+        key = ""
+    }
+}
 variable "gitlab_enabled" { default = false }
+## TODO: Probably make import_gitlab an object with secrets, dump, version etc
 variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }
 
@@ -112,24 +123,26 @@ locals {
     ##! Used with `managed_kubernetes`
     ##! Only for digital ocean during alpha
     managed_kubernetes_conf = lookup(local.workspace_managed_kubernetes_conf, terraform.workspace, local.workspace_managed_kubernetes_conf["default"])
+    gitlab_cluster = [
+        { size = local.size["s"], count = 1, labels = {type = "main"} },
+        { size = local.size["s"], auto_scale = true, min_nodes = 0, max_nodes = 4, key = "2gb-s" },
+        { size = local.size["l"], auto_scale = true, min_nodes = 0, max_nodes = 2, labels = {type = "gitlab"} },
+        { size = local.size["xl"], auto_scale = true, min_nodes = 0, max_nodes = 2, labels = {type = "gitlab-web"}, taints = {type = "gitlab-web"} },
+    ]
     workspace_managed_kubernetes_conf = {
         "default" = [{
             #key        = "" ## Opt key if multiple node groups same size
-            size       = "s-2vcpu-2gb"
-            label      = "main"
+            size       = local.size["m"]
+            labels     = {type="main"}
             taints     = []
-            count = 0
+
             ##! (count) or (min_node + max_node + auto_scale)
+            count      = 0
             #min_nodes  = 0
             #max_nodes  = 0
             #auto_scale = true
         }]
-        "gitlab-enabled-example" = [{
-            { size = local.size["s"], count = 1, label = "main" },
-            { size = local.size["s"], auto_scale = true, min_nodes = 0, max_nodes = 4, key = "2gb-s" },
-            { size = local.size["l"], auto_scale = true, min_nodes = 0, max_nodes = 2, labels = {type = "gitlab"} },
-            { size = local.size["xl"], auto_scale = true, min_nodes = 0, max_nodes = 2, labels = {type = "gitlab"}, taints = {type = "gitlab"} },
-        }]
+        "gitlab-env" = local.gitlab_cluster
     }
 }
 

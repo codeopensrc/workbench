@@ -17,6 +17,12 @@ provider "digitalocean" {
     token = var.config.do_token
 }
 
+provider "digitalocean" {
+    alias = "spaces"
+    spaces_access_id = var.config.do_spaces_access_key
+    spaces_secret_key = var.config.do_spaces_secret_key
+}
+
 provider "kubectl" {
     host  = digitalocean_kubernetes_cluster.main.endpoint
     token = digitalocean_kubernetes_cluster.main.kube_config[0].token

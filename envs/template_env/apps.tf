@@ -144,6 +144,7 @@ variable "kube_services" {
             "create_namespace" = false
             "chart_url"        = "https://charts.bitnami.com/bitnami"
             "chart_version"    = "16.7.27"
+            "timeout"          = 120
             "opt_value_files"  = []
         },
         mattermost = {
@@ -153,7 +154,6 @@ variable "kube_services" {
             "create_namespace" = true
             "chart_url"        = "https://helm.mattermost.com"
             "chart_version"    = "1.0.4"
-            "timeout"          = 120
             "opt_value_files"  = []
         },
         prometheus = {
