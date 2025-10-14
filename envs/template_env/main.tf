@@ -341,6 +341,7 @@ module "kubernetes" {
     s3_access_key_id = local.s3accesskey
     s3_secret_access_key = local.s3secretkey
     s3_endpoint = local.s3endpoint
+    s3_backup_bucket = local.s3_backup_bucket
 }
 
 resource "local_file" "init" {

@@ -137,7 +137,7 @@ resource "digitalocean_kubernetes_cluster" "main" {
     vpc_uuid = digitalocean_vpc.terraform_vpc.id
 
     cluster_autoscaler_configuration {
-        scale_down_unneeded_time = "5m"
+        scale_down_unneeded_time = "15m"
     }
 
     ##TODO: Test support for count AND/OR autoscale

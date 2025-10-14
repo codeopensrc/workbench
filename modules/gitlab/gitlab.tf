@@ -420,7 +420,24 @@ resource "null_resource" "restore_gitlab_scale_up" {
         }
     }
 }
-### TODO: Still need enabling runner in admin/settings/cicd to allow runner reg tokens until update
+resource "null_resource" "restore_gitlab_wait" {
+    count = local.restore_gitlab ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+        null_resource.restore_gitlab_toolbox_restore,
+        null_resource.restore_gitlab_scale_up,
+    ]
+    provisioner "local-exec" {
+        command = "kubectl rollout status deploy -lapp=webservice,release=gitlab -n gitlab"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
 resource "kubernetes_secret_v1_data" "gitlab_runner_secret" {
     count = local.restore_gitlab ? 1 : 0
     depends_on = [
@@ -430,6 +447,7 @@ resource "kubernetes_secret_v1_data" "gitlab_runner_secret" {
         null_resource.restore_gitlab_scale_down,
         null_resource.restore_gitlab_toolbox_restore,
         null_resource.restore_gitlab_scale_up,
+        null_resource.restore_gitlab_wait,
     ]
     metadata {
         name = local.gitlab_runner_secret
@@ -456,6 +474,7 @@ resource "null_resource" "create_tf_gitlab_pat" {
         null_resource.restore_gitlab_scale_down,
         null_resource.restore_gitlab_toolbox_restore,
         null_resource.restore_gitlab_scale_up,
+        null_resource.restore_gitlab_wait,
     ]
     triggers = {
         forced_update_trigger_var = ""

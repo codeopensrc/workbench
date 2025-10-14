@@ -63,6 +63,9 @@ locals {
     cidr_blocks = {
         "default" = "10.1.0.0/16"
     }
+    s3_backup_buckets = {
+        "default" = "UNIQUE-PREFIX-backups"
+    }
     gitlab_bucket_prefixes = {
         "default" = "UNIQUE-PREFIX-gitlab"
     }
@@ -89,6 +92,7 @@ locals {
         "default" = ""
     }
 
+    s3_backup_bucket = lookup(local.s3_backup_buckets, local.env, local.s3_backup_buckets["default"])
     gitlab_bucket_prefix = lookup(local.gitlab_bucket_prefixes, local.env, local.gitlab_bucket_prefixes["default"])
 
     # Additional configurable cname aliases: subdomainname -> alias

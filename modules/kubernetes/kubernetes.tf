@@ -37,6 +37,8 @@ variable "gitlab_bucket_prefix" {}
 variable "s3_access_key_id" {}
 variable "s3_secret_access_key" {}
 variable "s3_endpoint" {}
+variable "s3_region" {}
+variable "s3_backup_bucket" {}
 
 locals {
     consul_srvdiscovery_enabled = false
@@ -52,8 +54,8 @@ locals {
     mattermost_db_auth = {
         username = "mattermost"
         database = "mattermost"
-        password = local.mattermost_enabled ? random_password.mattermost_db["user"].result : ""
-        postgresPassword = local.mattermost_enabled ? random_password.mattermost_db["postgres"].result : ""
+        password = local.mattermost_enabled || var.kube_services["postgresql"].enabled ? random_password.mattermost_db["user"].result : ""
+        postgresPassword = local.mattermost_enabled || var.kube_services["postgresql"].enabled ? random_password.mattermost_db["postgres"].result : ""
     }
     mattermost_version = (local.mattermost_enabled
         ? local.mattermost_version_matrix[var.kube_services["mattermost"].chart_version]
@@ -153,7 +155,7 @@ locals {
           password: ${local.mattermost_db_auth.password}
           postgresPassword: ${local.mattermost_db_auth.postgresPassword}
         tls:
-          enabled: ${local.mattermost_enabled}
+          enabled: ${local.mattermost_enabled || var.kube_services["postgresql"].enabled}
           certificatesSecret: ${local.postgres_tls.name}
           certFilename: ${local.postgres_tls.cert}
           certKeyFilename: ${local.postgres_tls.key}
@@ -318,11 +320,11 @@ resource "random_password" "mattermost_db" {
     special          = false
 }
 resource "tls_private_key" "postgres" {
-    count = local.mattermost_enabled ? 1 : 0
+    count = local.mattermost_enabled || var.kube_services["postgresql"].enabled ? 1 : 0
     algorithm = "RSA"
 }
 resource "tls_self_signed_cert" "postgres" {
-    count = local.mattermost_enabled ? 1 : 0
+    count = local.mattermost_enabled || var.kube_services["postgresql"].enabled ? 1 : 0
     private_key_pem = tls_private_key.postgres[0].private_key_pem
     # Certificate expires after ~40000 days.
     validity_period_hours = 999999
@@ -339,7 +341,7 @@ resource "kubernetes_namespace" "mattermost" {
     }
 }
 resource "kubernetes_secret_v1" "postgres_tls" {
-    count = local.mattermost_enabled ? 1 : 0
+    count = local.mattermost_enabled || var.kube_services["postgresql"].enabled ? 1 : 0
     depends_on = [
         tls_private_key.postgres,
         tls_self_signed_cert.postgres,
@@ -401,6 +403,135 @@ resource "kubectl_manifest" "mattermost" {
     depends_on = [ helm_release.services["mattermost"] ]
     yaml_body = each.value
 }
+
+## TODO: Retore gitlab/mattermost opt
+## TODO: Kubernetes jobs using kubectl image instead of null_resource.local_exec
+resource "null_resource" "restore_mattermost_scaledown" {
+    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [
+        helm_release.services["mattermost"],
+        kubectl_manifest.mattermost,
+    ]
+    provisioner "local-exec" {
+        ## Scale mattermost down
+        command = "kubectl -n mattermost-operator scale deploy mattermost-operator --replicas=0; kubectl -n mattermost scale deploy mattermost --replicas=0"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+
+resource "null_resource" "restore_mattermost_newdb" {
+    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubectl_manifest.mattermost,
+        null_resource.restore_mattermost_scaledown,
+    ]
+    provisioner "local-exec" {
+        ## DROP DB
+        command = "echo \"${local.mattermost_db_auth.password}\" | kubectl -n mattermost exec postgresql-0 -it -- dropdb -U ${local.mattermost_db_auth.username} -h postgresql ${local.mattermost_db_auth.database}"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+    provisioner "local-exec" {
+        ## CREATE DB
+        command = "echo \"${local.mattermost_db_auth.password}\" | kubectl -n mattermost exec postgresql-0 -it -- createdb -U ${local.mattermost_db_auth.username} -h postgresql ${local.mattermost_db_auth.database}"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+
+resource "kubernetes_config_map_v1" "restore_mattermost_script" {
+    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubectl_manifest.mattermost,
+        null_resource.restore_mattermost_scaledown,
+        null_resource.restore_mattermost_newdb,
+    ]
+    metadata {
+        name = "restore-script"
+        namespace = "mattermost"
+    }
+    data = {
+        "restore_mattermost.sh" = "${file("${path.module}/scripts/restore_mattermost.sh")}"
+    }
+}
+
+resource "kubernetes_job_v1" "restore_mattermost_refreshdb" {
+    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubectl_manifest.mattermost,
+        null_resource.restore_mattermost_scaledown,
+        null_resource.restore_mattermost_newdb,
+        kubernetes_config_map_v1.restore_mattermost_script,
+    ]
+  metadata {
+    name = "restore-mattermost"
+    namespace = "mattermost"
+  }
+  spec {
+    template {
+      metadata {}
+      spec {
+        volume {
+          name = "mattermost-restore"
+          config_map {
+            name = kubernetes_config_map_v1.restore_mattermost_script[0].metadata[0].name
+            default_mode = "0777"
+          }
+        }
+        container {
+          name    = "restore"
+          image   = "ubuntu"
+          ## TODO: Configurable alias
+          command = ["bash", "-c", "/tmp/mm/restore_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password} -r ${var.s3_region} -n ${local.mattermost_filestore.bucket}"]
+          volume_mount {
+            name       = "mattermost-restore"
+            mount_path = "/tmp/mm"
+          }
+        }
+        restart_policy = "Never"
+      }
+    }
+    backoff_limit = 0
+  }
+  wait_for_completion = true
+  timeouts {
+    create = "2m"
+    update = "2m"
+  }
+}
+
+resource "null_resource" "restore_mattermost_scaleup" {
+    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubectl_manifest.mattermost,
+        null_resource.restore_mattermost_scaledown,
+        null_resource.restore_mattermost_newdb,
+        kubernetes_config_map_v1.restore_mattermost_script,
+        kubernetes_job_v1.restore_mattermost_refreshdb,
+    ]
+    provisioner "local-exec" {
+        ## Scale mattermost-operator back up (takes care of mattermost deployment)
+        command = "kubectl -n mattermost-operator scale deploy mattermost-operator --replicas=1;"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+
+## In order to backup, need to retrieve items from object store, zip and put in bucket
+
 #resource "null_resource" "managed_kubernetes" {
 #    count = contains(var.container_orchestrators, "managed_kubernetes") ? 1 : 0
 #    provisioner "local-exec" {
