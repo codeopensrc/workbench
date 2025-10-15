@@ -1,3 +1,14 @@
+### WARNING - UNSTABLE
+Under major refactor from vps to managed kubernetes based infra.  
+While under construction, components will change rapidly and unstable.  
+
+TF Modules _may_ end up being actual TF modules but not until much later.  
+Another example of things that can change -  
+  Currently developing with using single location for `terraform apply` for all infra in mind  
+  With increasing number of resources/complexity this philosophy may change  
+  (A single apply for everything is neat but not entirely practical at larger scales)  
+
+
 ## Wiki
 
 ### [Wiki Link](https://gitlab.codeopensrc.com/os/workbench/-/wikis/home)  
