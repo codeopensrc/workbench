@@ -184,6 +184,9 @@ module "gitlab" {
     mattermost_subdomain = var.mattermost_subdomain
     wekan_subdomain = var.wekan_subdomain
 
+    source_gitlab_bucket_prefix = var.source_gitlab_bucket_prefix
+    target_gitlab_bucket_prefix = var.target_gitlab_bucket_prefix
+    gitlab_backups_enabled = var.gitlab_backups_enabled
     gitlab_dump_name = var.gitlab_dump_name
     gitlab_secrets_body = module.cloud.gitlab_secrets_body
     gitlab_bucket_prefix = local.gitlab_bucket_prefix
@@ -191,9 +194,11 @@ module "gitlab" {
     s3_access_key_id = local.s3accesskey
     s3_secret_access_key = local.s3secretkey
     s3_endpoint = local.s3endpoint
+    s3_backup_bucket = local.s3_backup_bucket
 }
 
 resource "gitlab_application_settings" "this" {
+    count = var.gitlab_enabled ? 1 : 0
     depends_on = [
         local_file.kube_config,
         null_resource.cleanup_gitlab_cluster_volumes,

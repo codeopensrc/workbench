@@ -379,7 +379,7 @@ resource "helm_release" "services" {
     wait              = lookup(each.value, "wait", true)
     replace           = lookup(each.value, "replace", false)
     values            = concat(
-        [for f in each.value.opt_value_files: file("${path.module}/helm_values/${f}")],
+        [for f in each.value.opt_value_files: templatefile("${path.module}/helm_values/${f}", {host=var.root_domain_name})],
         [for key, values in local.tf_helm_values: values if key == each.key]
     )
 }
@@ -473,41 +473,41 @@ resource "kubernetes_job_v1" "restore_mattermost_refreshdb" {
         null_resource.restore_mattermost_newdb,
         kubernetes_config_map_v1.restore_mattermost_script,
     ]
-  metadata {
-    name = "restore-mattermost"
-    namespace = "mattermost"
-  }
-  spec {
-    template {
-      metadata {}
-      spec {
-        volume {
-          name = "mattermost-restore"
-          config_map {
-            name = kubernetes_config_map_v1.restore_mattermost_script[0].metadata[0].name
-            default_mode = "0777"
-          }
-        }
-        container {
-          name    = "restore"
-          image   = "ubuntu"
-          ## TODO: Configurable alias
-          command = ["bash", "-c", "/tmp/mm/restore_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password} -r ${var.s3_region} -n ${local.mattermost_filestore.bucket}"]
-          volume_mount {
-            name       = "mattermost-restore"
-            mount_path = "/tmp/mm"
-          }
-        }
-        restart_policy = "Never"
-      }
+    metadata {
+        name = "restore-mattermost"
+        namespace = "mattermost"
     }
-    backoff_limit = 0
-  }
-  wait_for_completion = true
-  timeouts {
-    create = "2m"
-    update = "2m"
-  }
+    spec {
+        template {
+            metadata {}
+            spec {
+                volume {
+                    name = "mattermost-restore"
+                    config_map {
+                        name = kubernetes_config_map_v1.restore_mattermost_script[0].metadata[0].name
+                        default_mode = "0777"
+                    }
+                }
+                container {
+                    name    = "restore"
+                    image   = "ubuntu"
+                    ## TODO: Configurable alias
+                    command = ["bash", "-c", "/tmp/mm/restore_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password} -r ${var.s3_region} -n ${local.mattermost_filestore.bucket}"]
+                    volume_mount {
+                        name       = "mattermost-restore"
+                        mount_path = "/tmp/mm"
+                    }
+                }
+                restart_policy = "Never"
+            }
+        }
+        backoff_limit = 0
+    }
+    wait_for_completion = true
+    timeouts {
+        create = "2m"
+        update = "2m"
+    }
 }
 
 resource "null_resource" "restore_mattermost_scaleup" {

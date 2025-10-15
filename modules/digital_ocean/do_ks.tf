@@ -12,7 +12,7 @@ locals {
     #1.19.15-do.0    1.19.15               cluster-autoscaler, docr-integration, token-authentication
     
     kube_do_matrix = {
-        "1.33.1-00" = "1.33.1-do.4"
+        "1.33.1-00" = "1.33.1-do.5"
     }
     last_kube_do_version = reverse(values(local.kube_do_matrix))[0]
     kube_major_minor = regex("^[0-9]+.[0-9]+", var.config.kubernetes_version)

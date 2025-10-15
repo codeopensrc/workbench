@@ -13,6 +13,9 @@ variable "bot_gpg_name" {}
 #variable "s3alias" {}
 #variable "s3bucket" {}
 
+variable "source_gitlab_bucket_prefix" {}
+variable "target_gitlab_bucket_prefix" {}
+variable "gitlab_backups_enabled" {}
 variable "gitlab_dump_name" {}
 variable "imported_runner_token" {}
 variable "gitlab_secrets_body" {}
@@ -21,6 +24,7 @@ variable "s3_region" {}
 variable "s3_access_key_id" {}
 variable "s3_secret_access_key" {}
 variable "s3_endpoint" {}
+variable "s3_backup_bucket" {}
 
 variable "mattermost_subdomain" {}
 variable "wekan_subdomain" {}
@@ -42,7 +46,8 @@ output "gitlab_pat" {
 }
 
 locals {
-
+    allow_backups = terraform.workspace == "default"
+    gitlab_backups_enabled = var.gitlab_backups_enabled && local.allow_backups
     gitlab_rails_secret = "gitlab-rails-secret"
     gitlab_objectstore_secret = "gitlab-objectstore-secret"
     gitlab_toolbox_objectstore_secret = "gitlab-toolbox-objectstore-secret"
@@ -134,7 +139,7 @@ locals {
         proxy_download: true
         bucket: ${var.gitlab_bucket_prefix}-dep-proxy
       backups:
-        bucket: ${var.gitlab_bucket_prefix}-backups
+        bucket: ${var.s3_backup_bucket}
         tmpBucket: ${var.gitlab_bucket_prefix}-tmp-backups
     EOF
 
@@ -485,6 +490,121 @@ resource "null_resource" "create_tf_gitlab_pat" {
         environment = {
             KUBECONFIG = var.local_kubeconfig_path
         }
+    }
+}
+
+resource "kubernetes_config_map_v1" "backup_gitlab_script" {
+    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+        null_resource.restore_gitlab_toolbox_restore,
+        null_resource.restore_gitlab_scale_up,
+        null_resource.restore_gitlab_wait,
+    ]
+    metadata {
+        name = "backup-gitlab"
+        namespace = "gitlab"
+    }
+    data = {
+        "backup_gitlab.sh" = "${file("${path.module}/scripts/backup_gitlab.sh")}"
+    }
+}
+
+## TODO: cronjob on same schedule minus about 10 minutes
+## TODO: CronJob using container that backs up using toolbox image first
+## Not sure what env stuff it needs
+##registry.gitlab.com/gitlab-org/build/cng/gitlab-toolbox-ce:v18.4.1
+resource "null_resource" "gitlab_toolbox_backup" {
+    ## Working standalone backup
+    ## TODO: Disabled until cronjob
+    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+        null_resource.restore_gitlab_toolbox_restore,
+        null_resource.restore_gitlab_scale_up,
+        null_resource.restore_gitlab_wait,
+        kubernetes_config_map_v1.backup_gitlab_script,
+    ]
+    provisioner "local-exec" {
+        ##TODO: try  -t TIMESTAMP      Timestamp (part before '_gitlab_backup.tar' in archive name),
+        ##                             can be used to specify backup source or target name.
+        command = "POD=$(kubectl get pods -n ${local.charts.gitlab.namespace} -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n gitlab $POD -it -- backup-utility --rsyncable --skip artifacts --skip external_diffs --skip lfs --skip uploads --skip packages --skip terraform_state --skip ci_secure_files --skip pages --skip registry"
+        interpreter = ["/bin/bash", "-c"]
+        environment = {
+            KUBECONFIG = var.local_kubeconfig_path
+        }
+    }
+}
+## TODO: cronjob on same schedule plus about 10 minutes
+resource "kubernetes_job_v1" "backup_gitlab" {
+    ## Working standalone backup
+    ## TODO: Disabled until cronjob
+    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
+    depends_on = [
+        helm_release.services["gitlab"],
+        kubernetes_secret_v1_data.gitlab_rails_secret,
+        null_resource.restore_gitlab_restart_pods,
+        null_resource.restore_gitlab_scale_down,
+        null_resource.restore_gitlab_toolbox_restore,
+        null_resource.restore_gitlab_scale_up,
+        null_resource.restore_gitlab_wait,
+        kubernetes_config_map_v1.backup_gitlab_script,
+        null_resource.gitlab_toolbox_backup,
+    ]
+    metadata {
+        name = "backup-gitlab"
+        namespace = "gitlab"
+    }
+    ### TODO: Cron schedule
+    spec {
+        template {
+            metadata {}
+            spec {
+                volume {
+                    name = "backup-gitlab"
+                    config_map {
+                        name = kubernetes_config_map_v1.backup_gitlab_script[0].metadata[0].name
+                        default_mode = "0777"
+                    }
+                }
+                volume {
+                    name = "rails-secret"
+                    secret {
+                        secret_name = local.gitlab_rails_secret
+                        default_mode = "0777"
+                    }
+                }
+                container {
+                    name    = "backup"
+                    image   = "ubuntu"
+                    ## TODO: Configurable alias
+                    command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_gitlab_bucket_prefix} -n ${var.target_gitlab_bucket_prefix}"]
+                    volume_mount {
+                        name       = "backup-gitlab"
+                        mount_path = "/tmp/gitlab/backup_gitlab.sh"
+                        sub_path   = "backup_gitlab.sh"
+                    }
+                    volume_mount {
+                        name       = "rails-secret"
+                        mount_path = "/tmp/gitlab/secrets.yml"
+                        sub_path   = "secrets.yml"
+                    }
+                }
+                restart_policy = "Never"
+            }
+        }
+        backoff_limit = 0
+    }
+    wait_for_completion = true
+    timeouts {
+        create = "2m"
+        update = "2m"
     }
 }
 

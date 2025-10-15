@@ -42,6 +42,9 @@ variable "gitlab_secrets_json" {
         key = ""
     }
 }
+#TODO: Better handling of mirroring backup buckets
+variable "source_gitlab_bucket_prefix" { default = "" }
+variable "target_gitlab_bucket_prefix" { default = "" }
 variable "gitlab_enabled" { default = false }
 ## TODO: Probably make import_gitlab an object with secrets, dump, version etc
 variable "import_gitlab" { default = false }
