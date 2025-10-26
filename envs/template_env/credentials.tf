@@ -66,8 +66,8 @@ locals {
     s3_backup_buckets = {
         "default" = "UNIQUE-PREFIX-backups"
     }
-    gitlab_bucket_prefixes = {
-        "default" = "UNIQUE-PREFIX-gitlab"
+    env_bucket_prefixes = {
+        "default" = "UNIQUE-PREFIX"
     }
     ## TODO: Unity builder inside pods
     ## This is for shell runners on build machines only
@@ -93,7 +93,7 @@ locals {
     }
 
     s3_backup_bucket = lookup(local.s3_backup_buckets, local.env, local.s3_backup_buckets["default"])
-    gitlab_bucket_prefix = lookup(local.gitlab_bucket_prefixes, local.env, local.gitlab_bucket_prefixes["default"])
+    env_bucket_prefix = lookup(local.env_bucket_prefixes, local.env, local.env_bucket_prefixes["default"])
 
     # Additional configurable cname aliases: subdomainname -> alias
     misc_cnames = lookup(local.misc_cname_aliases, local.env)

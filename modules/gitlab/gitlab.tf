@@ -13,13 +13,13 @@ variable "bot_gpg_name" {}
 #variable "s3alias" {}
 #variable "s3bucket" {}
 
-variable "source_gitlab_bucket_prefix" {}
-variable "target_gitlab_bucket_prefix" {}
+variable "source_env_bucket_prefix" {}
+variable "target_env_bucket_prefix" {}
 variable "gitlab_backups_enabled" {}
 variable "gitlab_dump_name" {}
 variable "imported_runner_token" {}
 variable "gitlab_secrets_body" {}
-variable "gitlab_bucket_prefix" {}
+variable "env_bucket_prefix" {}
 variable "s3_region" {}
 variable "s3_access_key_id" {}
 variable "s3_secret_access_key" {}
@@ -54,7 +54,7 @@ locals {
     gitlab_registry_objectstore_secret = "gitlab-registry-objectstore-secret"
     gitlab_runner_secret = "${local.charts["gitlab"].release_name}-gitlab-runner-secret"
 
-    external_storage_enabled = (var.gitlab_enabled && var.gitlab_bucket_prefix != ""
+    external_storage_enabled = (var.gitlab_enabled && var.env_bucket_prefix != ""
         && var.s3_region != "" && var.s3_access_key_id != "" && var.s3_secret_access_key != ""
         && var.s3_endpoint != "")
 
@@ -84,7 +84,7 @@ locals {
           key: config
     EOF
 
-    registry_objectstore_bucket = "${var.gitlab_bucket_prefix}-registry"
+    registry_objectstore_bucket = "${var.env_bucket_prefix}-gitlab-registry"
     registry_objectstore_config = chomp(local.registry_objectstore_config_heredoc)
     registry_objectstore_config_heredoc = <<-EOF
     storage:
@@ -100,7 +100,7 @@ locals {
         artifactsServer: true
         objectStore:
           ${local.global_object_store}
-          bucket: ${var.gitlab_bucket_prefix}-pages
+          bucket: ${var.env_bucket_prefix}-gitlab-pages
     EOF
 
     global_objectstore_appConfig = chomp(local.global_objectstore_appConfig_heredoc)
@@ -111,36 +111,36 @@ locals {
       lfs:
         enabled: ${local.external_storage_enabled}
         proxy_download: false
-        bucket: ${var.gitlab_bucket_prefix}-lfs
+        bucket: ${var.env_bucket_prefix}-gitlab-lfs
       artifacts:
         enabled: ${local.external_storage_enabled}
         proxy_download: true
-        bucket: ${var.gitlab_bucket_prefix}-artifacts
+        bucket: ${var.env_bucket_prefix}-gitlab-artifacts
       uploads:
         enabled: ${local.external_storage_enabled}
         proxy_download: true
-        bucket: ${var.gitlab_bucket_prefix}-uploads
+        bucket: ${var.env_bucket_prefix}-gitlab-uploads
       packages:
         enabled: ${local.external_storage_enabled}
         proxy_download: true
-        bucket: ${var.gitlab_bucket_prefix}-packages
+        bucket: ${var.env_bucket_prefix}-gitlab-packages
       externalDiffs:
         enabled: ${local.external_storage_enabled}
         proxy_download: true
-        bucket: ${var.gitlab_bucket_prefix}-mr-diffs
+        bucket: ${var.env_bucket_prefix}-gitlab-mr-diffs
       terraformState:
         enabled: ${local.external_storage_enabled}
-        bucket: ${var.gitlab_bucket_prefix}-terraform-state
+        bucket: ${var.env_bucket_prefix}-gitlab-terraform-state
       ciSecureFiles:
         enabled: ${local.external_storage_enabled}
-        bucket: ${var.gitlab_bucket_prefix}-ci-secure-files
+        bucket: ${var.env_bucket_prefix}-gitlab-ci-secure-files
       dependencyProxy:
         enabled: ${local.external_storage_enabled}
         proxy_download: true
-        bucket: ${var.gitlab_bucket_prefix}-dep-proxy
+        bucket: ${var.env_bucket_prefix}-gitlab-dep-proxy
       backups:
         bucket: ${var.s3_backup_bucket}
-        tmpBucket: ${var.gitlab_bucket_prefix}-tmp-backups
+        tmpBucket: ${var.env_bucket_prefix}-gitlab-tmp-backups
     EOF
 
     charts = {
@@ -494,7 +494,7 @@ resource "null_resource" "create_tf_gitlab_pat" {
 }
 
 resource "kubernetes_config_map_v1" "backup_gitlab_script" {
-    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
+    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -514,9 +514,9 @@ resource "kubernetes_config_map_v1" "backup_gitlab_script" {
 }
 
 ## TODO: cronjob on same schedule minus about 10 minutes
-## TODO: CronJob using container that backs up using toolbox image first
-## Not sure what env stuff it needs
-##registry.gitlab.com/gitlab-org/build/cng/gitlab-toolbox-ce:v18.4.1
+### TODO: Toolbox has cron backup built-in!
+## https://docs.gitlab.com/charts/charts/gitlab/toolbox/#configuration
+## https://docs.gitlab.com/charts/backup-restore/backup/#cron-based-backup
 resource "null_resource" "gitlab_toolbox_backup" {
     ## Working standalone backup
     ## TODO: Disabled until cronjob
@@ -584,7 +584,7 @@ resource "kubernetes_job_v1" "backup_gitlab" {
                     name    = "backup"
                     image   = "ubuntu"
                     ## TODO: Configurable alias
-                    command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_gitlab_bucket_prefix} -n ${var.target_gitlab_bucket_prefix}"]
+                    command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix}"]
                     volume_mount {
                         name       = "backup-gitlab"
                         mount_path = "/tmp/gitlab/backup_gitlab.sh"

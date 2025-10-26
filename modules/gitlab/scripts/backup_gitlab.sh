@@ -22,8 +22,8 @@ while getopts "a:b:k:r:s:m:n:v:e" flag; do
         k) S3_ACCESS_KEY=$OPTARG;;
         r) S3_REGION=$OPTARG;;
         s) S3_SECRET_KEY=$OPTARG;;
-        m) S3_MAIN_GITLAB_BACKUP_BUCKET_PREFIX=$OPTARG;;
-        n) S3_ALT_GITLAB_BACKUP_BUCKET_PREFIX=$OPTARG;;
+        m) S3_SRC_ENV_BACKUP_BUCKET_PREFIX=$OPTARG;;
+        n) S3_TARGET_ENV_BACKUP_BUCKET_PREFIX=$OPTARG;;
         v) OPT_VERSION=${OPTARG}_;;
         e) ENCRYPT=true;;
     esac
@@ -120,8 +120,8 @@ BUCKET_LIST=(artifacts mr-diffs lfs uploads packages dep-proxy terraform-state c
 
 ## Mirror current object store to alt object store
 for bucket in "${BUCKET_LIST[@]}"; do
-    echo "Mirroring $S3_ALIAS/${S3_MAIN_GITLAB_BACKUP_BUCKET_PREFIX}-${bucket} to $S3_ALIAS/${S3_ALT_GITLAB_BACKUP_BUCKET_PREFIX}-${bucket}"
-    /usr/local/bin/mc mirror $S3_ALIAS/${S3_MAIN_GITLAB_BACKUP_BUCKET_PREFIX}-${bucket} $S3_ALIAS/${S3_ALT_GITLAB_BACKUP_BUCKET_PREFIX}-${bucket}
+    echo "Mirroring $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket} to $S3_ALIAS/${S3_TARGET_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket}"
+    /usr/local/bin/mc mirror $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket} $S3_ALIAS/${S3_TARGET_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket}
 done
 
 ## We're moving from backup spot to "storage" backup spot with timestamped history

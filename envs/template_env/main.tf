@@ -184,12 +184,12 @@ module "gitlab" {
     mattermost_subdomain = var.mattermost_subdomain
     wekan_subdomain = var.wekan_subdomain
 
-    source_gitlab_bucket_prefix = var.source_gitlab_bucket_prefix
-    target_gitlab_bucket_prefix = var.target_gitlab_bucket_prefix
+    source_env_bucket_prefix = var.source_env_bucket_prefix
+    target_env_bucket_prefix = var.target_env_bucket_prefix
     gitlab_backups_enabled = var.gitlab_backups_enabled
     gitlab_dump_name = var.gitlab_dump_name
     gitlab_secrets_body = module.cloud.gitlab_secrets_body
-    gitlab_bucket_prefix = local.gitlab_bucket_prefix
+    env_bucket_prefix = local.env_bucket_prefix
     s3_region = local.region
     s3_access_key_id = local.s3accesskey
     s3_secret_access_key = local.s3secretkey
@@ -341,7 +341,10 @@ module "kubernetes" {
     kube_services = var.kube_services
     kubernetes_nginx_nodeports = var.kubernetes_nginx_nodeports
 
-    gitlab_bucket_prefix = local.gitlab_bucket_prefix
+    mattermost_backups_enabled = var.mattermost_backups_enabled
+    source_env_bucket_prefix = var.source_env_bucket_prefix
+    target_env_bucket_prefix = var.target_env_bucket_prefix
+    env_bucket_prefix = local.env_bucket_prefix
     s3_region = local.region
     s3_access_key_id = local.s3accesskey
     s3_secret_access_key = local.s3secretkey
@@ -631,7 +634,7 @@ locals {
         gitlab_enabled = var.gitlab_enabled
         import_gitlab = var.import_gitlab
         gitlab_secrets_json = var.gitlab_secrets_json
-        gitlab_bucket_prefix = local.gitlab_bucket_prefix
+        env_bucket_prefix = local.env_bucket_prefix
     }
 }
 

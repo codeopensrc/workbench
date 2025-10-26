@@ -70,6 +70,7 @@ for i in {0..15}; do
         #(cd $MATTERMOST_DIR/ && tar -czvf $MATTERMOST_DIR/mattermost_data_$TODAY.tar.gz *)
         tar -xzvf $LOCAL_FILE -C $MATTERMOST_DIR
 
+        ## TODO: How should we handle files that already exist at the bucket location
         /usr/local/bin/mc mirror --exclude "mattermost*" $MATTERMOST_DIR/ ${RESTORE_TO_LOCATION};
 
         rm $LOCAL_FILE

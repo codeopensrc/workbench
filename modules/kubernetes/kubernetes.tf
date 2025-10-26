@@ -33,12 +33,15 @@ variable "kubernetes_nginx_nodeports" {}
 variable "oauth" {}
 variable "subdomains" {}
 
-variable "gitlab_bucket_prefix" {}
+variable "source_env_bucket_prefix" {}
+variable "target_env_bucket_prefix" {}
+variable "env_bucket_prefix" {}
 variable "s3_access_key_id" {}
 variable "s3_secret_access_key" {}
 variable "s3_endpoint" {}
 variable "s3_region" {}
 variable "s3_backup_bucket" {}
+variable "mattermost_backups_enabled" {}
 
 locals {
     consul_srvdiscovery_enabled = false
@@ -46,6 +49,8 @@ locals {
         "1.0.4" = "10.12.0"
     }
     mattermost_enabled = var.kube_services["mattermost"].enabled
+    allow_backups = terraform.workspace == "default"
+    mattermost_backups_enabled = var.mattermost_backups_enabled && local.allow_backups
     postgres_tls = {
         name = "postgresql-tls"
         key = "tls.key"
@@ -77,13 +82,13 @@ locals {
     }
 
     gitlab_filestore_secret = "gitlab-minio-secret"
-    external_storage_enabled = (var.import_gitlab && var.gitlab_bucket_prefix != ""
+    external_storage_enabled = (var.import_gitlab && var.env_bucket_prefix != ""
         && var.s3_access_key_id != "" && var.s3_secret_access_key != "" && var.s3_endpoint != "")
 
     mattermost_filestore = {
         secretname = "mattermost-filestore"
         url = local.external_storage_enabled ? replace(var.s3_endpoint, "https://", "") : "minio.${var.root_domain_name}"
-        bucket = local.external_storage_enabled ? "${var.gitlab_bucket_prefix}-mattermost" : "mattermost"
+        bucket = local.external_storage_enabled ? "${var.env_bucket_prefix}-mattermost" : "mattermost"
         accesskey = local.mattermost_enabled ? (local.external_storage_enabled ? base64encode(var.s3_access_key_id) : base64encode(data.kubernetes_secret_v1.gitlab_filestore[0].data.accesskey)) : ""
         secretkey = local.mattermost_enabled ? (local.external_storage_enabled ? base64encode(var.s3_secret_access_key) : base64encode(data.kubernetes_secret_v1.gitlab_filestore[0].data.secretkey)) : ""
     }
@@ -414,7 +419,7 @@ resource "null_resource" "restore_mattermost_scaledown" {
     ]
     provisioner "local-exec" {
         ## Scale mattermost down
-        command = "kubectl -n mattermost-operator scale deploy mattermost-operator --replicas=0; kubectl -n mattermost scale deploy mattermost --replicas=0"
+        command = "kubectl -n mattermost-operator scale deploy mattermost-operator --replicas=0; kubectl -n mattermost scale deploy mattermost --replicas=0 || true"
         interpreter = ["/bin/bash", "-c"]
         environment = {
             KUBECONFIG = var.local_kubeconfig_path
@@ -530,7 +535,76 @@ resource "null_resource" "restore_mattermost_scaleup" {
     }
 }
 
-## In order to backup, need to retrieve items from object store, zip and put in bucket
+### TODO: To test
+## X Restore using current backup
+## X Backup helm deployed mattermost using below backup method
+## X Delete/destroy running mattermost
+## Empty mattermost bucket - forgot this step
+## X Restore using backup from the helm deployed mattermost, not the original restore
+
+## Also try to do with gitlab similarly as well, restore, backup helm deployed version, then restore from that backup
+## Once backup and restore from helm deployed version work, I say send it
+
+## a db dump and download data, tar, and send to backup bucket
+resource "kubernetes_config_map_v1" "backup_mattermost_script" {
+    count = local.mattermost_enabled && local.mattermost_backups_enabled ? 1 : 0
+    depends_on = [
+        null_resource.restore_mattermost_scaleup
+    ]
+    metadata {
+        name = "backup-mattermost"
+        namespace = "mattermost"
+    }
+    data = {
+        "backup_mattermost.sh" = "${file("${path.module}/scripts/backup_mattermost.sh")}"
+    }
+}
+
+resource "kubernetes_job_v1" "backup_mattermost" {
+    ## TODO: Disabled until cronjob
+    count = local.mattermost_enabled && local.mattermost_backups_enabled ? 0 : 0
+    depends_on = [
+        null_resource.restore_mattermost_scaleup,
+        kubernetes_config_map_v1.backup_mattermost_script
+    ]
+    metadata {
+        name = "backup-mattermost"
+        namespace = "mattermost"
+    }
+    ### TODO: Cron schedule
+    spec {
+        template {
+            metadata {}
+            spec {
+                volume {
+                    name = "backup-mattermost"
+                    config_map {
+                        name = kubernetes_config_map_v1.backup_mattermost_script[0].metadata[0].name
+                        default_mode = "0777"
+                    }
+                }
+                container {
+                    name    = "backup"
+                    image   = "ubuntu"
+                    command = ["bash", "-c", "/tmp/mattermost/backup_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password}"]
+                    volume_mount {
+                        name       = "backup-mattermost"
+                        mount_path = "/tmp/mattermost/backup_mattermost.sh"
+                        sub_path   = "backup_mattermost.sh"
+                    }
+                }
+                restart_policy = "Never"
+            }
+        }
+        backoff_limit = 0
+    }
+    wait_for_completion = true
+    timeouts {
+        create = "2m"
+        update = "2m"
+    }
+}
+
 
 #resource "null_resource" "managed_kubernetes" {
 #    count = contains(var.container_orchestrators, "managed_kubernetes") ? 1 : 0

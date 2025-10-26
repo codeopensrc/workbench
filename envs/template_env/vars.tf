@@ -33,7 +33,7 @@ variable "kubernetes_nginx_nodeports" {
 }
 
 ## Name of gitlab dump file/tar minus "_gitlab_backup.tar"
-## Default bucket location is ${local.gitlab_bucket_prefix}-backups in global.appConfig.backups in gitlab module
+## Default bucket location is ${local.env_bucket_prefix}-backups in global.appConfig.backups in gitlab module
 ## Previously used a bash script to loop through most recent - something like that again once helm backups working and stable
 variable "gitlab_dump_name" { default = "" }
 variable "gitlab_secrets_json" {
@@ -43,13 +43,14 @@ variable "gitlab_secrets_json" {
     }
 }
 #TODO: Better handling of mirroring backup buckets
-variable "source_gitlab_bucket_prefix" { default = "" }
-variable "target_gitlab_bucket_prefix" { default = "" }
+variable "source_env_bucket_prefix" { default = "" }
+variable "target_env_bucket_prefix" { default = "" }
 variable "gitlab_enabled" { default = false }
 ## TODO: Probably make import_gitlab an object with secrets, dump, version etc
 variable "import_gitlab" { default = false }
 variable "import_gitlab_version" { default = "" }
 
+variable "mattermost_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "gitlab_backups_enabled" { default = false }  #auto false if not "default" workspace
 variable "install_unity3d" { default = false }
 

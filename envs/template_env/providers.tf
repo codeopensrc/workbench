@@ -42,7 +42,6 @@ provider "helm" {
     }
 }
 
-## TODO: How do we not use the gitlab provider if deploying gitlab helm chart disabled
 provider "gitlab" {
     #https://gitlab.com/gitlab-org/api/client-go#use-the-config-package-experimental
     #config_file = ""
