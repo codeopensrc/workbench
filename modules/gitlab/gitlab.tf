@@ -724,8 +724,7 @@ resource "null_resource" "gitlab_toolbox_backup" {
     }
 }
 ## TODO: cronjob on same schedule plus about 10 minutes
-resource "kubernetes_job_v1" "backup_gitlab" {
-    ## Working standalone backup
+resource "kubernetes_cron_job_v1" "backup_gitlab" {
     ## TODO: Disabled until cronjob
     count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
     depends_on = [
@@ -743,51 +742,59 @@ resource "kubernetes_job_v1" "backup_gitlab" {
         name = "backup-gitlab"
         namespace = "gitlab"
     }
-    ### TODO: Cron schedule
     spec {
-        template {
+        concurrency_policy            = "Replace"
+        failed_jobs_history_limit     = 2
+        schedule                      = "0 1 * * 0,2,4"
+        timezone                      = "Etc/PST"
+        starting_deadline_seconds     = 10
+        successful_jobs_history_limit = 3
+        job_template {
             metadata {}
             spec {
-                volume {
-                    name = "backup-gitlab"
-                    config_map {
-                        name = kubernetes_config_map_v1.backup_gitlab_script[0].metadata[0].name
-                        default_mode = "0777"
+                template {
+                    metadata {}
+                    spec {
+                        volume {
+                            name = "backup-gitlab"
+                            config_map {
+                                name = kubernetes_config_map_v1.backup_gitlab_script[0].metadata[0].name
+                                default_mode = "0777"
+                            }
+                        }
+                        volume {
+                            name = "rails-secret"
+                            secret {
+                                secret_name = local.gitlab_rails_secret
+                                default_mode = "0777"
+                            }
+                        }
+                        container {
+                            name    = "backup"
+                            image   = "ubuntu"
+                            ## TODO: Configurable alias
+                            command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix}"]
+                            volume_mount {
+                                name       = "backup-gitlab"
+                                mount_path = "/tmp/gitlab/backup_gitlab.sh"
+                                sub_path   = "backup_gitlab.sh"
+                            }
+                            volume_mount {
+                                name       = "rails-secret"
+                                mount_path = "/tmp/gitlab/secrets.yml"
+                                sub_path   = "secrets.yml"
+                            }
+                        }
+                        restart_policy = "Never"
                     }
                 }
-                volume {
-                    name = "rails-secret"
-                    secret {
-                        secret_name = local.gitlab_rails_secret
-                        default_mode = "0777"
-                    }
-                }
-                container {
-                    name    = "backup"
-                    image   = "ubuntu"
-                    ## TODO: Configurable alias
-                    command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix}"]
-                    volume_mount {
-                        name       = "backup-gitlab"
-                        mount_path = "/tmp/gitlab/backup_gitlab.sh"
-                        sub_path   = "backup_gitlab.sh"
-                    }
-                    volume_mount {
-                        name       = "rails-secret"
-                        mount_path = "/tmp/gitlab/secrets.yml"
-                        sub_path   = "secrets.yml"
-                    }
-                }
-                restart_policy = "Never"
+                backoff_limit = 0
             }
         }
-        backoff_limit = 0
     }
-    wait_for_completion = true
-    timeouts {
-        create = "2m"
-        update = "2m"
-    }
+    #timeouts {
+    #    delete = "2m"
+    #}
 }
 
 #resource "null_resource" "prometheus_targets" {

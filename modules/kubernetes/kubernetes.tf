@@ -563,7 +563,7 @@ resource "kubernetes_config_map_v1" "backup_mattermost_script" {
     }
 }
 
-resource "kubernetes_job_v1" "backup_mattermost" {
+resource "kubernetes_cron_job_v1" "backup_mattermost" {
     ## TODO: Disabled until cronjob
     count = local.mattermost_enabled && local.mattermost_backups_enabled ? 0 : 0
     depends_on = [
@@ -574,38 +574,46 @@ resource "kubernetes_job_v1" "backup_mattermost" {
         name = "backup-mattermost"
         namespace = "mattermost"
     }
-    ### TODO: Cron schedule
     spec {
-        template {
+        concurrency_policy            = "Replace"
+        failed_jobs_history_limit     = 2
+        schedule                      = "0 0 * * 0,2,4"
+        timezone                      = "Etc/PST"
+        starting_deadline_seconds     = 10
+        successful_jobs_history_limit = 3
+        job_template {
             metadata {}
             spec {
-                volume {
-                    name = "backup-mattermost"
-                    config_map {
-                        name = kubernetes_config_map_v1.backup_mattermost_script[0].metadata[0].name
-                        default_mode = "0777"
+                template {
+                    metadata {}
+                    spec {
+                        volume {
+                            name = "backup-mattermost"
+                            config_map {
+                                name = kubernetes_config_map_v1.backup_mattermost_script[0].metadata[0].name
+                                default_mode = "0777"
+                            }
+                        }
+                        container {
+                            name    = "backup"
+                            image   = "ubuntu"
+                            command = ["bash", "-c", "/tmp/mattermost/backup_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password}"]
+                            volume_mount {
+                                name       = "backup-mattermost"
+                                mount_path = "/tmp/mattermost/backup_mattermost.sh"
+                                sub_path   = "backup_mattermost.sh"
+                            }
+                        }
+                        restart_policy = "Never"
                     }
                 }
-                container {
-                    name    = "backup"
-                    image   = "ubuntu"
-                    command = ["bash", "-c", "/tmp/mattermost/backup_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password}"]
-                    volume_mount {
-                        name       = "backup-mattermost"
-                        mount_path = "/tmp/mattermost/backup_mattermost.sh"
-                        sub_path   = "backup_mattermost.sh"
-                    }
-                }
-                restart_policy = "Never"
+                backoff_limit = 0
             }
         }
-        backoff_limit = 0
     }
-    wait_for_completion = true
-    timeouts {
-        create = "2m"
-        update = "2m"
-    }
+    #timeouts {
+    #    delete = "2m"
+    #}
 }
 
 
