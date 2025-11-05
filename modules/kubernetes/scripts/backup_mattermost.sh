@@ -67,7 +67,7 @@ mkdir -p $MAIN_BACKUP_FOLDER
 mattermost_folders=(client-plugins data plugins users)
 for folder in "${mattermost_folders[@]}"; do
     echo "Copy $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-mattermost/$folder to $MAIN_BACKUP_FOLDER/$folder"
-    /usr/local/bin/mc cp $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-mattermost/$folder $MAIN_BACKUP_FOLDER/$folder --recursive
+    /usr/local/bin/mc cp $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-mattermost/$folder/ $MAIN_BACKUP_FOLDER/$folder --recursive
 done
 
 ## Think our config comes from helm env vars mainly atm
@@ -75,10 +75,10 @@ done
 #mc cp ${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-mattermost/config.json $MAIN_BACKUP_FOLDER/config.json
 
 ## tar
-tar -czvf $ZIP_FILE_NAME $MAIN_BACKUP_FOLDER 
+(cd $MAIN_BACKUP_FOLDER && tar -czvf $ZIP_FILE_NAME *)
 
 ## cp to backup bucket
-/usr/local/bin/mc cp $ZIP_FILE_NAME $S3_ALIAS/$MAIN_BACKUP_BUCKET/mattermost/$YEAR_MONTH/
+/usr/local/bin/mc cp $MAIN_BACKUP_FOLDER/$ZIP_FILE_NAME $S3_ALIAS/$MAIN_BACKUP_BUCKET/mattermost/$YEAR_MONTH/
 
 
 ## OLD   -  Copy down object store, tar, mc cp up to backup bucket

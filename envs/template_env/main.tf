@@ -633,7 +633,7 @@ locals {
         ## gitlab secrets
         gitlab_enabled = var.gitlab_enabled
         import_gitlab = var.import_gitlab
-        gitlab_secrets_json = var.gitlab_secrets_json
+        gitlab_secrets = var.gitlab_secrets
         env_bucket_prefix = local.env_bucket_prefix
     }
 }

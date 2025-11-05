@@ -539,11 +539,14 @@ resource "null_resource" "restore_mattermost_scaleup" {
 ## X Restore using current backup
 ## X Backup helm deployed mattermost using below backup method
 ## X Delete/destroy running mattermost
-## Empty mattermost bucket - forgot this step
+## X Empty mattermost bucket - forgot this step
 ## X Restore using backup from the helm deployed mattermost, not the original restore
 
-## Also try to do with gitlab similarly as well, restore, backup helm deployed version, then restore from that backup
-## Once backup and restore from helm deployed version work, I say send it
+## X Also try to do with gitlab similarly as well, restore, backup helm deployed version, then restore from that backup
+## X External postgres, redis, and gitaly with backups in place first then test gitlab backups
+### Eh "external" just means deploying our own charts instead of bundled and why bother and maintain in that case
+## X Once backup and restore from helm deployed version work then send it
+## Send migration
 
 ## a db dump and download data, tar, and send to backup bucket
 resource "kubernetes_config_map_v1" "backup_mattermost_script" {

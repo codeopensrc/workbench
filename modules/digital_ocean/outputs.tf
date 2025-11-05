@@ -8,10 +8,10 @@ output "cluster_info" {
 data "digitalocean_spaces_bucket_object" "gitlab_secrets" {
     provider = digitalocean.spaces
     count = (var.config.gitlab_enabled && var.config.import_gitlab 
-        && var.config.gitlab_secrets_json.key != "" && var.config.gitlab_secrets_json.bucket != "" ? 1 : 0)
-    bucket = var.config.gitlab_secrets_json.bucket != "" ? var.config.gitlab_secrets_json.bucket : "${var.config.env_bucket_prefix}-backups"
+        && var.config.gitlab_secrets.key != "" && var.config.gitlab_secrets.bucket != "" ? 1 : 0)
+    bucket = var.config.gitlab_secrets.bucket != "" ? var.config.gitlab_secrets.bucket : "${var.config.env_bucket_prefix}-backups"
     region = var.config.do_region
-    key    = var.config.gitlab_secrets_json.key != "" ? var.config.gitlab_secrets_json.key : ""
+    key    = var.config.gitlab_secrets.key != "" ? var.config.gitlab_secrets.key : ""
 }
 
 output "gitlab_secrets_body" {

@@ -36,7 +36,7 @@ variable "kubernetes_nginx_nodeports" {
 ## Default bucket location is ${local.env_bucket_prefix}-backups in global.appConfig.backups in gitlab module
 ## Previously used a bash script to loop through most recent - something like that again once helm backups working and stable
 variable "gitlab_dump_name" { default = "" }
-variable "gitlab_secrets_json" {
+variable "gitlab_secrets" {
     default = {
         bucket = ""
         key = ""
