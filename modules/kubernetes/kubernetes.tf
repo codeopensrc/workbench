@@ -453,6 +453,7 @@ resource "null_resource" "restore_mattermost_newdb" {
     }
 }
 
+## TODO: Change script to read in credentials from mounted secret file
 resource "kubernetes_config_map_v1" "restore_mattermost_script" {
     count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
     depends_on = [
@@ -498,6 +499,7 @@ resource "kubernetes_job_v1" "restore_mattermost_refreshdb" {
                     name    = "restore"
                     image   = "ubuntu"
                     ## TODO: Configurable alias
+                    ## TODO: Mount credentials as secret and read-in in the script
                     command = ["bash", "-c", "/tmp/mm/restore_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password} -r ${var.s3_region} -n ${local.mattermost_filestore.bucket}"]
                     volume_mount {
                         name       = "mattermost-restore"
@@ -537,6 +539,7 @@ resource "null_resource" "restore_mattermost_scaleup" {
 }
 
 ## a db dump and download data, tar, and send to backup bucket
+## TODO: Change script to read in credentials from mounted secret file
 resource "kubernetes_config_map_v1" "backup_mattermost_script" {
     count = local.mattermost_enabled && local.mattermost_backups_enabled ? 1 : 0
     depends_on = [
@@ -552,7 +555,6 @@ resource "kubernetes_config_map_v1" "backup_mattermost_script" {
 }
 
 resource "kubernetes_cron_job_v1" "backup_mattermost" {
-    ## TODO: Disabled until cronjob
     count = local.mattermost_enabled && local.mattermost_backups_enabled ? 1 : 0
     depends_on = [
         null_resource.restore_mattermost_scaleup,
@@ -585,6 +587,7 @@ resource "kubernetes_cron_job_v1" "backup_mattermost" {
                         container {
                             name    = "backup"
                             image   = "ubuntu"
+                            ## TODO: Mount credentials as secret and read-in in the script
                             command = ["bash", "-c", "/tmp/mattermost/backup_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password}"]
                             volume_mount {
                                 name       = "backup-mattermost"

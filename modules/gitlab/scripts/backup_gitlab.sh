@@ -121,7 +121,7 @@ BUCKET_LIST=(artifacts mr-diffs lfs uploads packages dep-proxy terraform-state c
 ## Mirror current object store to alt object store
 for bucket in "${BUCKET_LIST[@]}"; do
     echo "Mirroring $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket} to $S3_ALIAS/${S3_TARGET_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket}"
-    /usr/local/bin/mc mirror $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket} $S3_ALIAS/${S3_TARGET_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket}
+    /usr/local/bin/mc mirror $S3_ALIAS/${S3_SRC_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket} $S3_ALIAS/${S3_TARGET_ENV_BACKUP_BUCKET_PREFIX}-gitlab-${bucket} --overwrite
 done
 
 ## We're moving from backup spot to "storage" backup spot with timestamped history

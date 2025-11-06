@@ -61,7 +61,7 @@ locals {
     restore_gitlab = var.gitlab_enabled && var.import_gitlab && local.external_storage_enabled && var.gitlab_secrets_body != ""
 
     ## TODO: Remove after migrated from omnibus
-    tmp_migrate_from_omnibus = true
+    tmp_migrate_from_omnibus = false
     gitlab_secrets = jsondecode(local.restore_gitlab ? var.gitlab_secrets_body : "{}")
 
     num_gitlab_sidekiq_pods = 1
@@ -79,12 +79,23 @@ locals {
 
     toolbox_objectstore_configs = chomp(local.toolbox_objectstore_configs_heredoc)
     toolbox_objectstore_configs_heredoc = <<-EOF
-    backups:
-      objectStorage:
-        config:
-          secret: ${local.gitlab_toolbox_objectstore_secret}
-          key: config
+    objectStorage:
+      config:
+        secret: ${local.gitlab_toolbox_objectstore_secret}
+        key: config
     EOF
+
+    ## https://docs.gitlab.com/charts/charts/gitlab/toolbox/#configuration
+    ## https://docs.gitlab.com/charts/backup-restore/backup/#cron-based-backup
+    ## TZ is UTC
+    toolbox_backup_cron = chomp(local.toolbox_backup_cron_heredoc)
+    toolbox_backup_cron_heredoc = <<-EOF
+    cron:
+      enabled: true
+      schedule: 0 8 * * 0,2,4
+      extraArgs: --rsyncable --skip artifacts --skip external_diffs --skip lfs --skip uploads --skip packages --skip terraform_state --skip ci_secure_files --skip pages --skip registry
+    EOF
+
 
     registry_objectstore_bucket = "${var.env_bucket_prefix}-gitlab-registry"
     registry_objectstore_config = chomp(local.registry_objectstore_config_heredoc)
@@ -296,7 +307,9 @@ locals {
             ${indent(4, local.gitlab_nodeselector)}
           toolbox:
             ${indent(4, local.gitlab_nodeselector)}
-            ${local.external_storage_enabled ? indent(4, local.toolbox_objectstore_configs) : ""}
+            backups:
+              ${local.external_storage_enabled ? indent(6, local.toolbox_objectstore_configs) : ""}
+              ${indent(6, local.toolbox_backup_cron)}
           gitlab-shell:
             ${indent(4, local.gitlab_nodeselector)}
           gitlab-exporter:
@@ -512,7 +525,7 @@ resource "helm_release" "services" {
     repository        = each.value.chart_url
     version           = lookup(each.value, "chart_version", null)
     timeout           = lookup(each.value, "timeout", 300)
-    force_update      = true
+    force_update      = false
     recreate_pods     = false
     dependency_update = true
     wait              = lookup(each.value, "wait", true)
@@ -524,7 +537,8 @@ resource "helm_release" "services" {
 }
 
 resource "kubernetes_secret_v1_data" "gitlab_rails_secret" {
-    count = local.restore_gitlab ? 1 : 0
+    ## Stops attempting to update after gitlab has been restored
+    count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [ helm_release.services["gitlab"] ]
     metadata {
         name = local.gitlab_rails_secret
@@ -543,6 +557,7 @@ resource "kubernetes_secret_v1_data" "gitlab_rails_secret" {
 ###TODO: Turn these local-exec provisioners into remote kubernetes jobs
 resource "null_resource" "restore_gitlab_restart_pods" {
     count = local.restore_gitlab ? 1 : 0
+    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret
@@ -557,6 +572,7 @@ resource "null_resource" "restore_gitlab_restart_pods" {
 }
 resource "null_resource" "restore_gitlab_scale_down" {
     count = local.restore_gitlab ? 1 : 0
+    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -573,6 +589,7 @@ resource "null_resource" "restore_gitlab_scale_down" {
 }
 resource "null_resource" "restore_gitlab_toolbox_restore" {
     count = local.restore_gitlab ? 1 : 0
+    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -589,6 +606,7 @@ resource "null_resource" "restore_gitlab_toolbox_restore" {
 }
 resource "null_resource" "restore_gitlab_scale_up" {
     count = local.restore_gitlab ? 1 : 0
+    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -607,6 +625,7 @@ resource "null_resource" "restore_gitlab_scale_up" {
 }
 resource "null_resource" "restore_gitlab_wait" {
     count = local.restore_gitlab ? 1 : 0
+    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -625,6 +644,7 @@ resource "null_resource" "restore_gitlab_wait" {
 }
 resource "kubernetes_secret_v1_data" "gitlab_runner_secret" {
     count = local.restore_gitlab ? 1 : 0
+    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -675,6 +695,7 @@ resource "null_resource" "create_tf_gitlab_pat" {
     }
 }
 
+## TODO: Change script to read in credentials from mounted secret file
 resource "kubernetes_config_map_v1" "backup_gitlab_script" {
     count = var.gitlab_enabled && local.gitlab_backups_enabled ? 1 : 0
     depends_on = [
@@ -695,39 +716,10 @@ resource "kubernetes_config_map_v1" "backup_gitlab_script" {
     }
 }
 
-## TODO: cronjob on same schedule minus about 10 minutes
-### TODO: Toolbox has cron backup built-in!
-## https://docs.gitlab.com/charts/charts/gitlab/toolbox/#configuration
-## https://docs.gitlab.com/charts/backup-restore/backup/#cron-based-backup
-resource "null_resource" "gitlab_toolbox_backup" {
-    ## Working standalone backup
-    ## TODO: Disabled until cronjob
-    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
-    depends_on = [
-        helm_release.services["gitlab"],
-        kubernetes_secret_v1_data.gitlab_rails_secret,
-        null_resource.restore_gitlab_restart_pods,
-        null_resource.restore_gitlab_scale_down,
-        null_resource.restore_gitlab_toolbox_restore,
-        null_resource.restore_gitlab_scale_up,
-        null_resource.restore_gitlab_wait,
-        kubernetes_config_map_v1.backup_gitlab_script,
-    ]
-    provisioner "local-exec" {
-        ##TODO: try  -t TIMESTAMP      Timestamp (part before '_gitlab_backup.tar' in archive name),
-        ##                             can be used to specify backup source or target name.
-        command = "POD=$(kubectl get pods -n ${local.charts.gitlab.namespace} -lapp=toolbox --no-headers -o custom-columns=NAME:.metadata.name); kubectl exec -n gitlab $POD -it -- backup-utility --rsyncable --skip artifacts --skip external_diffs --skip lfs --skip uploads --skip packages --skip terraform_state --skip ci_secure_files --skip pages --skip registry"
-        interpreter = ["/bin/bash", "-c"]
-        environment = {
-            KUBECONFIG = var.local_kubeconfig_path
-        }
-    }
-}
-## TODO: cronjob on same schedule plus about 10 minutes
+### NOTE: Toolbox has cron backup built-in!
+### This mirrors buckets and archives the backup appropriately
 resource "kubernetes_cron_job_v1" "backup_gitlab" {
-    ## TODO: Disabled until cronjob
-    ## Dont enable until we implement from native cronjob backup settings
-    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
+    count = var.gitlab_enabled && local.gitlab_backups_enabled ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -737,7 +729,6 @@ resource "kubernetes_cron_job_v1" "backup_gitlab" {
         null_resource.restore_gitlab_scale_up,
         null_resource.restore_gitlab_wait,
         kubernetes_config_map_v1.backup_gitlab_script,
-        null_resource.gitlab_toolbox_backup,
     ]
     metadata {
         name = "backup-gitlab"
@@ -746,8 +737,8 @@ resource "kubernetes_cron_job_v1" "backup_gitlab" {
     spec {
         concurrency_policy            = "Replace"
         failed_jobs_history_limit     = 2
-        schedule                      = "0 1 * * 0,2,4"
-        timezone                      = "Etc/PST"
+        schedule                      = "10 0 * * 0,2,4" ##set to 10 min after toolbox cron
+        timezone                      = "America/Los_Angeles"
         starting_deadline_seconds     = 10
         successful_jobs_history_limit = 3
         job_template {
@@ -774,6 +765,7 @@ resource "kubernetes_cron_job_v1" "backup_gitlab" {
                             name    = "backup"
                             image   = "ubuntu"
                             ## TODO: Configurable alias
+                            ## TODO: Mount credentials as secret and read-in in the script
                             command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix}"]
                             volume_mount {
                                 name       = "backup-gitlab"
