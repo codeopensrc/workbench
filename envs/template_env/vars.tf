@@ -161,20 +161,25 @@ variable "wekan_subdomain" { default = "wekan" }
 variable "cname_aliases" {
     default = [
         "consul",
-        "gitlab",
         "registry",
         "chat",
     ]
 }
 
+variable "a_aliases" {
+    default = [
+        "gitlab",
+    ]
+}
+
 variable "db_arecord_aliases" {
     default = [
-        "mongo.aws1",
-        "mongo.do1",
-        "pg.aws1",
-        "pg.do1",
-        "redis.aws1",
-        "redis.do1",
+        #"mongo.aws1",
+        #"mongo.do1",
+        #"pg.aws1",
+        #"pg.do1",
+        #"redis.aws1",
+        #"redis.do1",
     ]
 }
 

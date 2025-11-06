@@ -112,6 +112,18 @@ resource "digitalocean_record" "a_k8s_internal" {
     value  = "127.0.0.1"
 }
 
+resource "digitalocean_record" "a" {
+    for_each = {
+        for ind, record in compact(var.config.a_aliases):
+        record => record
+    }
+    name   = each.key
+    domain = digitalocean_domain.default.name
+    type   = "A"
+    ttl    = "300"
+    value  = data.digitalocean_loadbalancer.main.ip
+}
+
 resource "digitalocean_record" "a_root" {
     name   = "@"
     domain = digitalocean_domain.default.name

@@ -726,6 +726,7 @@ resource "null_resource" "gitlab_toolbox_backup" {
 ## TODO: cronjob on same schedule plus about 10 minutes
 resource "kubernetes_cron_job_v1" "backup_gitlab" {
     ## TODO: Disabled until cronjob
+    ## Dont enable until we implement from native cronjob backup settings
     count = var.gitlab_enabled && local.gitlab_backups_enabled ? 0 : 0
     depends_on = [
         helm_release.services["gitlab"],

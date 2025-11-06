@@ -316,6 +316,7 @@ locals {
 #    }
 #}
 
+## TODO: Make and move to postgres tf module
 resource "random_password" "mattermost_db" {
     for_each = {
         for ind, key in ["user", "postgres"]: key => key
@@ -535,19 +536,6 @@ resource "null_resource" "restore_mattermost_scaleup" {
     }
 }
 
-### TODO: To test
-## X Restore using current backup
-## X Backup helm deployed mattermost using below backup method
-## X Delete/destroy running mattermost
-## X Empty mattermost bucket - forgot this step
-## X Restore using backup from the helm deployed mattermost, not the original restore
-
-## X Also try to do with gitlab similarly as well, restore, backup helm deployed version, then restore from that backup
-## X External postgres, redis, and gitaly with backups in place first then test gitlab backups
-### Eh "external" just means deploying our own charts instead of bundled and why bother and maintain in that case
-## X Once backup and restore from helm deployed version work then send it
-## Send migration
-
 ## a db dump and download data, tar, and send to backup bucket
 resource "kubernetes_config_map_v1" "backup_mattermost_script" {
     count = local.mattermost_enabled && local.mattermost_backups_enabled ? 1 : 0
@@ -565,7 +553,7 @@ resource "kubernetes_config_map_v1" "backup_mattermost_script" {
 
 resource "kubernetes_cron_job_v1" "backup_mattermost" {
     ## TODO: Disabled until cronjob
-    count = local.mattermost_enabled && local.mattermost_backups_enabled ? 0 : 0
+    count = local.mattermost_enabled && local.mattermost_backups_enabled ? 1 : 0
     depends_on = [
         null_resource.restore_mattermost_scaleup,
         kubernetes_config_map_v1.backup_mattermost_script
@@ -578,7 +566,7 @@ resource "kubernetes_cron_job_v1" "backup_mattermost" {
         concurrency_policy            = "Replace"
         failed_jobs_history_limit     = 2
         schedule                      = "0 0 * * 0,2,4"
-        timezone                      = "Etc/PST"
+        timezone                      = "America/Los_Angeles"
         starting_deadline_seconds     = 10
         successful_jobs_history_limit = 3
         job_template {

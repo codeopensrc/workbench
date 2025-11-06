@@ -590,6 +590,7 @@ locals {
         ## DNS
         root_domain_name = local.root_domain_name
         additional_domains = local.additional_domains
+        a_aliases = var.a_aliases
         cname_aliases = var.cname_aliases
         db_arecord_aliases = var.db_arecord_aliases
         offsite_arecord_aliases = var.offsite_arecord_aliases
