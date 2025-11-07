@@ -556,8 +556,7 @@ resource "kubernetes_secret_v1_data" "gitlab_rails_secret" {
 
 ###TODO: Turn these local-exec provisioners into remote kubernetes jobs
 resource "null_resource" "restore_gitlab_restart_pods" {
-    count = local.restore_gitlab ? 1 : 0
-    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
+    count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret
@@ -571,8 +570,7 @@ resource "null_resource" "restore_gitlab_restart_pods" {
     }
 }
 resource "null_resource" "restore_gitlab_scale_down" {
-    count = local.restore_gitlab ? 1 : 0
-    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
+    count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -588,8 +586,7 @@ resource "null_resource" "restore_gitlab_scale_down" {
     }
 }
 resource "null_resource" "restore_gitlab_toolbox_restore" {
-    count = local.restore_gitlab ? 1 : 0
-    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
+    count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -605,8 +602,7 @@ resource "null_resource" "restore_gitlab_toolbox_restore" {
     }
 }
 resource "null_resource" "restore_gitlab_scale_up" {
-    count = local.restore_gitlab ? 1 : 0
-    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
+    count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -624,8 +620,7 @@ resource "null_resource" "restore_gitlab_scale_up" {
     }
 }
 resource "null_resource" "restore_gitlab_wait" {
-    count = local.restore_gitlab ? 1 : 0
-    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
+    count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -643,8 +638,7 @@ resource "null_resource" "restore_gitlab_wait" {
     }
 }
 resource "kubernetes_secret_v1_data" "gitlab_runner_secret" {
-    count = local.restore_gitlab ? 1 : 0
-    #count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
+    count = local.restore_gitlab && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubernetes_secret_v1_data.gitlab_rails_secret,
@@ -695,7 +689,6 @@ resource "null_resource" "create_tf_gitlab_pat" {
     }
 }
 
-## TODO: Change script to read in credentials from mounted secret file
 resource "kubernetes_config_map_v1" "backup_gitlab_script" {
     count = var.gitlab_enabled && local.gitlab_backups_enabled ? 1 : 0
     depends_on = [
@@ -736,11 +729,11 @@ resource "kubernetes_cron_job_v1" "backup_gitlab" {
     }
     spec {
         concurrency_policy            = "Replace"
-        failed_jobs_history_limit     = 2
+        failed_jobs_history_limit     = 1
         schedule                      = "10 0 * * 0,2,4" ##set to 10 min after toolbox cron
         timezone                      = "America/Los_Angeles"
         starting_deadline_seconds     = 10
-        successful_jobs_history_limit = 3
+        successful_jobs_history_limit = 1
         job_template {
             metadata {}
             spec {
@@ -761,12 +754,19 @@ resource "kubernetes_cron_job_v1" "backup_gitlab" {
                                 default_mode = "0777"
                             }
                         }
+
+                        volume {
+                            name = "filestore"
+                            secret {
+                                secret_name = local.gitlab_objectstore_secret
+                                default_mode = "0777"
+                            }
+                        }
                         container {
                             name    = "backup"
                             image   = "ubuntu"
                             ## TODO: Configurable alias
-                            ## TODO: Mount credentials as secret and read-in in the script
-                            command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix}"]
+                            command = ["bash", "-c", "/tmp/gitlab/backup_gitlab.sh -a spaces -b ${var.s3_backup_bucket} -s /tmp/gitlab/filestore -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix}"]
                             volume_mount {
                                 name       = "backup-gitlab"
                                 mount_path = "/tmp/gitlab/backup_gitlab.sh"
@@ -776,6 +776,10 @@ resource "kubernetes_cron_job_v1" "backup_gitlab" {
                                 name       = "rails-secret"
                                 mount_path = "/tmp/gitlab/secrets.yml"
                                 sub_path   = "secrets.yml"
+                            }
+                            volume_mount {
+                                name       = "filestore"
+                                mount_path = "/tmp/gitlab/filestore"
                             }
                         }
                         restart_policy = "Never"

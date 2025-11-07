@@ -9,6 +9,7 @@ terraform {
     }
 }
 
+variable "local_init_filepath" {}
 variable "local_kubeconfig_path" {}
 variable "gitlab_runner_tokens" {}
 variable "root_domain_name" {}
@@ -413,7 +414,7 @@ resource "kubectl_manifest" "mattermost" {
 ## TODO: Retore gitlab/mattermost opt
 ## TODO: Kubernetes jobs using kubectl image instead of null_resource.local_exec
 resource "null_resource" "restore_mattermost_scaledown" {
-    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    count = local.mattermost_enabled && local.external_storage_enabled && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["mattermost"],
         kubectl_manifest.mattermost,
@@ -429,7 +430,7 @@ resource "null_resource" "restore_mattermost_scaledown" {
 }
 
 resource "null_resource" "restore_mattermost_newdb" {
-    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    count = local.mattermost_enabled && local.external_storage_enabled && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubectl_manifest.mattermost,
@@ -453,9 +454,8 @@ resource "null_resource" "restore_mattermost_newdb" {
     }
 }
 
-## TODO: Change script to read in credentials from mounted secret file
 resource "kubernetes_config_map_v1" "restore_mattermost_script" {
-    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    count = local.mattermost_enabled && local.external_storage_enabled && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubectl_manifest.mattermost,
@@ -472,7 +472,7 @@ resource "kubernetes_config_map_v1" "restore_mattermost_script" {
 }
 
 resource "kubernetes_job_v1" "restore_mattermost_refreshdb" {
-    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    count = local.mattermost_enabled && local.external_storage_enabled && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubectl_manifest.mattermost,
@@ -495,16 +495,41 @@ resource "kubernetes_job_v1" "restore_mattermost_refreshdb" {
                         default_mode = "0777"
                     }
                 }
+                volume {
+                    name = "filestore"
+                    secret {
+                        secret_name = local.mattermost_filestore.secretname
+                        default_mode = "0777"
+                    }
+                }
+                volume {
+                    name = "dbauth"
+                    secret {
+                        secret_name = local.mattermost_file.db.secretname
+                        default_mode = "0777"
+                    }
+                }
                 container {
                     name    = "restore"
                     image   = "ubuntu"
                     ## TODO: Configurable alias
-                    ## TODO: Mount credentials as secret and read-in in the script
-                    command = ["bash", "-c", "/tmp/mm/restore_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password} -r ${var.s3_region} -n ${local.mattermost_filestore.bucket}"]
+                    command = ["bash", "-c", "/tmp/mattermost/restore_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -d /tmp/mattermost/dbauth -s /tmp/mattermost/filestore -r ${var.s3_region} -n ${local.mattermost_filestore.bucket}"]
                     volume_mount {
                         name       = "mattermost-restore"
-                        mount_path = "/tmp/mm"
+                        mount_path = "/tmp/mattermost/restore_mattermost.sh"
+                        sub_path   = "restore_mattermost.sh"
                     }
+                    volume_mount {
+                        name       = "filestore"
+                        mount_path = "/tmp/mattermost/filestore"
+                    }
+                    volume_mount {
+                        name       = "dbauth"
+                        mount_path = "/tmp/mattermost/dbauth"
+                    }
+
+
+
                 }
                 restart_policy = "Never"
             }
@@ -519,7 +544,7 @@ resource "kubernetes_job_v1" "restore_mattermost_refreshdb" {
 }
 
 resource "null_resource" "restore_mattermost_scaleup" {
-    count = local.mattermost_enabled && local.external_storage_enabled ? 1 : 0
+    count = local.mattermost_enabled && local.external_storage_enabled && !fileexists(var.local_init_filepath) ? 1 : 0
     depends_on = [
         helm_release.services["gitlab"],
         kubectl_manifest.mattermost,
@@ -566,11 +591,11 @@ resource "kubernetes_cron_job_v1" "backup_mattermost" {
     }
     spec {
         concurrency_policy            = "Replace"
-        failed_jobs_history_limit     = 2
+        failed_jobs_history_limit     = 1
         schedule                      = "0 0 * * 0,2,4"
         timezone                      = "America/Los_Angeles"
         starting_deadline_seconds     = 10
-        successful_jobs_history_limit = 3
+        successful_jobs_history_limit = 1
         job_template {
             metadata {}
             spec {
@@ -584,15 +609,36 @@ resource "kubernetes_cron_job_v1" "backup_mattermost" {
                                 default_mode = "0777"
                             }
                         }
+                        volume {
+                            name = "filestore"
+                            secret {
+                                secret_name = local.mattermost_filestore.secretname
+                                default_mode = "0777"
+                            }
+                        }
+                        volume {
+                            name = "dbauth"
+                            secret {
+                                secret_name = local.mattermost_file.db.secretname
+                                default_mode = "0777"
+                            }
+                        }
                         container {
                             name    = "backup"
                             image   = "ubuntu"
-                            ## TODO: Mount credentials as secret and read-in in the script
-                            command = ["bash", "-c", "/tmp/mattermost/backup_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -k ${var.s3_access_key_id} -s ${var.s3_secret_access_key} -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix} -u ${local.mattermost_db_auth.username} -p ${local.mattermost_db_auth.password}"]
+                            command = ["bash", "-c", "/tmp/mattermost/backup_mattermost.sh -a spaces -b ${var.s3_backup_bucket} -d /tmp/mattermost/dbauth -s /tmp/mattermost/filestore -r ${var.s3_region} -m ${var.source_env_bucket_prefix} -n ${var.target_env_bucket_prefix}"]
                             volume_mount {
                                 name       = "backup-mattermost"
                                 mount_path = "/tmp/mattermost/backup_mattermost.sh"
                                 sub_path   = "backup_mattermost.sh"
+                            }
+                            volume_mount {
+                                name       = "filestore"
+                                mount_path = "/tmp/mattermost/filestore"
+                            }
+                            volume_mount {
+                                name       = "dbauth"
+                                mount_path = "/tmp/mattermost/dbauth"
                             }
                         }
                         restart_policy = "Never"

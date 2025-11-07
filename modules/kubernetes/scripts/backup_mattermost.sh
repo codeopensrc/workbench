@@ -1,21 +1,44 @@
 #!/bin/bash
 
-while getopts "a:b:k:r:s:m:n:u:p:v:e" flag; do
+while getopts "a:b:d:r:s:m:n:v:e" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) S3_ALIAS=$OPTARG;;
         b) MAIN_BACKUP_BUCKET=$OPTARG;;
-        k) S3_ACCESS_KEY=$OPTARG;;
+        d) DB_AUTH_MOUNT=$OPTARG;;
         r) S3_REGION=$OPTARG;;
-        s) S3_SECRET_KEY=$OPTARG;;
+        s) S3_SECRET_MOUNT=$OPTARG;;
         m) S3_SRC_ENV_BACKUP_BUCKET_PREFIX=$OPTARG;;
         n) S3_TARGET_ENV_BACKUP_BUCKET_PREFIX=$OPTARG;;
-        u) DB_USER=$OPTARG;;
-        p) DB_PASS=$OPTARG;;
         v) OPT_VERSION=${OPTARG}_;;
         e) ENCRYPT=true;;
     esac
 done
+
+if [[ -z $S3_SECRET_MOUNT ]]; then
+    echo "Secret file necessary for credentials to access s3 storage, exiting"
+    exit 1
+fi
+
+if [[ -z $DB_AUTH_MOUNT ]]; then
+    echo "DB auth file necessary for credentials to access db, exiting"
+    exit 1
+fi
+
+
+S3_ACCESS_KEY=$(cat $S3_SECRET_MOUNT/accesskey) 
+S3_SECRET_KEY=$(cat $S3_SECRET_MOUNT/secretkey) 
+
+DB_USER=$(cat $DB_AUTH_MOUNT/username) 
+DB_PASS=$(cat $DB_AUTH_MOUNT/password) 
+DB_CONN_STRING=$(cat $DB_AUTH_MOUNT/DB_CONNECTION_STRING) 
+
+## Use db_user/pass in backup and conn_string in restore
+if [[ $DB_USER = "null" || $DB_PASS = "null" ]]; then
+    USER_PASS=$(echo $DB_CONN_STRING | sed -En "s|postgres:\/\/(.*):(.*)@.*|\1:\2|p")
+    DB_USER=$(echo $USER_PASS | cut -d ":" -f1)
+    DB_PASS=$(echo $USER_PASS | cut -d ":" -f2)
+fi
 
 apt-get update
 apt-get install -y curl

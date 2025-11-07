@@ -319,6 +319,7 @@ module "kubernetes" {
     ]
     oauth = gitlab_application.oidc
     subdomains = local.subdomains
+    local_init_filepath = local.init_filepath
     local_kubeconfig_path = local.kubeconfig_path
 
     gitlab_runner_tokens = local.gitlab_runner_tokens

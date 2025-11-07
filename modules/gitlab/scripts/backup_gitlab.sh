@@ -12,16 +12,15 @@
 
 OPT_VERSION=""
 
-while getopts "a:b:k:r:s:m:n:v:e" flag; do
+while getopts "a:b:r:s:m:n:v:e" flag; do
     # These become set during 'getopts'  --- $OPTIND $OPTARG
     case "$flag" in
         a) S3_ALIAS=$OPTARG;;
         b) MAIN_BACKUP_BUCKET=$OPTARG;;
         #c) USE_CONSUL=true;;
         #g) GC_DOCKER_REGISTRY=true;;
-        k) S3_ACCESS_KEY=$OPTARG;;
         r) S3_REGION=$OPTARG;;
-        s) S3_SECRET_KEY=$OPTARG;;
+        s) S3_SECRET_MOUNT=$OPTARG;;
         m) S3_SRC_ENV_BACKUP_BUCKET_PREFIX=$OPTARG;;
         n) S3_TARGET_ENV_BACKUP_BUCKET_PREFIX=$OPTARG;;
         v) OPT_VERSION=${OPTARG}_;;
@@ -29,8 +28,17 @@ while getopts "a:b:k:r:s:m:n:v:e" flag; do
     esac
 done
 
+
+if [[ -z $S3_SECRET_MOUNT ]]; then
+    echo "Secret file necessary for credentials to access s3 storage, exiting"
+    exit 1
+fi
+
 apt-get update
-apt-get install -y curl
+apt-get install -y curl yq
+
+S3_ACCESS_KEY=$(cat $S3_SECRET_MOUNT/connection | yq -r ".aws_access_key_id") 
+S3_SECRET_KEY=$(cat $S3_SECRET_MOUNT/connection | yq -r ".aws_secret_access_key") 
 
 if [[ ! -f /usr/local/bin/mc ]]; then
     curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
